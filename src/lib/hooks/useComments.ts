@@ -11,6 +11,37 @@ import {
   UpdateCommentInput,
 } from '@/lib/actions/comments';
 
+// Types
+export interface CommentThread {
+  comment: CommentWithAuthor;
+  replies: CommentWithAuthor[];
+}
+
+/**
+ * Group a flat list of comments into threads (top-level comments with their replies)
+ */
+export function groupCommentsIntoThreads(comments: CommentWithAuthor[]): CommentThread[] {
+  const topLevel: CommentWithAuthor[] = [];
+  const repliesByParent = new Map<string, CommentWithAuthor[]>();
+
+  for (const comment of comments) {
+    if (comment.parentCommentId) {
+      const existing = repliesByParent.get(comment.parentCommentId) ?? [];
+      existing.push(comment);
+      repliesByParent.set(comment.parentCommentId, existing);
+    } else {
+      topLevel.push(comment);
+    }
+  }
+
+  return topLevel.map((comment) => ({
+    comment,
+    replies: (repliesByParent.get(comment.id) ?? []).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    ),
+  }));
+}
+
 // Query key factory
 export const commentKeys = {
   all: ['comments'] as const,
@@ -33,6 +64,15 @@ export function useComments(taskId: string, options?: { enabled?: boolean }) {
     },
     enabled: options?.enabled ?? !!taskId,
   });
+}
+
+/**
+ * Hook to fetch comments for a task, grouped into threads
+ */
+export function useCommentThreads(taskId: string, options?: { enabled?: boolean }) {
+  const query = useComments(taskId, options);
+  const threads = query.data ? groupCommentsIntoThreads(query.data) : [];
+  return { ...query, threads, isLoading: query.isLoading };
 }
 
 /**
@@ -74,6 +114,7 @@ export function useCreateComment() {
             id: `temp-${Date.now()}`,
             taskId: newComment.taskId,
             authorId: '', // Will be filled by server
+            parentCommentId: newComment.parentCommentId ?? null,
             content: content ?? { type: 'doc', content: [] },
             createdAt: new Date(),
             updatedAt: null,
