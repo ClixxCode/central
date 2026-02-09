@@ -1,0 +1,9 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "npm install": true,
+        "npx drizzle-kit": true,
+        "npx tsc": true,
+        "npm uninstall": true,
+        "mv": true
+    }
+}

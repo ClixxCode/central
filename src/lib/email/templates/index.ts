@@ -1,0 +1,7 @@
+// Email template exports
+export * from './base';
+export * from './mention';
+export * from './task-assigned';
+export * from './task-due';
+export * from './daily-digest';
+export * from './comment-added';

@@ -1,0 +1,69 @@
+import { getAppUrl } from '../client';
+import { baseEmailTemplate, emailButton } from './base';
+
+/**
+ * Email verification template
+ * Sent when a user registers with email/password
+ */
+export function emailVerificationTemplate(params: {
+  name?: string;
+  verificationUrl: string;
+}): { subject: string; html: string } {
+  const { name, verificationUrl } = params;
+  const greeting = name ? `Hi ${name},` : 'Hi,';
+
+  const content = `
+    <p style="margin: 0 0 16px;">${greeting}</p>
+    <p style="margin: 0 0 16px;">
+      Welcome to Central! Please verify your email address to complete your registration
+      and start managing your projects.
+    </p>
+    <p style="margin: 0 0 24px; text-align: center;">
+      ${emailButton('Verify Email', verificationUrl)}
+    </p>
+    <p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">
+      This link will expire in 24 hours. If you didn't create an account with Central,
+      you can safely ignore this email.
+    </p>
+    <p style="margin: 0; color: #9ca3af; font-size: 13px;">
+      If the button doesn't work, copy and paste this link into your browser:<br/>
+      <a href="${verificationUrl}" style="color: #3b82f6; word-break: break-all;">${verificationUrl}</a>
+    </p>
+  `;
+
+  return {
+    subject: 'Verify your email for Central',
+    html: baseEmailTemplate(content, 'Please verify your email to complete registration'),
+  };
+}
+
+/**
+ * Email verification success template
+ * Optional: sent after successful verification
+ */
+export function emailVerifiedTemplate(params: {
+  name?: string;
+}): { subject: string; html: string } {
+  const { name } = params;
+  const greeting = name ? `Hi ${name},` : 'Hi,';
+  const loginUrl = `${getAppUrl()}/login`;
+
+  const content = `
+    <p style="margin: 0 0 16px;">${greeting}</p>
+    <p style="margin: 0 0 16px;">
+      Your email has been verified successfully! You can now sign in to Central
+      and start managing your projects.
+    </p>
+    <p style="margin: 0 0 24px; text-align: center;">
+      ${emailButton('Sign In', loginUrl)}
+    </p>
+    <p style="margin: 0; color: #6b7280; font-size: 14px;">
+      Welcome to the team!
+    </p>
+  `;
+
+  return {
+    subject: 'Email verified - Welcome to Central',
+    html: baseEmailTemplate(content, 'Your email has been verified'),
+  };
+}

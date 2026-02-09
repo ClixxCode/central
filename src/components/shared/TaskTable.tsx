@@ -1,0 +1,502 @@
+'use client';
+
+import * as React from 'react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Settings2, ExternalLink } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useColumnResize } from '@/lib/hooks/useColumnResize';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import type { StatusOption, SectionOption } from '@/lib/db/schema';
+import { ClientIcon } from '@/components/clients/ClientIcon';
+
+// Assignee can come in two formats
+interface AssigneeWithUser {
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    image?: string | null;
+    avatarUrl?: string | null;
+  };
+}
+
+interface FlatAssignee {
+  id: string;
+  name: string | null;
+  email: string;
+  image?: string | null;
+  avatarUrl?: string | null;
+}
+
+// Generic task type that covers both board tasks and rollup tasks
+export interface TableTask {
+  id: string;
+  title: string;
+  status: string;
+  section: string | null;
+  position: number;
+  dueDate: Date | string | null;
+  assignees: Array<AssigneeWithUser | FlatAssignee>;
+  // Optional fields for rollup tasks
+  clientName?: string | null;
+  clientColor?: string | null;
+  clientIcon?: string | null;
+  boardName?: string | null;
+  boardId?: string;
+  clientSlug?: string | null;
+}
+
+// Helper to normalize assignee data
+function normalizeAssignee(assignee: AssigneeWithUser | FlatAssignee) {
+  if ('user' in assignee) {
+    return {
+      id: assignee.user.id,
+      name: assignee.user.name,
+      email: assignee.user.email,
+      image: assignee.user.image ?? assignee.user.avatarUrl ?? null,
+    };
+  }
+  return {
+    id: assignee.id,
+    name: assignee.name,
+    email: assignee.email,
+    image: assignee.image ?? assignee.avatarUrl ?? null,
+  };
+}
+
+type SortField = 'title' | 'status' | 'dueDate' | 'position' | 'client';
+type SortDirection = 'asc' | 'desc';
+
+export interface TableSortOptions {
+  field: SortField;
+  direction: SortDirection;
+}
+
+export interface TableColumnConfig {
+  title: boolean;
+  status: boolean;
+  section: boolean;
+  assignees: boolean;
+  dueDate: boolean;
+  source?: boolean; // For rollup - shows client/board
+}
+
+const defaultColumns: TableColumnConfig = {
+  title: true,
+  status: true,
+  section: true,
+  assignees: true,
+  dueDate: true,
+  source: false,
+};
+
+interface TaskTableProps {
+  tasks: TableTask[];
+  statusOptions: StatusOption[];
+  sectionOptions: SectionOption[];
+  onTaskClick?: (taskId: string) => void;
+  onNavigateToSource?: (task: TableTask) => void;
+  isLoading?: boolean;
+  sort?: TableSortOptions;
+  onSortChange?: (sort: TableSortOptions) => void;
+  columns?: TableColumnConfig;
+  onColumnsChange?: (columns: TableColumnConfig) => void;
+  emptyMessage?: string;
+  showSource?: boolean; // Enable source column for rollups
+}
+
+export function TaskTable({
+  tasks,
+  statusOptions,
+  sectionOptions,
+  onTaskClick,
+  onNavigateToSource,
+  isLoading = false,
+  sort = { field: 'position', direction: 'asc' },
+  onSortChange,
+  columns: columnsProp,
+  onColumnsChange,
+  emptyMessage = 'No tasks found',
+  showSource = false,
+}: TaskTableProps) {
+  // Merge default columns with showSource
+  const columns = React.useMemo(() => ({
+    ...defaultColumns,
+    ...columnsProp,
+    source: showSource || columnsProp?.source,
+  }), [columnsProp, showSource]);
+
+  const handleSort = (field: SortField) => {
+    if (!onSortChange) return;
+
+    if (sort.field === field) {
+      onSortChange({
+        field,
+        direction: sort.direction === 'asc' ? 'desc' : 'asc',
+      });
+    } else {
+      onSortChange({ field, direction: 'asc' });
+    }
+  };
+
+  const handleColumnToggle = (column: keyof TableColumnConfig) => {
+    if (!onColumnsChange) return;
+
+    const newColumns = { ...columns, [column]: !columns[column] };
+    const visibleCount = Object.values(newColumns).filter(Boolean).length;
+
+    if (visibleCount >= 1) {
+      onColumnsChange(newColumns);
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sort.field !== field) {
+      return <ArrowUpDown className="ml-1 size-3 text-muted-foreground" />;
+    }
+    return sort.direction === 'asc' ? (
+      <ArrowUp className="ml-1 size-3" />
+    ) : (
+      <ArrowDown className="ml-1 size-3" />
+    );
+  };
+
+  const columnHeaders: {
+    key: keyof TableColumnConfig;
+    label: string;
+    sortField?: SortField;
+    resizable?: boolean;
+  }[] = [
+    { key: 'title', label: 'Task', sortField: 'title' },
+    { key: 'source', label: 'Source', sortField: 'client', resizable: true },
+    { key: 'status', label: 'Status', sortField: 'status', resizable: true },
+    { key: 'section', label: 'Section', resizable: true },
+    { key: 'assignees', label: 'Assignees', resizable: true },
+    { key: 'dueDate', label: 'Due Date', sortField: 'dueDate', resizable: true },
+  ];
+
+  const { columnWidths, onResizeStart, isResizing } = useColumnResize();
+
+  const visibleHeaders = columnHeaders.filter((h) => columns[h.key]);
+
+  // Get status and section labels
+  const getStatusLabel = (statusId: string) => {
+    const status = statusOptions.find((s) => s.id === statusId);
+    return status ? { label: status.label, color: status.color } : { label: statusId, color: '#888' };
+  };
+
+  const getSectionLabel = (sectionId: string | null) => {
+    if (!sectionId) return '—';
+    const section = sectionOptions.find((s) => s.id === sectionId);
+    return section?.label ?? sectionId;
+  };
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getInitials = (name: string | null, email: string) => {
+    if (name) {
+      return name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    return email[0].toUpperCase();
+  };
+
+  if (isLoading) {
+    return (
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full min-w-[600px] table-fixed">
+          <colgroup>
+            {visibleHeaders.map((header) => (
+              <col
+                key={header.key}
+                style={header.key === 'title' ? undefined : { width: columnWidths[header.key] }}
+              />
+            ))}
+            <col style={{ width: 48 }} />
+          </colgroup>
+          <thead className="bg-muted/50">
+            <tr>
+              {visibleHeaders.map((header) => (
+                <th
+                  key={header.key}
+                  className={cn(
+                    'px-3 py-2 text-left text-sm font-medium text-muted-foreground',
+                    header.key === 'title' && 'min-w-[200px] w-full'
+                  )}
+                >
+                  {header.label}
+                </th>
+              ))}
+              <th className="w-12 px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <tr key={i} className="border-t">
+                {visibleHeaders.map((header) => (
+                  <td key={header.key} className="px-3 py-3">
+                    <Skeleton className="h-5 w-full" />
+                  </td>
+                ))}
+                <td className="px-3 py-3" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <div className={cn('overflow-x-auto rounded-lg border', isResizing && 'select-none')}>
+        <table className="w-full min-w-[600px] table-fixed">
+          <colgroup>
+            {visibleHeaders.map((header) => (
+              <col
+                key={header.key}
+                style={header.key === 'title' ? undefined : { width: columnWidths[header.key] }}
+              />
+            ))}
+            <col style={{ width: 48 }} />
+          </colgroup>
+          <thead className="bg-muted/50">
+            <tr>
+              {visibleHeaders.map((header) => (
+                <th
+                  key={header.key}
+                  className={cn(
+                    'relative px-3 py-2 text-left text-sm font-medium text-muted-foreground',
+                    header.key === 'title' && 'min-w-[200px] w-full'
+                  )}
+                >
+                  {header.sortField && onSortChange ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(header.sortField!)}
+                      className={cn(
+                        'inline-flex items-center rounded hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        sort.field === header.sortField && 'text-foreground'
+                      )}
+                    >
+                      {header.label}
+                      <SortIcon field={header.sortField} />
+                    </button>
+                  ) : (
+                    header.label
+                  )}
+                  {header.resizable && (
+                    <div
+                      onMouseDown={(e) => onResizeStart(header.key, e)}
+                      className="absolute -right-px top-0 h-full w-2 cursor-grab active:cursor-grabbing group/resize"
+                    >
+                      <div className="mx-auto h-full w-px bg-transparent group-hover/resize:bg-primary/40 group-active/resize:bg-primary/60" />
+                    </div>
+                  )}
+                </th>
+              ))}
+              <th className="w-12 px-3 py-2">
+                {onColumnsChange && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                        <Settings2 className="size-3.5" />
+                        <span className="sr-only">Column settings</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Columns</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {columnHeaders.map((header) => (
+                        <DropdownMenuCheckboxItem
+                          key={header.key}
+                          checked={columns[header.key]}
+                          onCheckedChange={() => handleColumnToggle(header.key)}
+                        >
+                          {header.label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={visibleHeaders.length + 1}
+                  className="px-3 py-8 text-center text-sm text-muted-foreground"
+                >
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              tasks.map((task) => {
+                const status = getStatusLabel(task.status);
+
+                return (
+                  <tr
+                    key={task.id}
+                    onClick={() => onTaskClick?.(task.id)}
+                    className={cn(
+                      'border-t transition-colors',
+                      onTaskClick && 'cursor-pointer hover:bg-muted/50'
+                    )}
+                  >
+                    {/* Title */}
+                    {columns.title && (
+                      <td className="px-3 py-3">
+                        <span className="font-medium text-sm">{task.title}</span>
+                      </td>
+                    )}
+
+                    {/* Source (client/board) */}
+                    {columns.source && (
+                      <td className="px-3 py-3">
+                        {task.clientName ? (
+                          <div className="flex items-center gap-2">
+                            <ClientIcon icon={task.clientIcon ?? null} color={task.clientColor ?? null} name={task.clientName ?? undefined} size="xs" />
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-sm truncate max-w-[120px]">
+                                  {task.clientName}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {task.boardName ? `${task.clientName} / ${task.boardName}` : task.clientName}
+                              </TooltipContent>
+                            </Tooltip>
+                            {onNavigateToSource && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNavigateToSource(task);
+                                }}
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
+
+                    {/* Status */}
+                    {columns.status && (
+                      <td className="px-3 py-3">
+                        <Badge
+                          variant="outline"
+                          className="whitespace-nowrap"
+                          style={{
+                            borderColor: status.color,
+                            backgroundColor: `${status.color}15`,
+                          }}
+                        >
+                          <span
+                            className="mr-1.5 h-2 w-2 rounded-full"
+                            style={{ backgroundColor: status.color }}
+                          />
+                          {status.label}
+                        </Badge>
+                      </td>
+                    )}
+
+                    {/* Section */}
+                    {columns.section && (
+                      <td className="px-3 py-3">
+                        <span className="text-sm text-muted-foreground">
+                          {getSectionLabel(task.section)}
+                        </span>
+                      </td>
+                    )}
+
+                    {/* Assignees */}
+                    {columns.assignees && (
+                      <td className="px-3 py-3">
+                        <div className="flex -space-x-2">
+                          {task.assignees.slice(0, 3).map((a) => {
+                            const assignee = normalizeAssignee(a);
+                            return (
+                              <Tooltip key={assignee.id}>
+                                <TooltipTrigger asChild>
+                                  <Avatar className="h-6 w-6 border-2 border-background">
+                                    <AvatarImage src={assignee.image ?? undefined} />
+                                    <AvatarFallback className="text-[10px]">
+                                      {getInitials(assignee.name, assignee.email)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {assignee.name ?? assignee.email}
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                          {task.assignees.length > 3 && (
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px]">
+                              +{task.assignees.length - 3}
+                            </div>
+                          )}
+                          {task.assignees.length === 0 && (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </div>
+                      </td>
+                    )}
+
+                    {/* Due Date */}
+                    {columns.dueDate && (
+                      <td className="px-3 py-3">
+                        <span className="text-sm text-muted-foreground">
+                          {formatDate(task.dueDate)}
+                        </span>
+                      </td>
+                    )}
+
+                    {/* Actions placeholder */}
+                    <td className="px-3 py-3" />
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </TooltipProvider>
+  );
+}
+
+export { defaultColumns as defaultTableColumns };
