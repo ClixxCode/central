@@ -1,7 +1,6 @@
 import { pgTable, uuid, jsonb, timestamp } from 'drizzle-orm/pg-core';
 
 export interface SiteSettings {
-  slackTeamId?: string;
 }
 
 export const siteSettings = pgTable('site_settings', {

@@ -67,7 +67,6 @@ import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { isCompleteStatus } from '@/lib/utils/status';
 import { useClient } from '@/lib/hooks/useClients';
 import { useNotificationPreferences } from '@/lib/hooks/useNotifications';
-import { useSiteSettings } from '@/lib/hooks/useSiteSettings';
 
 // Re-export types for backwards compatibility
 export interface StatusOption {
@@ -161,9 +160,8 @@ export function TaskModal({
   const { data: clientData } = useClient(clientSlug);
   const slackChannelUrl = clientData?.metadata?.slackChannelUrl;
   const { data: notifPrefs } = useNotificationPreferences();
-  const { data: siteSettings } = useSiteSettings();
   const slackLinkType = notifPrefs?.slack?.slackLinkType ?? 'web';
-  const slackTeamId = siteSettings?.slackTeamId;
+  const slackTeamId = process.env.NEXT_PUBLIC_SLACK_WORKSPACE_ID;
 
   // Form state
   const [title, setTitle] = useState('');

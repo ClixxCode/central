@@ -30,8 +30,6 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
-import { useSiteSettings, useUpdateSiteSettings } from '@/lib/hooks/useSiteSettings';
 import type { UserPreferences } from '@/lib/schema/users';
 
 // Notification types with their display info
@@ -107,21 +105,11 @@ export function NotificationSettingsMatrix({
   const [localPrefs, setLocalPrefs] = useState(preferences);
   const [pendingChanges, setPendingChanges] = useState<Set<string>>(new Set());
   const [slackUsername, setSlackUsername] = useState(preferences.slack.slackUsername ?? '');
-  const { isAdmin } = useCurrentUser();
-  const { data: siteSettings } = useSiteSettings();
-  const updateSiteSettings = useUpdateSiteSettings();
-  const [slackTeamId, setSlackTeamId] = useState('');
 
   useEffect(() => {
     setLocalPrefs(preferences);
     setSlackUsername(preferences.slack.slackUsername ?? '');
   }, [preferences]);
-
-  useEffect(() => {
-    if (siteSettings?.slackTeamId) {
-      setSlackTeamId(siteSettings.slackTeamId);
-    }
-  }, [siteSettings]);
 
   const isChannelEnabled = (channel: ChannelKey): boolean => {
     return localPrefs[channel].enabled;
@@ -255,27 +243,6 @@ export function NotificationSettingsMatrix({
     if (!result.success) {
       toast.error(result.error ?? 'Failed to update setting');
       setLocalPrefs(preferences);
-    }
-  };
-
-  const handleSaveSlackTeamId = async () => {
-    const key = 'slack-teamid';
-    setPendingChanges((prev) => new Set(prev).add(key));
-
-    const result = await updateSiteSettings.mutateAsync({
-      slackTeamId: slackTeamId.trim() || undefined,
-    });
-
-    setPendingChanges((prev) => {
-      const next = new Set(prev);
-      next.delete(key);
-      return next;
-    });
-
-    if (result.success) {
-      toast.success('Slack Workspace ID saved');
-    } else {
-      toast.error(result.error ?? 'Failed to save Workspace ID');
     }
   };
 
@@ -506,33 +473,6 @@ export function NotificationSettingsMatrix({
                   </p>
                 </div>
 
-                {isAdmin && (
-                  <div className="space-y-2 border-t pt-4">
-                    <Label htmlFor="slack-team-id">Slack Workspace ID</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Required for the desktop app option. Find this under your Slack workspace settings.
-                    </p>
-                    <div className="flex gap-2">
-                      <Input
-                        id="slack-team-id"
-                        value={slackTeamId}
-                        onChange={(e) => setSlackTeamId(e.target.value)}
-                        placeholder="T03ABC123"
-                      />
-                      <Button
-                        onClick={handleSaveSlackTeamId}
-                        disabled={isPending('slack-teamid')}
-                        variant="outline"
-                      >
-                        {isPending('slack-teamid') ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Save'
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
