@@ -9,6 +9,7 @@ interface Client {
   slug: string;
   color: string;
   icon: string | null;
+  defaultBoardId: string | null;
   boards: { id: string; name: string }[];
 }
 
