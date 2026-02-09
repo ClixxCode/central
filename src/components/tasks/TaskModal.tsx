@@ -59,6 +59,7 @@ import {
   Repeat,
   Link2,
   Hash,
+  Pencil,
 } from 'lucide-react';
 import { RecurringPicker, RecurringIndicator } from './RecurringPicker';
 import { SubtasksTab } from './SubtasksTab';
@@ -871,40 +872,85 @@ export function TaskModal({
                     </div>
                   </div>
 
-                  {/* Description - always editable with auto-save */}
+                  {/* Description - view/edit toggle */}
                   <div>
                     <div
-                      className="rounded-md border"
-                      onFocus={() => setDescriptionFocused(true)}
+                      className={cn(
+                        'relative rounded-md border',
+                        !descriptionFocused && 'group/desc hover:border-primary/50 transition-colors'
+                      )}
                       onBlur={(e) => {
+                        if (!descriptionFocused) return;
                         if (!e.currentTarget.contains(e.relatedTarget)) {
+                          if ((e.relatedTarget as HTMLElement)?.closest('[data-radix-popper-content-wrapper]')) {
+                            return;
+                          }
                           setDescriptionFocused(false);
                         }
                       }}
                     >
                       {descriptionFocused && editorRef.current?.getEditor() && (
-                        <EditorToolbar
-                          editor={editorRef.current.getEditor()}
-                          onUploadImage={handleUploadImage}
-                        />
+                        <div className="flex items-center justify-between border-b bg-muted/30">
+                          <EditorToolbar
+                            editor={editorRef.current.getEditor()}
+                            onUploadImage={handleUploadImage}
+                            className="border-b-0"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="mr-1 text-xs text-muted-foreground"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => setDescriptionFocused(false)}
+                          >
+                            <Check className="mr-1 h-3 w-3" />
+                            Done
+                          </Button>
+                        </div>
                       )}
-                      <TaskEditor
-                        ref={editorRef}
-                        content={description}
-                        onChange={(content) => {
-                          setDescription(content);
-                          if (isAutoSaveEnabled) {
-                            debouncedSaveDescription(content);
+                      {!descriptionFocused && (
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1 z-10 opacity-0 group-hover/desc:opacity-100 transition-opacity p-1 rounded hover:bg-accent"
+                          onClick={() => {
+                            setDescriptionFocused(true);
+                            setTimeout(() => editorRef.current?.focus(), 0);
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      )}
+                      <div
+                        className="relative"
+                        onClick={(e) => {
+                          if (!descriptionFocused) {
+                            // Don't enter edit mode when clicking a link
+                            if ((e.target as HTMLElement).closest('a')) return;
+                            setDescriptionFocused(true);
+                            setTimeout(() => editorRef.current?.focus(), 0);
                           }
                         }}
-                        users={mentionUsers}
-                        attachments={fileMentionItems}
-                        onUploadImage={handleUploadImage}
-                        onFileMentionClick={handleFileMentionClick}
-                        placeholder="Add a description... (+ to reference attachments)"
-                        className="[&>div]:border-0 [&>div]:focus-within:ring-0"
-                        minHeight="150px"
-                      />
+                      >
+                        <TaskEditor
+                          ref={editorRef}
+                          content={description}
+                          editable={descriptionFocused}
+                          onChange={(content) => {
+                            setDescription(content);
+                            if (isAutoSaveEnabled) {
+                              debouncedSaveDescription(content);
+                            }
+                          }}
+                          users={mentionUsers}
+                          attachments={fileMentionItems}
+                          onUploadImage={handleUploadImage}
+                          onFileMentionClick={handleFileMentionClick}
+                          placeholder="Add a description... (+ to reference attachments)"
+                          className="[&>div]:border-0 [&>div]:focus-within:ring-0"
+                          minHeight="150px"
+                        />
+                      </div>
                     </div>
                   </div>
 

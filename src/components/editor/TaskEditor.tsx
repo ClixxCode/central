@@ -24,25 +24,14 @@ import type { TiptapContent } from '@/lib/db/schema/tasks';
 import { MentionList, type MentionUser } from './MentionList';
 import { FileMentionList, type FileMentionItem } from './FileMentionList';
 
-// Custom Link extension with proper attribute handling
+// Custom Link extension — adds href as title attribute for URL tooltip on hover
 const CustomLink = Link.extend({
-  inclusive: false,
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      href: {
-        default: null,
-      },
-      target: {
-        default: '_blank',
-      },
-      rel: {
-        default: 'noopener noreferrer',
-      },
-      class: {
-        default: 'text-primary underline underline-offset-2 hover:text-primary/80',
-      },
-    };
+  renderHTML({ HTMLAttributes }) {
+    const attrs = mergeAttributes(this.options.HTMLAttributes, HTMLAttributes);
+    if (attrs.href) {
+      attrs.title = attrs.href;
+    }
+    return ['a', attrs, 0];
   },
 });
 
@@ -463,10 +452,16 @@ export const TaskEditor = forwardRef<TaskEditorRef, TaskEditorProps>(
           },
         }),
         CustomLink.configure({
-          openOnClick: true,
+          openOnClick: false,
+          enableClickSelection: true,
           autolink: true,
           defaultProtocol: 'https',
           linkOnPaste: true,
+          HTMLAttributes: {
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            class: 'text-primary underline underline-offset-2 hover:text-primary/80',
+          },
         }),
         Placeholder.configure({
           placeholder,

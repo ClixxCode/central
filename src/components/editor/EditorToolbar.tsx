@@ -131,6 +131,10 @@ export function EditorToolbar({ editor, className, onUploadImage }: EditorToolba
           'flex flex-wrap items-center gap-0.5 border-b bg-muted/30 px-1 py-1',
           className
         )}
+        onMouseDown={(e) => {
+          // Prevent toolbar clicks from stealing focus from the editor
+          e.preventDefault();
+        }}
       >
         {/* Text formatting */}
         <ToolbarButton
