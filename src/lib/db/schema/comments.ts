@@ -10,8 +10,7 @@ export const comments = pgTable('comments', {
     .notNull()
     .references(() => tasks.id, { onDelete: 'cascade' }),
   authorId: uuid('author_id')
-    .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: 'set null' }),
   parentCommentId: uuid('parent_comment_id').references((): AnyPgColumn => comments.id, { onDelete: 'cascade' }),
   content: jsonb('content').$type<TiptapContent>().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

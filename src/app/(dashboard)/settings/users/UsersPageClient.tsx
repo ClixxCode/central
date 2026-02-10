@@ -14,6 +14,7 @@ import {
   KeyRound,
   UserX,
   UserCheck,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +39,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -59,6 +70,7 @@ import {
   updateUserRole,
   deactivateUser,
   reactivateUser,
+  deleteUser,
   type ManagedUser,
 } from '@/lib/actions/user-management';
 import {
@@ -74,6 +86,13 @@ export function UsersPageClient() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'user' | 'admin'>('user');
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<ManagedUser | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
+  const [deleteStep1Open, setDeleteStep1Open] = useState(false);
+  const [deleteStep2Open, setDeleteStep2Open] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
 
   // Queries
   const { data: users, isLoading: usersLoading } = useQuery({
@@ -198,20 +217,69 @@ export function UsersPageClient() {
     },
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const result = await deleteUser(userId);
+      if (!result.success) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('User permanently deleted');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
     await inviteMutation.mutateAsync({ email: inviteEmail.trim(), role: inviteRole });
   };
 
-  const handleDeactivateUser = async (user: ManagedUser) => {
-    if (!confirm(`Are you sure you want to deactivate ${user.name || user.email}? They will no longer be able to log in.`)) {
-      return;
-    }
-    await deactivateUserMutation.mutateAsync(user.id);
+  const handleDeactivateUser = (user: ManagedUser) => {
+    setDeactivateTarget(user);
+    setDeactivateDialogOpen(true);
+  };
+
+  const confirmDeactivateUser = async () => {
+    if (!deactivateTarget) return;
+    await deactivateUserMutation.mutateAsync(deactivateTarget.id);
+    setDeactivateDialogOpen(false);
+    setDeactivateTarget(null);
   };
 
   const handleReactivateUser = async (user: ManagedUser) => {
     await reactivateUserMutation.mutateAsync(user.id);
+  };
+
+  const handleDeleteUser = (user: ManagedUser) => {
+    setDeleteTarget(user);
+    setDeleteStep1Open(true);
+  };
+
+  const confirmDeleteStep1 = () => {
+    setDeleteStep1Open(false);
+    setDeleteStep2Open(true);
+  };
+
+  const confirmDeleteStep2 = async () => {
+    if (!deleteTarget) return;
+    await deleteUserMutation.mutateAsync(deleteTarget.id);
+    setDeleteStep2Open(false);
+    setDeleteTarget(null);
+  };
+
+  const handleSendReset = (user: ManagedUser) => {
+    setResetTarget(user);
+    setResetDialogOpen(true);
+  };
+
+  const confirmSendReset = async () => {
+    if (!resetTarget) return;
+    await sendResetMutation.mutateAsync(resetTarget.id);
+    setResetDialogOpen(false);
+    setResetTarget(null);
   };
 
   const getInitials = (name: string | null, email: string) => {
@@ -407,7 +475,7 @@ export function UsersPageClient() {
                           <DropdownMenuContent align="end">
                             {!isDeactivated && (
                               <DropdownMenuItem
-                                onClick={() => sendResetMutation.mutate(user.id)}
+                                onClick={() => handleSendReset(user)}
                               >
                                 <KeyRound className="h-4 w-4 mr-2" />
                                 Send Password Reset
@@ -415,12 +483,22 @@ export function UsersPageClient() {
                             )}
                             <DropdownMenuSeparator />
                             {isDeactivated ? (
-                              <DropdownMenuItem
-                                onClick={() => handleReactivateUser(user)}
-                              >
-                                <UserCheck className="h-4 w-4 mr-2" />
-                                Reactivate
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleReactivateUser(user)}
+                                >
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Reactivate
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDeleteUser(user)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete permanently
+                                </DropdownMenuItem>
+                              </>
                             ) : (
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
@@ -520,6 +598,96 @@ export function UsersPageClient() {
           )}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate user</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to deactivate {deactivateTarget?.name || deactivateTarget?.email}? They will no longer be able to log in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={confirmDeactivateUser}
+              variant="destructive"
+            >
+              Deactivate
+            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send password reset</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to send a password reset email to {resetTarget?.name || resetTarget?.email}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={confirmSendReset}
+            >
+              Send reset
+            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete user — Step 1: Initial confirmation */}
+      <AlertDialog open={deleteStep1Open} onOpenChange={setDeleteStep1Open}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete {deleteTarget?.name || deleteTarget?.email}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={confirmDeleteStep1}
+              variant="destructive"
+            >
+              I&apos;m sure
+            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete user — Step 2: Final confirmation with consequences */}
+      <AlertDialog open={deleteStep2Open} onOpenChange={setDeleteStep2Open}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete user</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>This will permanently delete {deleteTarget?.name || deleteTarget?.email}. The following will happen:</p>
+                <ul className="list-disc pl-5 space-y-1 text-sm">
+                  <li>Their name will be removed from all tasks, boards, and comments they created</li>
+                  <li>Their task assignments and team memberships will be removed</li>
+                  <li>Their comments will be preserved but shown as &quot;Deleted user&quot;</li>
+                  <li>This action cannot be undone</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={confirmDeleteStep2}
+              disabled={deleteUserMutation.isPending}
+              variant="destructive"
+            >
+              {deleteUserMutation.isPending ? 'Deleting...' : 'Delete permanently'}
+            </AlertDialogAction>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

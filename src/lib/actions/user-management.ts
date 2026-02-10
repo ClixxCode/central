@@ -1,10 +1,11 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { users, teamMembers } from '@/lib/db/schema';
+import { users, teamMembers, tasks, boards, clients, attachments, comments, invitations, rollupInvitations } from '@/lib/db/schema';
 import { eq, desc, ne } from 'drizzle-orm';
 import { requireAdmin, getCurrentUser } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import { del } from '@vercel/blob';
 
 export interface ManagedUser {
   id: string;
@@ -162,5 +163,67 @@ export async function reactivateUser(userId: string): Promise<ActionResult> {
   } catch (error) {
     console.error('reactivateUser error:', error);
     return { success: false, error: 'Failed to reactivate user' };
+  }
+}
+
+/**
+ * Permanently delete a user (admin only)
+ * User must be deactivated first. Clears FK references that would block deletion,
+ * then deletes the user row (cascade handles the rest).
+ */
+export async function deleteUser(userId: string): Promise<ActionResult> {
+  try {
+    const admin = await requireAdmin();
+
+    // Prevent self-deletion
+    if (admin.id === userId) {
+      return { success: false, error: 'You cannot delete your own account' };
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    // Safety gate: must be deactivated first
+    if (!user.deactivatedAt) {
+      return { success: false, error: 'User must be deactivated before permanent deletion' };
+    }
+
+    // Clear FK references and delete user in a single transaction
+    await db.transaction(async (tx) => {
+      // Nullify createdBy / authorId / uploadedBy references
+      await tx.update(tasks).set({ createdBy: null }).where(eq(tasks.createdBy, userId));
+      await tx.update(boards).set({ createdBy: null }).where(eq(boards.createdBy, userId));
+      await tx.update(clients).set({ createdBy: null }).where(eq(clients.createdBy, userId));
+      await tx.update(attachments).set({ uploadedBy: null }).where(eq(attachments.uploadedBy, userId));
+      await tx.update(comments).set({ authorId: null }).where(eq(comments.authorId, userId));
+
+      // Delete invitation records that reference this user as inviter
+      await tx.delete(invitations).where(eq(invitations.invitedBy, userId));
+      await tx.delete(rollupInvitations).where(eq(rollupInvitations.invitedBy, userId));
+
+      // Delete the user — cascade handles accounts, teamMembers, taskAssignees,
+      // notifications, boardAccess, favorites, boardActivityLog, taskViews,
+      // emailVerificationTokens, passwordResetTokens, rollupOwners,
+      // rollupInvitations.userId
+      await tx.delete(users).where(eq(users.id, userId));
+    });
+
+    // Delete avatar blob from Vercel Blob (fire-and-forget)
+    if (user.avatarUrl?.includes('blob.vercel-storage.com')) {
+      del(user.avatarUrl).catch((err) =>
+        console.error('Failed to delete avatar blob:', err)
+      );
+    }
+
+    revalidatePath('/settings/users');
+    return { success: true };
+  } catch (error) {
+    console.error('deleteUser error:', error);
+    return { success: false, error: 'Failed to delete user' };
   }
 }

@@ -14,7 +14,7 @@ export const attachments = pgTable(
     url: text('url').notNull(),
     size: integer('size'), // bytes
     mimeType: varchar('mime_type', { length: 100 }),
-    uploadedBy: uuid('uploaded_by').references(() => users.id),
+    uploadedBy: uuid('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [

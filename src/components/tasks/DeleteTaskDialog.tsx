@@ -35,13 +35,13 @@ export function DeleteTaskDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className="bg-destructive hover:bg-destructive/90 focus:ring-destructive"
+            variant="destructive"
           >
             Delete
           </AlertDialogAction>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

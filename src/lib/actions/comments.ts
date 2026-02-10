@@ -37,12 +37,12 @@ export interface CommentAttachment {
 export interface CommentWithAuthor {
   id: string;
   taskId: string;
-  authorId: string;
+  authorId: string | null;
   parentCommentId: string | null;
   content: TiptapContent;
   createdAt: Date;
   updatedAt: Date | null;
-  author: CommentAuthor;
+  author: CommentAuthor | null;
   attachments: CommentAttachment[];
 }
 
@@ -207,7 +207,7 @@ export async function listComments(taskId: string): Promise<{
       authorDeactivatedAt: users.deactivatedAt,
     })
     .from(comments)
-    .innerJoin(users, eq(users.id, comments.authorId))
+    .leftJoin(users, eq(users.id, comments.authorId))
     .where(eq(comments.taskId, taskId))
     .orderBy(desc(comments.createdAt));
 
@@ -253,13 +253,15 @@ export async function listComments(taskId: string): Promise<{
     content: c.content,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
-    author: {
-      id: c.authorId,
-      email: c.authorEmail,
-      name: c.authorName,
-      avatarUrl: c.authorAvatarUrl,
-      deactivatedAt: c.authorDeactivatedAt,
-    },
+    author: c.authorEmail
+      ? {
+          id: c.authorId!,
+          email: c.authorEmail,
+          name: c.authorName,
+          avatarUrl: c.authorAvatarUrl,
+          deactivatedAt: c.authorDeactivatedAt,
+        }
+      : null,
     attachments: attachmentsByComment.get(c.id) ?? [],
   }));
 
@@ -305,7 +307,7 @@ export async function createComment(input: CreateCommentInput): Promise<{
     if (parentComment.parentCommentId !== null) {
       return { success: false, error: 'Cannot reply to a reply (only one level of nesting allowed)' };
     }
-    parentCommentAuthorId = parentComment.authorId;
+    parentCommentAuthorId = parentComment.authorId ?? undefined;
   }
 
   // Create the comment

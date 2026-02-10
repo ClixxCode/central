@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { boardActivityLog, users } from '@/lib/db/schema';
-import { eq, and, desc, isNotNull, gte } from 'drizzle-orm';
+import { eq, and, desc, gte } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { getBoard } from './boards';
 
@@ -86,7 +86,6 @@ export async function listBoardActivity(boardId: string): Promise<{
     .where(
       and(
         eq(boardActivityLog.boardId, boardId),
-        isNotNull(boardActivityLog.taskId),
         gte(boardActivityLog.createdAt, thirtyDaysAgo)
       )
     )

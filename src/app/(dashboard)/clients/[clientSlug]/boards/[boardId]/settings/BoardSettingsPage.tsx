@@ -71,17 +71,22 @@ export function BoardSettingsPage({
     <div className="space-y-6">
       {/* Back link */}
       <Link
-        href={`/clients/${clientSlug}`}
+        href={`/clients/${clientSlug}/boards/${boardId}`}
         className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4 mr-1" />
-        Back to {displayBoard.client?.name ?? 'Client'}
+        Back to {displayBoard.name}
       </Link>
 
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">Board Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">{displayBoard.name}</p>
+        <Link
+          href={`/clients/${clientSlug}`}
+          className="text-sm text-muted-foreground hover:text-foreground mt-1 inline-block"
+        >
+          {displayBoard.client?.name ?? 'Client'}
+        </Link>
       </div>
 
       {/* Tabs */}

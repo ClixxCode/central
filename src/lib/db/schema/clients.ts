@@ -26,7 +26,7 @@ export const clients = pgTable('clients', {
   leadUserId: uuid('lead_user_id').references(() => users.id, { onDelete: 'set null' }),
   defaultBoardId: uuid('default_board_id').references((): AnyPgColumn => boards.id, { onDelete: 'set null' }),
   metadata: jsonb('metadata').$type<ClientMetadata>().default({}),
-  createdBy: uuid('created_by').references(() => users.id),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

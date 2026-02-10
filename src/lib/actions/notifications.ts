@@ -471,8 +471,8 @@ export async function createCommentAddedNotification(input: {
   });
 
   for (const comment of previousComments) {
-    // Add the commenter
-    recipientIds.add(comment.authorId);
+    // Add the commenter (skip if author was deleted)
+    if (comment.authorId) recipientIds.add(comment.authorId);
 
     // 3. Extract users mentioned in previous comments
     const mentionedInComment = extractMentionedUserIds(comment.content as TiptapContent);

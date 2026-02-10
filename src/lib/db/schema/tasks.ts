@@ -60,7 +60,7 @@ export const tasks = pgTable('tasks', {
   recurringGroupId: uuid('recurring_group_id'),
   parentTaskId: uuid('parent_task_id').references((): any => tasks.id, { onDelete: 'cascade' }),
   position: integer('position').notNull().default(0),
-  createdBy: uuid('created_by').references(() => users.id),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

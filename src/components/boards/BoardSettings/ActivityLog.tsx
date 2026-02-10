@@ -42,8 +42,12 @@ function buildDescription(entry: BoardActivityEntry): {
   switch (entry.action) {
     case 'task_created':
       return { text: `${userName} created`, taskTitle };
+    case 'task_deleted':
+      return { text: `${userName} deleted`, taskTitle };
     case 'subtask_created':
       return { text: `${userName} added subtask`, taskTitle };
+    case 'subtask_deleted':
+      return { text: `${userName} deleted subtask`, taskTitle };
     case 'task_status_changed':
       return {
         text: `${userName} changed status from ${meta.oldLabel ?? meta.oldValue} to ${meta.newLabel ?? meta.newValue} on`,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   listTasks,
   listSubtasks,
@@ -301,6 +302,9 @@ export function useDeleteTask() {
       queryClient.removeQueries({ queryKey: taskKeys.detail(taskId) });
 
       return { previousTask, previousTasks };
+    },
+    onSuccess: () => {
+      toast.success('Task deleted');
     },
     onError: (err, taskId, context) => {
       // Rollback on error

@@ -1265,6 +1265,23 @@ export async function deleteTask(taskId: string): Promise<{
     return { success: false, error: 'Task not found or access denied' };
   }
 
+  // Get task details for activity log before deleting
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { boardId: true, title: true, parentTaskId: true },
+  });
+
+  // Log board activity before delete (task row must still exist for FK)
+  if (task) {
+    await logBoardActivity({
+      boardId: task.boardId,
+      taskId,
+      taskTitle: task.title,
+      userId: user.id,
+      action: task.parentTaskId ? 'subtask_deleted' : 'task_deleted',
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
+
   // Delete task (cascades to assignees)
   await db.delete(tasks).where(eq(tasks.id, taskId));
 
