@@ -21,7 +21,7 @@ export function commentAddedEmailHtml(data: CommentAddedEmailData): string {
   const taskUrl = `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
 
   const commentHtml = data.commentPreview
-    ? `<div style="background: #333338; border-left: 3px solid #7c8fff; padding: 12px; margin: 16px 0; border-radius: 0 8px 8px 0;">
+    ? `<div style="background: #333338; border-left: 3px solid #C4959C; padding: 12px; margin: 16px 0; border-radius: 0 8px 8px 0;">
         <p style="margin: 0; color: #d0d0d5; font-style: italic;">"${data.commentPreview}"</p>
       </div>`
     : '';

@@ -98,7 +98,7 @@ export function dailyDigestEmailHtml(data: DailyDigestEmailData): string {
 
     sections.push(`
       <div style="margin-bottom: 24px;">
-        <h3 style="margin: 0 0 12px; font-size: 16px; color: #7c8fff; border-bottom: 2px solid #353165; padding-bottom: 8px;">
+        <h3 style="margin: 0 0 12px; font-size: 16px; color: #C4959C; border-bottom: 2px solid #353165; padding-bottom: 8px;">
           Due Tomorrow (${data.tasksDueTomorrow.length})
         </h3>
         ${tasksHtml}

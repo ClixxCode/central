@@ -33,7 +33,7 @@ export function baseEmailTemplate(content: string, preheader?: string): string {
           Clix Digital Marketing Agency
         </p>
         <p style="color: #6b6b74; font-size: 11px; margin: 8px 0 0;">
-          <a href="${appUrl}/settings/notifications" style="color: #7c8fff; text-decoration: underline;">Manage notification preferences</a>
+          <a href="${appUrl}/settings/notifications" style="color: #C4959C; text-decoration: underline;">Manage notification preferences</a>
         </p>
       </div>
     </div>

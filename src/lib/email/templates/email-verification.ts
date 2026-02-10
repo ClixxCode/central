@@ -27,7 +27,7 @@ export function emailVerificationTemplate(params: {
     </p>
     <p style="margin: 0; color: #6b6b74; font-size: 13px;">
       If the button doesn't work, copy and paste this link into your browser:<br/>
-      <a href="${verificationUrl}" style="color: #7c8fff; word-break: break-all;">${verificationUrl}</a>
+      <a href="${verificationUrl}" style="color: #C4959C; word-break: break-all;">${verificationUrl}</a>
     </p>
   `;
 
