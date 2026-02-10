@@ -8,7 +8,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
@@ -102,51 +101,49 @@ export function PersonalRollupToolbar({ tasksByClient, viewMode = 'swimlane' }: 
             </Badge>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 p-0 max-h-[min(400px,var(--radix-popover-content-available-height))] flex flex-col">
+        <PopoverContent align="end" className="w-72 p-0 max-h-[min(400px,var(--radix-popover-content-available-height))] overflow-hidden flex flex-col">
           <div className="p-3 border-b shrink-0">
             <h4 className="font-medium text-sm">Toggle boards</h4>
             <p className="text-xs text-muted-foreground mt-0.5">
               Show or hide boards in your task view
             </p>
           </div>
-          <ScrollArea className="flex-1 min-h-0">
-            <div className="p-2 space-y-1">
-              {allBoards.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No boards available
-                </p>
-              ) : (
-                allBoards.map((board) => {
-                  const isHidden = isBoardHidden(board.id);
-                  return (
-                    <button
-                      key={board.id}
-                      type="button"
-                      onClick={() => toggleBoard(board.id)}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                        'hover:bg-accent',
-                        isHidden && 'opacity-60'
-                      )}
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <ClientIcon icon={board.clientIcon} color={board.clientColor} name={board.clientName} size="xs" />
-                        <span className="truncate">{board.name}</span>
-                        <span className="text-xs text-muted-foreground truncate">
-                          {board.clientName}
-                        </span>
-                      </div>
-                      {isHidden ? (
-                        <EyeOff className="size-4 text-muted-foreground shrink-0" />
-                      ) : (
-                        <Eye className="size-4 text-primary shrink-0" />
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </ScrollArea>
+          <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
+            {allBoards.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                No boards available
+              </p>
+            ) : (
+              allBoards.map((board) => {
+                const isHidden = isBoardHidden(board.id);
+                return (
+                  <button
+                    key={board.id}
+                    type="button"
+                    onClick={() => toggleBoard(board.id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      'hover:bg-accent',
+                      isHidden && 'opacity-60'
+                    )}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <ClientIcon icon={board.clientIcon} color={board.clientColor} name={board.clientName} size="xs" />
+                      <span className="truncate">{board.name}</span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {board.clientName}
+                      </span>
+                    </div>
+                    {isHidden ? (
+                      <EyeOff className="size-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <Eye className="size-4 text-primary shrink-0" />
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
           {hiddenBoardCount > 0 && (
             <div className="p-2 border-t shrink-0">
               <Button
