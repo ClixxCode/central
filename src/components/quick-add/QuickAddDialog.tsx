@@ -267,6 +267,7 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
           onUserRemove={handleUserRemove}
           onDateRemove={handleDateRemove}
           onStatusRemove={handleStatusRemove}
+          onSubmit={handleSubmit}
           selectedBoardId={selectedBoard?.boardId}
           statusOptions={boardData?.statusOptions}
           pills={pills}
@@ -280,6 +281,12 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
         />
 
         {/* Footer: option dropdowns + actions */}

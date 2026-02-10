@@ -29,6 +29,7 @@ interface SmartTaskInputProps {
   onUserRemove: (userId: string) => void;
   onDateRemove: () => void;
   onStatusRemove: () => void;
+  onSubmit?: () => void;
   selectedBoardId?: string;
   statusOptions?: { id: string; label: string; color: string; position: number }[];
   pills: InputPill[];
@@ -46,6 +47,7 @@ export function SmartTaskInput({
   onUserRemove,
   onDateRemove,
   onStatusRemove,
+  onSubmit,
   selectedBoardId,
   statusOptions,
   pills,
@@ -217,9 +219,16 @@ export function SmartTaskInput({
       // Don't propagate Enter/ArrowDown/ArrowUp when popover is open
       if (trigger && (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault();
+        return;
+      }
+
+      // Enter with no popover open → submit
+      if (e.key === 'Enter' && !trigger && onSubmit) {
+        e.preventDefault();
+        onSubmit();
       }
     },
-    [trigger, onBoardRemove, onUserRemove, onDateRemove, onStatusRemove, onTitleChange, extractTitle]
+    [trigger, onBoardRemove, onUserRemove, onDateRemove, onStatusRemove, onTitleChange, extractTitle, onSubmit]
   );
 
   // Insert a pill span replacing the trigger text
