@@ -127,6 +127,8 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
     expandedClients,
     toggleSidebarCollapse,
     toggleClientExpanded,
+    toggleSection,
+    isSectionCollapsed,
   } = useUIStore();
   const { data: favorites = [] } = useFavorites();
   const reorderFavorites = useReorderFavorites();
@@ -284,11 +286,20 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
           {favorites.length > 0 && (
             <div className="mt-6">
               {!isCollapsed && (
-                <div className="flex items-center gap-2 px-3 py-2">
+                <button
+                  onClick={() => toggleSection('favorites')}
+                  className="group flex items-center gap-2 px-3 py-2 w-full"
+                >
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Favorites
                   </span>
-                </div>
+                  <ChevronDown
+                    className={cn(
+                      'h-3 w-3 text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-all',
+                      isSectionCollapsed('favorites') && '-rotate-90'
+                    )}
+                  />
+                </button>
               )}
 
               {isCollapsed ? (
@@ -334,7 +345,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                     );
                   })}
                 </div>
-              ) : (
+              ) : !isSectionCollapsed('favorites') ? (
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
@@ -365,20 +376,30 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                     </div>
                   </SortableContext>
                 </DndContext>
-              )}
+              ) : null}
             </div>
           )}
 
           {/* Clients Section */}
           {!isCollapsed && (
             <div className="mt-6">
-              <div className="flex items-center justify-between px-3 py-2">
-                <Link
-                  href="/clients"
-                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Clients
-                </Link>
+              <div className="group flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/clients"
+                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Clients
+                  </Link>
+                  <button onClick={() => toggleSection('clients')}>
+                    <ChevronDown
+                      className={cn(
+                        'h-3 w-3 text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-all',
+                        isSectionCollapsed('clients') && '-rotate-90'
+                      )}
+                    />
+                  </button>
+                </div>
                 {isAdmin && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -393,7 +414,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                 )}
               </div>
 
-              <div className="space-y-1">
+              {!isSectionCollapsed('clients') && <div className="space-y-1">
                 {clients.map((client) => {
                   const isExpanded = clientsExpanded.includes(client.id);
                   const isClientActive = pathname.includes(`/clients/${client.slug}`);
@@ -491,7 +512,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                     </Collapsible>
                   );
                 })}
-              </div>
+              </div>}
             </div>
           )}
           </div>

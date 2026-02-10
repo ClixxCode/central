@@ -6,6 +6,7 @@ interface UIState {
   sidebarOpen: boolean;
   sidebarCollapsed: boolean;
   expandedClients: string[];
+  collapsedSections: string[];
 
   // Actions
   setSidebarOpen: (open: boolean) => void;
@@ -13,15 +14,18 @@ interface UIState {
   toggleSidebarCollapse: () => void;
   toggleClientExpanded: (clientId: string) => void;
   setExpandedClients: (clientIds: string[]) => void;
+  toggleSection: (section: string) => void;
+  isSectionCollapsed: (section: string) => boolean;
 }
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state
       sidebarOpen: false,
       sidebarCollapsed: false,
       expandedClients: [],
+      collapsedSections: [],
 
       // Actions
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -41,6 +45,15 @@ export const useUIStore = create<UIState>()(
 
       setExpandedClients: (clientIds) =>
         set({ expandedClients: clientIds }),
+
+      toggleSection: (section) =>
+        set((state) => ({
+          collapsedSections: state.collapsedSections.includes(section)
+            ? state.collapsedSections.filter((s) => s !== section)
+            : [...state.collapsedSections, section],
+        })),
+
+      isSectionCollapsed: (section) => get().collapsedSections.includes(section),
     }),
     {
       name: 'clix-pm-ui',
@@ -48,6 +61,7 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
         expandedClients: state.expandedClients,
+        collapsedSections: state.collapsedSections,
       }),
     }
   )
