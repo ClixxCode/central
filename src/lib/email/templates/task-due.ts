@@ -27,8 +27,8 @@ export function taskDueEmailHtml(data: TaskDueEmailData): string {
   const formattedDate = formatEmailDate(data.dueDate);
 
   const headerStyle = data.isOverdue
-    ? 'color: #DC2626;' // red for overdue
-    : 'color: #D97706;'; // amber for due soon
+    ? 'color: #f87171;' // red for overdue
+    : 'color: #fbbf24;'; // amber for due soon
 
   const headerText = data.isOverdue
     ? 'Task Overdue'
@@ -40,7 +40,7 @@ export function taskDueEmailHtml(data: TaskDueEmailData): string {
 
   const content = `
     <h2 style="margin: 0 0 16px; font-size: 18px; ${headerStyle}">${headerText}</h2>
-    <p style="margin: 0 0 16px; color: #374151;">
+    <p style="margin: 0 0 16px; color: #d1cdd9;">
       ${messageText}
     </p>
     ${taskCard({

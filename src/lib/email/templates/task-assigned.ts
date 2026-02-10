@@ -23,12 +23,12 @@ export function taskAssignedEmailHtml(data: TaskAssignedEmailData): string {
   const taskUrl = `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
 
   const descriptionHtml = data.taskDescription
-    ? `<p style="margin: 16px 0; color: #6b7280; font-size: 14px;">${data.taskDescription}</p>`
+    ? `<p style="margin: 16px 0; color: #a8a3b5; font-size: 14px;">${data.taskDescription}</p>`
     : '';
 
   const content = `
-    <h2 style="margin: 0 0 16px; font-size: 18px; color: #111827;">New Task Assignment</h2>
-    <p style="margin: 0 0 16px; color: #374151;">
+    <h2 style="margin: 0 0 16px; font-size: 18px; color: #f5f5f5;">New Task Assignment</h2>
+    <p style="margin: 0 0 16px; color: #d1cdd9;">
       <strong>${data.assignerName}</strong> assigned you to a task:
     </p>
     ${taskCard({

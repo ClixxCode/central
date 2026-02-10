@@ -13,21 +13,21 @@ export function adminPasswordResetTemplate(params: {
   const greeting = name ? `Hi ${name},` : 'Hi,';
 
   const content = `
-    <p style="margin: 0 0 16px;">${greeting}</p>
-    <p style="margin: 0 0 16px;">
+    <p style="margin: 0 0 16px; color: #f5f5f5;">${greeting}</p>
+    <p style="margin: 0 0 16px; color: #d1cdd9;">
       ${adminName} has sent you a link to reset your password for Central.
       Use the button below to set a new password and access your account.
     </p>
     <p style="margin: 0 0 24px; text-align: center;">
       ${emailButton('Reset Password', resetUrl)}
     </p>
-    <p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">
+    <p style="margin: 0 0 16px; color: #a8a3b5; font-size: 14px;">
       This link will expire in 24 hours. If you didn't expect this email,
       please contact your administrator.
     </p>
-    <p style="margin: 0; color: #9ca3af; font-size: 13px;">
+    <p style="margin: 0; color: #706a80; font-size: 13px;">
       If the button doesn't work, copy and paste this link into your browser:<br/>
-      <a href="${resetUrl}" style="color: #3b82f6; word-break: break-all;">${resetUrl}</a>
+      <a href="${resetUrl}" style="color: #7c8fff; word-break: break-all;">${resetUrl}</a>
     </p>
   `;
 
