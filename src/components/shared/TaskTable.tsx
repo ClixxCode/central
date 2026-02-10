@@ -1,17 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, Settings2, ExternalLink } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useColumnResize } from '@/lib/hooks/useColumnResize';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -116,7 +108,6 @@ interface TaskTableProps {
   sort?: TableSortOptions;
   onSortChange?: (sort: TableSortOptions) => void;
   columns?: TableColumnConfig;
-  onColumnsChange?: (columns: TableColumnConfig) => void;
   emptyMessage?: string;
   showSource?: boolean; // Enable source column for rollups
 }
@@ -131,15 +122,15 @@ export function TaskTable({
   sort = { field: 'position', direction: 'asc' },
   onSortChange,
   columns: columnsProp,
-  onColumnsChange,
   emptyMessage = 'No tasks found',
   showSource = false,
 }: TaskTableProps) {
-  // Merge default columns with showSource
+  // Merge default columns with showSource (showSource enables source column by default,
+  // but explicit columnsProp.source can override it)
   const columns = React.useMemo(() => ({
     ...defaultColumns,
+    source: showSource,
     ...columnsProp,
-    source: showSource || columnsProp?.source,
   }), [columnsProp, showSource]);
 
   const handleSort = (field: SortField) => {
@@ -152,17 +143,6 @@ export function TaskTable({
       });
     } else {
       onSortChange({ field, direction: 'asc' });
-    }
-  };
-
-  const handleColumnToggle = (column: keyof TableColumnConfig) => {
-    if (!onColumnsChange) return;
-
-    const newColumns = { ...columns, [column]: !columns[column] };
-    const visibleCount = Object.values(newColumns).filter(Boolean).length;
-
-    if (visibleCount >= 1) {
-      onColumnsChange(newColumns);
     }
   };
 
@@ -184,7 +164,7 @@ export function TaskTable({
     resizable?: boolean;
   }[] = [
     { key: 'title', label: 'Task', sortField: 'title' },
-    { key: 'source', label: 'Source', sortField: 'client', resizable: true },
+    { key: 'source', label: 'Board', sortField: 'client', resizable: true },
     { key: 'status', label: 'Status', sortField: 'status', resizable: true },
     { key: 'section', label: 'Section', resizable: true },
     { key: 'assignees', label: 'Assignees', resizable: true },
@@ -321,31 +301,7 @@ export function TaskTable({
                   )}
                 </th>
               ))}
-              <th className="w-12 px-3 py-2">
-                {onColumnsChange && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        <Settings2 className="size-3.5" />
-                        <span className="sr-only">Column settings</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Columns</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {columnHeaders.map((header) => (
-                        <DropdownMenuCheckboxItem
-                          key={header.key}
-                          checked={columns[header.key]}
-                          onCheckedChange={() => handleColumnToggle(header.key)}
-                        >
-                          {header.label}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </th>
+              <th className="w-12 px-3 py-2" />
             </tr>
           </thead>
           <tbody>

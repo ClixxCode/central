@@ -3,10 +3,43 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 type ViewMode = 'table' | 'swimlane' | 'kanban';
 
+export interface BoardTableColumns {
+  title: boolean;
+  status: boolean;
+  section: boolean;
+  assignees: boolean;
+  dueDate: boolean;
+  source?: boolean;
+}
+
+const defaultBoardTableColumns: BoardTableColumns = {
+  title: true,
+  status: true,
+  section: true,
+  assignees: true,
+  dueDate: true,
+};
+
+export interface SwimlaneCardItems {
+  section: boolean;
+  dueDate: boolean;
+  assignees: boolean;
+}
+
+const defaultSwimlaneCardItems: SwimlaneCardItems = {
+  section: true,
+  dueDate: true,
+  assignees: true,
+};
+
 interface BoardViewState {
   // Per-board view preferences
   boardViews: Record<string, ViewMode>;
   collapsedSwimlanes: Record<string, string[]>;
+  // Per-board table column visibility
+  boardTableColumns: Record<string, BoardTableColumns>;
+  // Per-board swimlane card item visibility
+  swimlaneCardItems: Record<string, SwimlaneCardItems>;
 
   // Actions
   getBoardView: (boardId: string, defaultView?: ViewMode) => ViewMode;
@@ -15,6 +48,11 @@ interface BoardViewState {
   isSwimlaneCollapsed: (boardId: string, status: string) => boolean;
   setAllSwimlanesCollapsed: (boardId: string, swimlaneIds: string[], collapsed: boolean) => void;
   areAllSwimlanesCollapsed: (boardId: string, swimlaneIds: string[]) => boolean;
+  getBoardTableColumns: (boardId: string, defaults?: BoardTableColumns) => BoardTableColumns;
+  setBoardTableColumns: (boardId: string, columns: BoardTableColumns) => void;
+  toggleBoardTableColumn: (boardId: string, column: keyof BoardTableColumns) => void;
+  getSwimlaneCardItems: (boardId: string) => SwimlaneCardItems;
+  toggleSwimlaneCardItem: (boardId: string, item: keyof SwimlaneCardItems) => void;
 }
 
 export const useBoardViewStore = create<BoardViewState>()(
@@ -22,6 +60,8 @@ export const useBoardViewStore = create<BoardViewState>()(
     (set, get) => ({
       boardViews: {},
       collapsedSwimlanes: {},
+      boardTableColumns: {},
+      swimlaneCardItems: {},
 
       getBoardView: (boardId, defaultView = 'swimlane') => get().boardViews[boardId] ?? defaultView,
 
@@ -62,10 +102,41 @@ export const useBoardViewStore = create<BoardViewState>()(
         const collapsed = get().collapsedSwimlanes[boardId] ?? [];
         return swimlaneIds.length > 0 && swimlaneIds.every((id) => collapsed.includes(id));
       },
+
+      getBoardTableColumns: (boardId, defaults = defaultBoardTableColumns) =>
+        get().boardTableColumns[boardId] ?? defaults,
+
+      setBoardTableColumns: (boardId, columns) =>
+        set((state) => ({
+          boardTableColumns: { ...state.boardTableColumns, [boardId]: columns },
+        })),
+
+      toggleBoardTableColumn: (boardId, column) =>
+        set((state) => {
+          const current = state.boardTableColumns[boardId] ?? defaultBoardTableColumns;
+          const newColumns = { ...current, [column]: !current[column] };
+          const visibleCount = Object.values(newColumns).filter(Boolean).length;
+          if (visibleCount < 1) return state;
+          return {
+            boardTableColumns: { ...state.boardTableColumns, [boardId]: newColumns },
+          };
+        }),
+
+      getSwimlaneCardItems: (boardId) =>
+        get().swimlaneCardItems[boardId] ?? defaultSwimlaneCardItems,
+
+      toggleSwimlaneCardItem: (boardId, item) =>
+        set((state) => {
+          const current = state.swimlaneCardItems[boardId] ?? defaultSwimlaneCardItems;
+          return {
+            swimlaneCardItems: { ...state.swimlaneCardItems, [boardId]: { ...current, [item]: !current[item] } },
+          };
+        }),
     }),
     {
       name: 'clix-pm-board-views',
       storage: createJSONStorage(() => localStorage),
+      skipHydration: true,
     }
   )
 );

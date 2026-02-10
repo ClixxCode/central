@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, LayoutList, Kanban, TableRowsSplit, ExternalLink, ChevronsUpDown, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, LayoutList, Kanban, TableRowsSplit, ExternalLink, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RollupTaskCard } from './RollupTaskCard';
 import { TaskModal } from '@/components/tasks/TaskModal';
-import { TaskTable, type TableTask, type TableSortOptions } from '@/components/shared/TaskTable';
+import { TaskTable, type TableTask, type TableSortOptions, type TableColumnConfig } from '@/components/shared/TaskTable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DndProvider, type DragEndEvent } from '@/components/dnd';
 import { DroppableContainer } from '@/components/dnd/DroppableContainer';
@@ -40,6 +40,8 @@ interface RollupBoardViewProps {
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
   viewMode?: RollupViewMode;
+  tableColumns?: TableColumnConfig;
+  hiddenCardItems?: Set<string>;
 }
 
 export function RollupBoardView({
@@ -49,9 +51,11 @@ export function RollupBoardView({
   sectionOptions,
   assignableUsers,
   viewMode = 'swimlane',
+  tableColumns,
+  hiddenCardItems,
 }: RollupBoardViewProps) {
   const router = useRouter();
-  const { isSwimlaneCollapsed, toggleSwimlane, setAllSwimlanesCollapsed, areAllSwimlanesCollapsed } = useBoardViewStore();
+  const { isSwimlaneCollapsed, toggleSwimlane } = useBoardViewStore();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
@@ -197,18 +201,6 @@ export function RollupBoardView({
     return sorted;
   }, [tasks, tableSort, statusOptions]);
 
-  // Get all swimlane IDs for collapse/expand all (must be before any early returns)
-  const allSwimlaneIds = React.useMemo(
-    () => boardGroups.map((g) => g.boardId),
-    [boardGroups]
-  );
-
-  const allCollapsed = areAllSwimlanesCollapsed(rollupBoard.id, allSwimlaneIds);
-
-  const handleToggleAll = React.useCallback(() => {
-    setAllSwimlanesCollapsed(rollupBoard.id, allSwimlaneIds, !allCollapsed);
-  }, [rollupBoard.id, allSwimlaneIds, allCollapsed, setAllSwimlanesCollapsed]);
-
   // Table view
   if (viewMode === 'table') {
     return (
@@ -221,6 +213,7 @@ export function RollupBoardView({
           onNavigateToSource={navigateToSourceBoard}
           sort={tableSort}
           onSortChange={setTableSort}
+          columns={tableColumns}
           showSource
           emptyMessage="No tasks in this rollup"
         />
@@ -265,6 +258,7 @@ export function RollupBoardView({
                 assignableUsers={assignableUsers}
                 onTaskClick={setSelectedTaskId}
                 onNavigateToSource={navigateToSourceBoard}
+                hiddenCardItems={hiddenCardItems}
               />
             );
           })}
@@ -303,18 +297,6 @@ export function RollupBoardView({
           </div>
         ) : (
           <>
-            {/* Collapse/Expand All Button */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleToggleAll}
-                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              >
-                <ChevronsUpDown className="size-4" />
-                {allCollapsed ? 'Expand All' : 'Collapse All'}
-              </button>
-            </div>
-
             {/* Swimlanes */}
             <div className="space-y-6">
               {boardGroups.map((group) => {
@@ -338,6 +320,7 @@ export function RollupBoardView({
                     onTaskStatusChange={(taskId, newStatus) => {
                       updateTask.mutate({ id: taskId, status: newStatus });
                     }}
+                    hiddenCardItems={hiddenCardItems}
                   />
                 );
               })}
@@ -380,6 +363,7 @@ interface RollupBoardSwimlaneProps {
   onTaskClick: (taskId: string) => void;
   onNavigateToBoard: () => void;
   onTaskStatusChange: (taskId: string, newStatus: string) => void;
+  hiddenCardItems?: Set<string>;
 }
 
 function hexToSubtleBg(hex: string, opacity = 0.06): string {
@@ -399,6 +383,7 @@ function RollupBoardSwimlane({
   onTaskClick,
   onNavigateToBoard,
   onTaskStatusChange,
+  hiddenCardItems,
 }: RollupBoardSwimlaneProps) {
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
 
@@ -474,11 +459,12 @@ function RollupBoardSwimlane({
             assignableUsers={assignableUsers}
             showClientBadge={false}
             variant="kanban"
+            hiddenItems={hiddenCardItems}
           />
         </div>
       );
     },
-    [group.tasks, sectionOptions, assignableUsers]
+    [group.tasks, sectionOptions, assignableUsers, hiddenCardItems]
   );
 
   return (
@@ -575,6 +561,7 @@ function RollupBoardSwimlane({
                                 variant="kanban"
                                 onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                                 isExpanded={expandedParents.has(task.id)}
+                                hiddenItems={hiddenCardItems}
                               />
                             </SortableTask>
                             {expandedParents.has(task.id) && (
@@ -621,6 +608,7 @@ interface RollupKanbanColumnProps {
   assignableUsers: AssigneeUser[];
   onTaskClick: (taskId: string) => void;
   onNavigateToSource: (task: RollupTaskWithAssignees) => void;
+  hiddenCardItems?: Set<string>;
 }
 
 function RollupKanbanColumn({
@@ -631,6 +619,7 @@ function RollupKanbanColumn({
   assignableUsers,
   onTaskClick,
   onNavigateToSource,
+  hiddenCardItems,
 }: RollupKanbanColumnProps) {
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
   const toggleExpanded = React.useCallback((taskId: string) => {
@@ -678,6 +667,7 @@ function RollupKanbanColumn({
                   variant="kanban"
                   onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                   isExpanded={expandedParents.has(task.id)}
+                  hiddenItems={hiddenCardItems}
                 />
                 {expandedParents.has(task.id) && (
                   <ExpandedSubtasks

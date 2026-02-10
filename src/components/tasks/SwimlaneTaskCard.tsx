@@ -20,6 +20,7 @@ interface SwimlaneTaskCardProps {
   isOverlay?: boolean;
   onToggleSubtasks?: () => void;
   isExpanded?: boolean;
+  hiddenItems?: Set<string>;
 }
 
 export function SwimlaneTaskCard({
@@ -31,8 +32,12 @@ export function SwimlaneTaskCard({
   isOverlay = false,
   onToggleSubtasks,
   isExpanded,
+  hiddenItems,
 }: SwimlaneTaskCardProps) {
   const section = sectionOptions.find((s) => s.id === task.section);
+  const showSection = !hiddenItems?.has('section');
+  const showDueDate = !hiddenItems?.has('dueDate');
+  const showAssignees = !hiddenItems?.has('assignees');
 
   const cardContent = (
     <div
@@ -73,7 +78,7 @@ export function SwimlaneTaskCard({
         {/* Meta Row */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           {/* Section Badge */}
-          {section && (
+          {showSection && section && (
             <span
               className="inline-flex items-center rounded px-1.5 py-0.5 font-medium"
               style={{
@@ -86,7 +91,7 @@ export function SwimlaneTaskCard({
           )}
 
           {/* Due Date */}
-          {task.dueDate && (
+          {showDueDate && task.dueDate && (
             <div className="flex items-center gap-1">
               <Calendar className="size-3" />
               <DateDisplay
@@ -111,7 +116,7 @@ export function SwimlaneTaskCard({
               attachmentCount={task.attachmentCount}
               hasNewComments={task.hasNewComments}
             />
-            {task.assignees.length > 0 && (
+            {showAssignees && task.assignees.length > 0 && (
               <AssigneeAvatars
                 assignees={task.assignees}
                 maxDisplay={3}

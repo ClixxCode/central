@@ -1,16 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Columns, Eye, EyeOff, FolderKanban } from 'lucide-react';
+import { Eye, EyeOff, FolderKanban, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Popover,
   PopoverContent,
@@ -20,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
+import { TableColumnsButton } from '@/components/shared/TableColumnsButton';
 import type { MyTasksByClient } from '@/lib/actions/tasks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 
@@ -31,17 +24,29 @@ export const PERSONAL_ROLLUP_COLUMNS = [
   { id: 'assignees', label: 'Assignees' },
 ] as const;
 
+// Table columns available for toggle
+const TABLE_COLUMNS = [
+  { id: 'source', label: 'Board' },
+  { id: 'status', label: 'Status' },
+  { id: 'section', label: 'Section' },
+  { id: 'assignees', label: 'Assignees' },
+  { id: 'dueDate', label: 'Due Date' },
+] as const;
+
 interface PersonalRollupToolbarProps {
   tasksByClient: MyTasksByClient[];
+  viewMode?: 'swimlane' | 'table';
 }
 
-export function PersonalRollupToolbar({ tasksByClient }: PersonalRollupToolbarProps) {
+export function PersonalRollupToolbar({ tasksByClient, viewMode = 'swimlane' }: PersonalRollupToolbarProps) {
   const {
     hiddenColumns,
     toggleColumn,
     toggleBoard,
     isColumnHidden,
     isBoardHidden,
+    tableColumns,
+    toggleTableColumn,
   } = usePersonalRollupStore();
 
   // Get all unique boards across all clients
@@ -68,33 +73,23 @@ export function PersonalRollupToolbar({ tasksByClient }: PersonalRollupToolbarPr
 
   return (
     <div className="flex items-center gap-2">
-      {/* Column Visibility Toggle */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2">
-            <Columns className="size-4" />
-            Columns
-            {hiddenColumns.length > 0 && (
-              <Badge variant="secondary" className="ml-1 px-1.5 py-0">
-                {PERSONAL_ROLLUP_COLUMNS.length - hiddenColumns.length}/{PERSONAL_ROLLUP_COLUMNS.length}
-              </Badge>
-            )}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {PERSONAL_ROLLUP_COLUMNS.map((column) => (
-            <DropdownMenuCheckboxItem
-              key={column.id}
-              checked={!isColumnHidden(column.id)}
-              onCheckedChange={() => toggleColumn(column.id)}
-            >
-              {column.label}
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Column Visibility Toggle / Card Items Toggle */}
+      {viewMode === 'swimlane' ? (
+        <TableColumnsButton
+          columns={PERSONAL_ROLLUP_COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
+          visibleColumns={Object.fromEntries(PERSONAL_ROLLUP_COLUMNS.map((c) => [c.id, !isColumnHidden(c.id)]))}
+          onToggle={(col) => toggleColumn(col)}
+          label="Card Items"
+          menuLabel="Toggle card items"
+          icon={SlidersHorizontal}
+        />
+      ) : (
+        <TableColumnsButton
+          columns={TABLE_COLUMNS.map((c) => ({ id: c.id, label: c.label }))}
+          visibleColumns={tableColumns}
+          onToggle={(col) => toggleTableColumn(col as keyof typeof tableColumns)}
+        />
+      )}
 
       {/* Board Visibility Toggle */}
       <Popover>

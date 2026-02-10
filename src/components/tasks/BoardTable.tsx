@@ -1,17 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, Settings2 } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { TaskRow, TaskRowSkeleton } from './TaskRow';
 import { useColumnResize } from '@/lib/hooks/useColumnResize';
 import { useSubtasks } from '@/lib/hooks/useTasks';
@@ -51,7 +42,6 @@ interface BoardTableProps {
   sort?: TaskSortOptions;
   onSortChange?: (sort: TaskSortOptions) => void;
   columns?: ColumnConfig;
-  onColumnsChange?: (columns: ColumnConfig) => void;
   emptyMessage?: string;
 }
 
@@ -68,7 +58,6 @@ export function BoardTable({
   sort = { field: 'position', direction: 'asc' },
   onSortChange,
   columns = defaultColumns,
-  onColumnsChange,
   emptyMessage = 'No tasks found',
 }: BoardTableProps) {
   const handleSort = (field: SortField) => {
@@ -83,18 +72,6 @@ export function BoardTable({
     } else {
       // New field, default to ascending
       onSortChange({ field, direction: 'asc' });
-    }
-  };
-
-  const handleColumnToggle = (column: keyof ColumnConfig) => {
-    if (!onColumnsChange) return;
-
-    // Don't allow hiding all columns
-    const newColumns = { ...columns, [column]: !columns[column] };
-    const visibleCount = Object.values(newColumns).filter(Boolean).length;
-
-    if (visibleCount >= 1) {
-      onColumnsChange(newColumns);
     }
   };
 
@@ -218,31 +195,7 @@ export function BoardTable({
                 )}
               </th>
             ))}
-            <th className="w-12 px-3 py-2">
-              {onColumnsChange && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      <Settings2 className="size-3.5" />
-                      <span className="sr-only">Column settings</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Columns</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {columnHeaders.map((header) => (
-                      <DropdownMenuCheckboxItem
-                        key={header.key}
-                        checked={columns[header.key]}
-                        onCheckedChange={() => handleColumnToggle(header.key)}
-                      >
-                        {header.label}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </th>
+            <th className="w-12 px-3 py-2" />
           </tr>
         </thead>
         <tbody>

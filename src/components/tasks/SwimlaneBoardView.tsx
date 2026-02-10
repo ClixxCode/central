@@ -30,6 +30,8 @@ interface SwimlaneBoardViewProps {
   highlightedCommentId?: string | null;
   /** Called when the task modal closes (to clear URL params) */
   onTaskModalClose?: () => void;
+  /** Set of card item IDs to hide (e.g. 'section', 'dueDate', 'assignees') */
+  hiddenItems?: Set<string>;
 }
 
 export function SwimlaneBoardView({
@@ -43,6 +45,7 @@ export function SwimlaneBoardView({
   initialTaskId,
   highlightedCommentId,
   onTaskModalClose,
+  hiddenItems,
 }: SwimlaneBoardViewProps) {
   const { isSwimlaneCollapsed, toggleSwimlane } = useBoardViewStore();
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
@@ -255,10 +258,11 @@ export function SwimlaneBoardView({
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
           isOverlay
+          hiddenItems={hiddenItems}
         />
       );
     },
-    [tasks, sectionOptions, assignableUsers]
+    [tasks, sectionOptions, assignableUsers, hiddenItems]
   );
 
   // Sort status options by position
@@ -294,6 +298,7 @@ export function SwimlaneBoardView({
                       onClick={() => setSelectedTaskId(task.id)}
                       onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                       isExpanded={expandedParents.has(task.id)}
+                      hiddenItems={hiddenItems}
                     />
                     {expandedParents.has(task.id) && (
                       <ExpandedSubtasks

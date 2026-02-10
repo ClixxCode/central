@@ -29,6 +29,8 @@ interface KanbanBoardViewProps {
   highlightedCommentId?: string | null;
   /** Called when the task modal closes (to clear URL params) */
   onTaskModalClose?: () => void;
+  /** Set of card item IDs to hide (e.g. 'section', 'dueDate', 'assignees') */
+  hiddenItems?: Set<string>;
 }
 
 export function KanbanBoardView({
@@ -42,6 +44,7 @@ export function KanbanBoardView({
   initialTaskId,
   highlightedCommentId,
   onTaskModalClose,
+  hiddenItems,
 }: KanbanBoardViewProps) {
   const updateTaskPositions = useUpdateTaskPositions();
   const updateTask = useUpdateTask();
@@ -248,10 +251,11 @@ export function KanbanBoardView({
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
           isOverlay
+          hiddenItems={hiddenItems}
         />
       );
     },
-    [tasks, sectionOptions, assignableUsers]
+    [tasks, sectionOptions, assignableUsers, hiddenItems]
   );
 
   // Sort status options by position
@@ -285,6 +289,7 @@ export function KanbanBoardView({
                       onClick={() => setSelectedTaskId(task.id)}
                       onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                       isExpanded={expandedParents.has(task.id)}
+                      hiddenItems={hiddenItems}
                     />
                     {expandedParents.has(task.id) && (
                       <ExpandedSubtasks

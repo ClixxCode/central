@@ -22,6 +22,7 @@ interface RollupTaskCardProps {
   variant?: 'swimlane' | 'kanban';
   onToggleSubtasks?: () => void;
   isExpanded?: boolean;
+  hiddenItems?: Set<string>;
 }
 
 export function RollupTaskCard({
@@ -34,8 +35,12 @@ export function RollupTaskCard({
   variant = 'swimlane',
   onToggleSubtasks,
   isExpanded,
+  hiddenItems,
 }: RollupTaskCardProps) {
   const section = sectionOptions.find((s) => s.id === task.section);
+  const showSection = !hiddenItems?.has('section');
+  const showDueDate = !hiddenItems?.has('dueDate');
+  const showAssignees = !hiddenItems?.has('assignees');
 
   const handleNavigate = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -85,7 +90,7 @@ export function RollupTaskCard({
         )}
 
         {/* Section Badge */}
-        {section && (
+        {showSection && section && (
           <span
             className="mb-2 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
             style={{
@@ -103,7 +108,7 @@ export function RollupTaskCard({
         {/* Meta Row */}
         <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           {/* Due Date */}
-          {task.dueDate ? (
+          {showDueDate && task.dueDate ? (
             <div className="flex items-center gap-1">
               <Calendar className="size-3" />
               <DateDisplay
@@ -130,7 +135,7 @@ export function RollupTaskCard({
               attachmentCount={task.attachmentCount}
               hasNewComments={task.hasNewComments}
             />
-            {task.assignees.length > 0 && (
+            {showAssignees && task.assignees.length > 0 && (
               <AssigneeAvatars
                 assignees={task.assignees}
                 maxDisplay={2}
@@ -198,7 +203,7 @@ export function RollupTaskCard({
         {/* Meta Row */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           {/* Section Badge */}
-          {section && (
+          {showSection && section && (
             <span
               className="inline-flex items-center rounded px-1.5 py-0.5 font-medium"
               style={{
@@ -211,7 +216,7 @@ export function RollupTaskCard({
           )}
 
           {/* Due Date */}
-          {task.dueDate && (
+          {showDueDate && task.dueDate && (
             <div className="flex items-center gap-1">
               <Calendar className="size-3" />
               <DateDisplay
@@ -236,7 +241,7 @@ export function RollupTaskCard({
               attachmentCount={task.attachmentCount}
               hasNewComments={task.hasNewComments}
             />
-            {task.assignees.length > 0 && (
+            {showAssignees && task.assignees.length > 0 && (
               <AssigneeAvatars
                 assignees={task.assignees}
                 maxDisplay={3}

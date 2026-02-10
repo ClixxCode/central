@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, ExternalLink, Plus } from 'lucide-react';
 import { TaskModal } from './TaskModal';
 import { RollupTaskCard } from '@/components/rollups/RollupTaskCard';
-import { TaskTable, type TableTask, type TableSortOptions, type TableColumnConfig } from '@/components/shared/TaskTable';
+import { TaskTable, type TableTask } from '@/components/shared/TaskTable';
 import { DndProvider, type DragEndEvent } from '@/components/dnd';
 import { DroppableContainer } from '@/components/dnd/DroppableContainer';
 import { SortableTask } from '@/components/dnd/SortableTask';
@@ -44,10 +44,20 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
     isClientCollapsed,
     toggleClient,
     isBoardHidden,
+    hiddenColumns,
+    tableColumns,
+    tableSort,
+    setTableSort,
   } = usePersonalRollupStore();
 
   const updateTask = useUpdateMyTask();
   const deleteTask = useDeleteTask();
+
+  // Compute hidden card items from store for swimlane cards
+  const swimlaneHiddenItems = React.useMemo(
+    () => new Set(hiddenColumns),
+    [hiddenColumns]
+  );
 
   // Modal state — ID-based so subtask navigation works via onOpenSubtask
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
@@ -154,19 +164,7 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
     [deleteTask]
   );
 
-  // Table view state
-  const [tableSort, setTableSort] = React.useState<TableSortOptions>({
-    field: 'client',
-    direction: 'asc',
-  });
-  const [tableColumns, setTableColumns] = React.useState<TableColumnConfig>({
-    title: true,
-    status: true,
-    section: true,
-    assignees: true,
-    dueDate: true,
-    source: true,
-  });
+  // Table view state from persisted store (tableColumns, tableSort)
 
   // All tasks flattened for table view
   const flatTasks = React.useMemo(() => {
@@ -291,7 +289,6 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
           sort={tableSort}
           onSortChange={setTableSort}
           columns={tableColumns}
-          onColumnsChange={setTableColumns}
           showSource
           emptyMessage="No tasks assigned to you"
         />
@@ -315,6 +312,7 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
                   onTaskStatusChange={(taskId, newStatus) => {
                     updateTask.mutate({ id: taskId, status: newStatus });
                   }}
+                  hiddenCardItems={swimlaneHiddenItems}
                 />
               );
             })}
@@ -358,6 +356,7 @@ interface MyWorkBoardSwimlaneProps {
   onSubtaskClick: (taskId: string) => void;
   onNavigateToBoard: () => void;
   onTaskStatusChange: (taskId: string, newStatus: string) => void;
+  hiddenCardItems?: Set<string>;
 }
 
 function hexToSubtleBg(hex: string, opacity = 0.06): string {
@@ -375,6 +374,7 @@ function MyWorkBoardSwimlane({
   onSubtaskClick,
   onNavigateToBoard,
   onTaskStatusChange,
+  hiddenCardItems,
 }: MyWorkBoardSwimlaneProps) {
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
 
@@ -465,11 +465,12 @@ function MyWorkBoardSwimlane({
             assignableUsers={task.assignees}
             showClientBadge={false}
             variant="kanban"
+            hiddenItems={hiddenCardItems}
           />
         </div>
       );
     },
-    [group]
+    [group, hiddenCardItems]
   );
 
   return (
@@ -493,8 +494,12 @@ function MyWorkBoardSwimlane({
           >
             {group.clientName}
           </span>
-          <span className="text-muted-foreground">/</span>
-          <span className="font-medium">{group.boardName}</span>
+          {group.boardName.toLowerCase() !== group.clientName.toLowerCase() && (
+            <>
+              <span className="text-muted-foreground">/</span>
+              <span className="font-medium">{group.boardName}</span>
+            </>
+          )}
         </button>
         <span className="ml-auto text-sm text-muted-foreground">
           {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
@@ -571,6 +576,7 @@ function MyWorkBoardSwimlane({
                                 variant="kanban"
                                 onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                                 isExpanded={expandedParents.has(task.id)}
+                                hiddenItems={hiddenCardItems}
                               />
                             </SortableTask>
                             {expandedParents.has(task.id) && (

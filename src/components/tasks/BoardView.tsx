@@ -3,7 +3,9 @@
 import * as React from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { BoardTable, ColumnConfig, defaultColumns } from './BoardTable';
+import { BoardTable } from './BoardTable';
+import { TableColumnsButton } from '@/components/shared/TableColumnsButton';
+import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { NewTaskRow } from './NewTaskRow';
 import { TaskFilterBar } from './TaskFilterBar';
 import { TaskModal } from './TaskModal';
@@ -33,13 +35,15 @@ export function BoardView({
   statusOptions,
   sectionOptions,
 }: BoardViewProps) {
+  const { getBoardTableColumns, toggleBoardTableColumn } = useBoardViewStore();
+  const columns = getBoardTableColumns(boardId);
+
   // Filter and sort state
   const [filters, setFilters] = React.useState<TaskFilters>({});
   const [sort, setSort] = React.useState<TaskSortOptions>({
     field: 'position',
     direction: 'asc',
   });
-  const [columns, setColumns] = React.useState<ColumnConfig>(defaultColumns);
 
   // Modal state
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
@@ -92,14 +96,28 @@ export function BoardView({
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* Filters */}
-        <TaskFilterBar
-          filters={filters}
-          onFiltersChange={setFilters}
-          statusOptions={statusOptions}
-          sectionOptions={sectionOptions}
-          assignableUsers={assignableUsers}
-        />
+        <div className="flex items-center gap-4">
+          {/* Filters */}
+          <TaskFilterBar
+            filters={filters}
+            onFiltersChange={setFilters}
+            statusOptions={statusOptions}
+            sectionOptions={sectionOptions}
+            assignableUsers={assignableUsers}
+          />
+
+          {/* Column visibility */}
+          <TableColumnsButton
+            columns={[
+              { id: 'status', label: 'Status' },
+              { id: 'section', label: 'Section' },
+              { id: 'assignees', label: 'Assignees' },
+              { id: 'dueDate', label: 'Due Date' },
+            ]}
+            visibleColumns={columns}
+            onToggle={(col) => toggleBoardTableColumn(boardId, col as keyof typeof columns)}
+          />
+        </div>
 
         {/* Actions */}
         <Button onClick={handleOpenCreateModal} size="sm">
@@ -122,7 +140,6 @@ export function BoardView({
         sort={sort}
         onSortChange={setSort}
         columns={columns}
-        onColumnsChange={setColumns}
       />
 
       {/* Inline new task row */}

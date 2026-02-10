@@ -640,12 +640,12 @@ export function MyTasksPageClient() {
   });
   const { data: mentions = [] } = useMentions();
   const { data: replies = [] } = useReplies();
-  const [viewMode, setViewMode] = React.useState<'swimlane' | 'table'>('swimlane');
+  const { viewMode, setViewMode, activeTab: storedTab, setActiveTab, areAllClientsCollapsed, setAllClientsCollapsed, isBoardHidden } = usePersonalRollupStore();
   const [filters, setFilters] = React.useState<TaskFilters>({});
-  const { areAllClientsCollapsed, setAllClientsCollapsed, isBoardHidden } = usePersonalRollupStore();
 
-  // Default to 'notifications' tab if coming from the notification dropdown
-  const defaultTab = searchParams.get('tab') === 'notifications' ? 'notifications' : 'tasks';
+  // Default to stored tab, with URL param override (e.g. from notification dropdown)
+  const urlTab = searchParams.get('tab');
+  const defaultTab = urlTab === 'notifications' ? 'notifications' : urlTab === 'tasks' ? 'tasks' : storedTab;
 
   const unreadMentions = mentions.filter((m) => !m.readAt).length;
   const unreadReplies = replies.filter((r) => !r.readAt).length;
@@ -679,7 +679,7 @@ export function MyTasksPageClient() {
         <p className="text-muted-foreground">Tasks, mentions, and replies across all clients</p>
       </div>
 
-      <Tabs defaultValue={defaultTab} className="w-full">
+      <Tabs defaultValue={defaultTab} onValueChange={(v) => setActiveTab(v as 'tasks' | 'notifications')} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="tasks" className="gap-2">
             <CheckSquare className="size-4" />
@@ -743,7 +743,7 @@ export function MyTasksPageClient() {
                       Table
                     </button>
                   </div>
-                  {tasksByClient && <PersonalRollupToolbar tasksByClient={tasksByClient} />}
+                  {tasksByClient && <PersonalRollupToolbar tasksByClient={tasksByClient} viewMode={viewMode} />}
                   <TaskFilterBar
                     filters={filters}
                     onFiltersChange={setFilters}

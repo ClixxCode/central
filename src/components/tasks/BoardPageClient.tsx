@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { Plus, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { BoardTable, defaultColumns, type ColumnConfig } from './BoardTable';
+import { BoardTable } from './BoardTable';
+import { TableColumnsButton } from '@/components/shared/TableColumnsButton';
 import { SwimlaneBoardView } from './SwimlaneBoardView';
 import { KanbanBoardView } from './KanbanBoardView';
 import { ViewToggleButtons } from './ViewToggle';
@@ -40,8 +41,10 @@ export function BoardPageClient({
   statusOptions,
   sectionOptions,
 }: BoardPageClientProps) {
-  const { getBoardView } = useBoardViewStore();
+  const { getBoardView, getBoardTableColumns, toggleBoardTableColumn, getSwimlaneCardItems, toggleSwimlaneCardItem } = useBoardViewStore();
   const viewMode = getBoardView(boardId, 'kanban');
+  const columns = getBoardTableColumns(boardId);
+  const swimlaneCardItems = getSwimlaneCardItems(boardId);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -52,8 +55,6 @@ export function BoardPageClient({
     field: 'position',
     direction: 'asc',
   });
-  const [columns, setColumns] = React.useState<ColumnConfig>(defaultColumns);
-
   // Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
 
@@ -153,6 +154,15 @@ export function BoardPageClient({
     });
   };
 
+  // Compute hidden card items set for swimlane view
+  const swimlaneHiddenItems = React.useMemo(() => {
+    const hidden = new Set<string>();
+    if (!swimlaneCardItems.section) hidden.add('section');
+    if (!swimlaneCardItems.dueDate) hidden.add('dueDate');
+    if (!swimlaneCardItems.assignees) hidden.add('assignees');
+    return hidden;
+  }, [swimlaneCardItems]);
+
   const isLoading = isLoadingTasks || isLoadingUsers;
 
   return (
@@ -162,6 +172,33 @@ export function BoardPageClient({
         <div className="flex items-center gap-4">
           {/* View Toggle */}
           <ViewToggleButtons boardId={boardId} defaultView="kanban" />
+
+          {/* Column visibility (table) / Card items (swimlane/kanban) */}
+          {viewMode === 'table' ? (
+            <TableColumnsButton
+              columns={[
+                { id: 'status', label: 'Status' },
+                { id: 'section', label: 'Section' },
+                { id: 'assignees', label: 'Assignees' },
+                { id: 'dueDate', label: 'Due Date' },
+              ]}
+              visibleColumns={columns}
+              onToggle={(col) => toggleBoardTableColumn(boardId, col as keyof typeof columns)}
+            />
+          ) : (
+            <TableColumnsButton
+              columns={[
+                { id: 'section', label: 'Section' },
+                { id: 'dueDate', label: 'Due Date' },
+                { id: 'assignees', label: 'Assignees' },
+              ]}
+              visibleColumns={swimlaneCardItems}
+              onToggle={(col) => toggleSwimlaneCardItem(boardId, col as 'section' | 'dueDate' | 'assignees')}
+              label="Card Items"
+              menuLabel="Toggle card items"
+              icon={SlidersHorizontal}
+            />
+          )}
 
           {/* Filters */}
           <TaskFilterBar
@@ -198,7 +235,6 @@ export function BoardPageClient({
           sort={sort}
           onSortChange={setSort}
           columns={columns}
-          onColumnsChange={setColumns}
         />
       ) : viewMode === 'swimlane' ? (
         <SwimlaneBoardView
@@ -212,6 +248,7 @@ export function BoardPageClient({
           initialTaskId={urlTaskId}
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
+          hiddenItems={swimlaneHiddenItems}
         />
       ) : (
         <KanbanBoardView
@@ -225,6 +262,7 @@ export function BoardPageClient({
           initialTaskId={urlTaskId}
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
+          hiddenItems={swimlaneHiddenItems}
         />
       )}
 

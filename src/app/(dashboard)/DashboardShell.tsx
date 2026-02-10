@@ -1,6 +1,7 @@
 'use client';
 
 import { Sidebar, Header, MobileNav } from '@/components/layout';
+import { StoreHydration } from '@/lib/stores/StoreHydration';
 import { signOutUser } from '@/lib/actions/auth';
 
 interface Client {
@@ -39,6 +40,7 @@ export function DashboardShell({
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <StoreHydration />
       {/* Desktop Sidebar */}
       <div className="hidden lg:flex h-full">
         <Sidebar clients={clients} isAdmin={isAdmin} />
