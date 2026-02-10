@@ -47,7 +47,7 @@ export const sendCommentAddedEmail = inngest.createFunction(
         from: EMAIL_CONFIG.from,
         to: data.recipientEmail,
         subject: commentAddedEmailSubject(data.commenterName, data.taskTitle),
-        html: commentAddedEmailHtml({
+        html: await commentAddedEmailHtml({
           recipientName: data.recipientName || 'there',
           commenterName: data.commenterName,
           taskTitle: data.taskTitle,

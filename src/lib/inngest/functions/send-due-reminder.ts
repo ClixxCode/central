@@ -55,7 +55,7 @@ export const sendDueReminder = inngest.createFunction(
         from: EMAIL_CONFIG.from,
         to: data.recipientEmail,
         subject,
-        html: taskDueEmailHtml({
+        html: await taskDueEmailHtml({
           recipientName: data.recipientName || 'there',
           taskTitle: data.taskTitle,
           taskId: data.taskId,

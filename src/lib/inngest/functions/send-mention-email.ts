@@ -47,7 +47,7 @@ export const sendMentionEmail = inngest.createFunction(
         from: EMAIL_CONFIG.from,
         to: data.recipientEmail,
         subject: mentionEmailSubject(data.mentionerName, data.taskTitle),
-        html: mentionEmailHtml({
+        html: await mentionEmailHtml({
           recipientName: data.recipientName || 'there',
           mentionerName: data.mentionerName,
           taskTitle: data.taskTitle,

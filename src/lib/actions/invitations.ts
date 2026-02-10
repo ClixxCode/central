@@ -5,7 +5,7 @@ import { invitations, users } from '@/lib/db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth/session';
 import { resend, EMAIL_CONFIG, getAppUrl } from '@/lib/email/client';
-import { baseEmailTemplate, emailButton } from '@/lib/email/templates/base';
+import { invitationEmailHtml } from '@/lib/email/templates/invitation';
 
 interface CreateInvitationInput {
   email: string;
@@ -95,28 +95,12 @@ async function sendInvitationEmail(
 ): Promise<void> {
   const inviteUrl = `${getAppUrl()}/invite/${invitationId}`;
 
-  const content = `
-    <h2 style="margin-top: 0;">You're invited!</h2>
-    <p style="margin: 0 0 16px;">${inviterName} has invited you to join Central.</p>
-    <p style="margin: 0 0 24px;">Click the button below to create your account and get started:</p>
-    <p style="margin: 0 0 24px; text-align: center;">
-      ${emailButton('Accept Invitation', inviteUrl)}
-    </p>
-    <p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">
-      This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
-    </p>
-    <p style="margin: 0; color: #9ca3af; font-size: 13px;">
-      If the button doesn't work, copy and paste this link into your browser:<br/>
-      <a href="${inviteUrl}" style="color: #3b82f6; word-break: break-all;">${inviteUrl}</a>
-    </p>
-  `;
-
   try {
     await resend.emails.send({
       from: EMAIL_CONFIG.from,
       to: email,
       subject: `You've been invited to Central`,
-      html: baseEmailTemplate(content, `${inviterName} has invited you to join Central`),
+      html: await invitationEmailHtml(inviterName, inviteUrl),
     });
   } catch (error) {
     console.error('Failed to send invitation email:', error);

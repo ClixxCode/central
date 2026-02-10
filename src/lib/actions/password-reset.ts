@@ -50,7 +50,7 @@ export async function sendPasswordResetLink(userId: string): Promise<{
     const resetUrl = `${getAppUrl()}/reset-password?token=${token}`;
 
     // Send email
-    const emailContent = adminPasswordResetTemplate({
+    const emailContent = await adminPasswordResetTemplate({
       name: user.name ?? undefined,
       adminName: admin.name ?? 'An administrator',
       resetUrl,

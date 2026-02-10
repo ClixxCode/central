@@ -54,7 +54,7 @@ export async function sendVerificationEmail(userId: string): Promise<{
     const verificationUrl = `${getAppUrl()}/verify-email?token=${token}`;
 
     // Send email
-    const emailContent = emailVerificationTemplate({
+    const emailContent = await emailVerificationTemplate({
       name: user.name ?? undefined,
       verificationUrl,
     });

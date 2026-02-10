@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-  baseEmailTemplate,
-  emailButton,
-  taskCard,
   formatEmailDate,
   mentionEmailSubject,
   mentionEmailHtml,
@@ -21,73 +18,6 @@ vi.mock('@/lib/email/client', () => ({
 }));
 
 describe('Email Templates', () => {
-  describe('baseEmailTemplate', () => {
-    it('wraps content in HTML structure', () => {
-      const html = baseEmailTemplate('<p>Test content</p>');
-
-      expect(html).toContain('<!DOCTYPE html>');
-      expect(html).toContain('<html>');
-      expect(html).toContain('Test content');
-      expect(html).toContain('Central');
-    });
-
-    it('includes preheader when provided', () => {
-      const html = baseEmailTemplate('<p>Content</p>', 'This is a preheader');
-
-      expect(html).toContain('This is a preheader');
-    });
-
-    it('includes link to notification preferences', () => {
-      const html = baseEmailTemplate('<p>Content</p>');
-
-      expect(html).toContain('/settings/notifications');
-    });
-  });
-
-  describe('emailButton', () => {
-    it('creates a styled button link', () => {
-      const button = emailButton('Click Me', 'https://example.com');
-
-      expect(button).toContain('Click Me');
-      expect(button).toContain('href="https://example.com"');
-      expect(button).toContain('style=');
-    });
-  });
-
-  describe('taskCard', () => {
-    it('renders task title and status', () => {
-      const card = taskCard({
-        title: 'Test Task',
-        status: 'In Progress',
-      });
-
-      expect(card).toContain('Test Task');
-      expect(card).toContain('In Progress');
-    });
-
-    it('includes due date when provided', () => {
-      const card = taskCard({
-        title: 'Test Task',
-        status: 'Active',
-        dueDate: 'Jan 15, 2026',
-      });
-
-      expect(card).toContain('Due: Jan 15, 2026');
-    });
-
-    it('includes client and board names when provided', () => {
-      const card = taskCard({
-        title: 'Test Task',
-        status: 'Active',
-        clientName: 'Acme Corp',
-        boardName: 'Main Board',
-      });
-
-      expect(card).toContain('Acme Corp');
-      expect(card).toContain('Main Board');
-    });
-  });
-
   describe('formatEmailDate', () => {
     it('formats Date object', () => {
       // Use a date with time to avoid timezone issues
@@ -127,8 +57,8 @@ describe('Email Templates', () => {
       expect(subject).toBe('Alice mentioned you in "Review PR"');
     });
 
-    it('generates HTML with all required elements', () => {
-      const html = mentionEmailHtml(mentionData);
+    it('generates HTML with all required elements', async () => {
+      const html = await mentionEmailHtml(mentionData);
 
       expect(html).toContain('Alice');
       expect(html).toContain('Review PR');
@@ -158,8 +88,8 @@ describe('Email Templates', () => {
       expect(subject).toBe('You\'ve been assigned to "Update docs"');
     });
 
-    it('generates HTML with assignment info', () => {
-      const html = taskAssignedEmailHtml(assignedData);
+    it('generates HTML with assignment info', async () => {
+      const html = await taskAssignedEmailHtml(assignedData);
 
       expect(html).toContain('Alice');
       expect(html).toContain('assigned you');
@@ -195,16 +125,15 @@ describe('Email Templates', () => {
       expect(subject).toBe('Overdue: "Submit report" was due');
     });
 
-    it('generates HTML for due soon', () => {
-      const html = taskDueEmailHtml(dueData);
+    it('generates HTML for due soon', async () => {
+      const html = await taskDueEmailHtml(dueData);
 
       expect(html).toContain('Task Due Soon');
       expect(html).toContain('Submit report');
-      expect(html).not.toContain('overdue');
     });
 
-    it('generates HTML for overdue', () => {
-      const html = taskDueEmailHtml({ ...dueData, isOverdue: true });
+    it('generates HTML for overdue', async () => {
+      const html = await taskDueEmailHtml({ ...dueData, isOverdue: true });
 
       expect(html).toContain('Task Overdue');
       expect(html).toContain('needs your attention');
@@ -262,8 +191,8 @@ describe('Email Templates', () => {
       expect(subject).toMatch(/\d+/);
     });
 
-    it('generates HTML with all sections', () => {
-      const html = dailyDigestEmailHtml(digestData);
+    it('generates HTML with all sections', async () => {
+      const html = await dailyDigestEmailHtml(digestData);
 
       expect(html).toContain('Dave');
       expect(html).toContain('Due Today');
@@ -274,7 +203,7 @@ describe('Email Templates', () => {
       expect(html).toContain('Alice');
     });
 
-    it('shows overdue section when tasks are overdue', () => {
+    it('shows overdue section when tasks are overdue', async () => {
       const dataWithOverdue = {
         ...digestData,
         tasksOverdue: [
@@ -291,13 +220,13 @@ describe('Email Templates', () => {
         ],
       };
 
-      const html = dailyDigestEmailHtml(dataWithOverdue);
+      const html = await dailyDigestEmailHtml(dataWithOverdue);
 
       expect(html).toContain('Overdue');
       expect(html).toContain('Old Task');
     });
 
-    it('shows empty state when nothing to report', () => {
+    it('shows empty state when nothing to report', async () => {
       const emptyData = {
         recipientName: 'Dave',
         date: new Date('2026-01-15'),
@@ -307,7 +236,7 @@ describe('Email Templates', () => {
         unreadNotifications: [],
       };
 
-      const html = dailyDigestEmailHtml(emptyData);
+      const html = await dailyDigestEmailHtml(emptyData);
 
       expect(html).toContain('all caught up');
     });

@@ -47,7 +47,7 @@ export const sendAssignmentEmail = inngest.createFunction(
         from: EMAIL_CONFIG.from,
         to: data.recipientEmail,
         subject: taskAssignedEmailSubject(data.taskTitle),
-        html: taskAssignedEmailHtml({
+        html: await taskAssignedEmailHtml({
           recipientName: data.recipientName || 'there',
           assignerName: data.assignerName,
           taskTitle: data.taskTitle,

@@ -242,7 +242,7 @@ export const sendDailyDigest = inngest.createFunction(
         from: EMAIL_CONFIG.from,
         to: data.userEmail,
         subject: dailyDigestEmailSubject(today),
-        html: dailyDigestEmailHtml({
+        html: await dailyDigestEmailHtml({
           recipientName: data.userName || 'there',
           date: today,
           tasksDueToday: digestData.tasksDueToday,
