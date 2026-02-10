@@ -4,9 +4,8 @@ import { db } from '@/lib/db';
 import { invitations, users } from '@/lib/db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth/session';
-import { Resend } from 'resend';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { resend, EMAIL_CONFIG, getAppUrl } from '@/lib/email/client';
+import { baseEmailTemplate, emailButton } from '@/lib/email/templates/base';
 
 interface CreateInvitationInput {
   email: string;
@@ -94,45 +93,30 @@ async function sendInvitationEmail(
   email: string,
   inviterName: string
 ): Promise<void> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  const inviteUrl = `${appUrl}/invite/${invitationId}`;
+  const inviteUrl = `${getAppUrl()}/invite/${invitationId}`;
+
+  const content = `
+    <h2 style="margin-top: 0;">You're invited!</h2>
+    <p style="margin: 0 0 16px;">${inviterName} has invited you to join Central.</p>
+    <p style="margin: 0 0 24px;">Click the button below to create your account and get started:</p>
+    <p style="margin: 0 0 24px; text-align: center;">
+      ${emailButton('Accept Invitation', inviteUrl)}
+    </p>
+    <p style="margin: 0 0 16px; color: #6b7280; font-size: 14px;">
+      This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+    </p>
+    <p style="margin: 0; color: #9ca3af; font-size: 13px;">
+      If the button doesn't work, copy and paste this link into your browser:<br/>
+      <a href="${inviteUrl}" style="color: #3b82f6; word-break: break-all;">${inviteUrl}</a>
+    </p>
+  `;
 
   try {
     await resend.emails.send({
-      from: 'Central <noreply@clix.co>',
+      from: EMAIL_CONFIG.from,
       to: email,
       subject: `You've been invited to Central`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          </head>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%); padding: 30px; border-radius: 12px 12px 0 0;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">Central</h1>
-            </div>
-            <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px; border: 1px solid #e5e7eb; border-top: none;">
-              <h2 style="margin-top: 0;">You're invited!</h2>
-              <p>${inviterName} has invited you to join Central.</p>
-              <p>Click the button below to create your account and get started:</p>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${inviteUrl}" style="background: #3B82F6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
-                  Accept Invitation
-                </a>
-              </div>
-              <p style="color: #6b7280; font-size: 14px;">
-                This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
-              </p>
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-              <p style="color: #9ca3af; font-size: 12px; margin-bottom: 0;">
-                Clix Digital Marketing Agency
-              </p>
-            </div>
-          </body>
-        </html>
-      `,
+      html: baseEmailTemplate(content, `${inviterName} has invited you to join Central`),
     });
   } catch (error) {
     console.error('Failed to send invitation email:', error);

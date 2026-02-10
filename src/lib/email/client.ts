@@ -4,10 +4,13 @@ import { Resend } from 'resend';
 export const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Email configuration
+const fromName = process.env.EMAIL_FROM_NAME ?? 'Central';
+const fromEmail = process.env.EMAIL_FROM_ADDRESS ?? 'noreply@clix.co';
+
 export const EMAIL_CONFIG = {
-  from: 'Central <noreply@clix.co>',
-  replyTo: 'support@clix.co',
-} as const;
+  from: `${fromName} <${fromEmail}>` as const,
+  replyTo: process.env.EMAIL_REPLY_TO ?? fromEmail,
+};
 
 // Base app URL for links in emails
 export function getAppUrl(): string {
