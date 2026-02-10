@@ -127,7 +127,7 @@ export function useCreateComment() {
             },
             attachments: [],
           };
-          return [optimisticComment, ...old];
+          return [...old, optimisticComment];
         }
       );
 

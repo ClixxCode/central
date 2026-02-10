@@ -11,7 +11,7 @@ import {
   teamMembers,
 } from '@/lib/db/schema';
 import type { TiptapContent } from '@/lib/db/schema/tasks';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { del } from '@vercel/blob';
 import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
@@ -209,7 +209,7 @@ export async function listComments(taskId: string): Promise<{
     .from(comments)
     .leftJoin(users, eq(users.id, comments.authorId))
     .where(eq(comments.taskId, taskId))
-    .orderBy(desc(comments.createdAt));
+    .orderBy(comments.createdAt);
 
   // Get attachments for all comments
   const commentIds = commentList.map((c) => c.id);
