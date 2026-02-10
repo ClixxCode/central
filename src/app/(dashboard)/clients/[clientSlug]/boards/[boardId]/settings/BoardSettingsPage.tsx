@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { StatusOptionsEditor } from '@/components/boards/BoardSettings/StatusOptionsEditor';
 import { SectionOptionsEditor } from '@/components/boards/BoardSettings/SectionOptionsEditor';
 import { AccessManagement } from '@/components/boards/BoardSettings/AccessManagement';
+import { ActivityLog } from '@/components/boards/BoardSettings/ActivityLog';
 import { useBoard, useUpdateBoard } from '@/lib/hooks';
 import type { BoardWithAccess } from '@/lib/actions/boards';
 
@@ -87,13 +88,12 @@ export function BoardSettingsPage({
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="statuses">Statuses</TabsTrigger>
-          <TabsTrigger value="sections">Sections</TabsTrigger>
+          <TabsTrigger value="activity">Activity Log</TabsTrigger>
           {isAdmin && <TabsTrigger value="access">Access</TabsTrigger>}
         </TabsList>
 
         {/* General Tab */}
-        <TabsContent value="general" className="mt-6">
+        <TabsContent value="general" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Board Name</CardTitle>
@@ -122,10 +122,7 @@ export function BoardSettingsPage({
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Statuses Tab */}
-        <TabsContent value="statuses" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Status Options</CardTitle>
@@ -141,10 +138,7 @@ export function BoardSettingsPage({
               />
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Sections Tab */}
-        <TabsContent value="sections" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Section Options</CardTitle>
@@ -158,6 +152,21 @@ export function BoardSettingsPage({
                 onChange={handleSaveSectionOptions}
                 disabled={updateBoard.isPending}
               />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Activity Log Tab */}
+        <TabsContent value="activity" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Activity Log</CardTitle>
+              <CardDescription>
+                Recent task changes on this board from the last 30 days.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ActivityLog boardId={boardId} clientSlug={clientSlug} />
             </CardContent>
           </Card>
         </TabsContent>

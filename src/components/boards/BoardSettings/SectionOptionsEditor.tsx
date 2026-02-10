@@ -247,6 +247,7 @@ export function SectionOptionsEditor({ options, onChange, disabled }: SectionOpt
   return (
     <div className="space-y-3">
       <DndContext
+        id="section-options-dnd"
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}

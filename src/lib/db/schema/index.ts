@@ -38,6 +38,9 @@ export * from './email-verification';
 // Site Settings
 export * from './site-settings';
 
+// Board Activity Log
+export * from './board-activity-log';
+
 // Re-export types
 export type { UserPreferences, NotificationChannelSettings } from './users';
 export type { StatusOption, SectionOption } from './boards';

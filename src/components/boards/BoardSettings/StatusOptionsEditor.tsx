@@ -228,6 +228,7 @@ export function StatusOptionsEditor({ options, onChange, disabled }: StatusOptio
   return (
     <div className="space-y-3">
       <DndContext
+        id="status-options-dnd"
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
