@@ -1,6 +1,22 @@
 export { useCurrentUser, type CurrentUser } from './useCurrentUser';
 export * from './useClients';
-export * from './useBoards';
+export {
+  useBoards,
+  useBoard,
+  useCreateBoard,
+  useUpdateBoard,
+  useDeleteBoard,
+  useAddBoardAccess,
+  useUpdateBoardAccess,
+  useRemoveBoardAccess,
+  useUsers,
+  useTeams,
+  usePersonalBoard,
+  useUpdatePersonalBoard,
+  boardKeys,
+  userKeys,
+  personalBoardKeys,
+} from './useBoards';
 export {
   useTasks,
   useTask,

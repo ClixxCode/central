@@ -28,8 +28,10 @@ interface PersonalRollupState {
   tableColumns: TableColumnConfig;
   // Table sort
   tableSort: TableSortConfig;
-  // Active tab: tasks or notifications
-  activeTab: 'tasks' | 'notifications';
+  // Active tab: tasks, notifications, or personal
+  activeTab: 'tasks' | 'notifications' | 'personal';
+  // Personal list view mode
+  personalListViewMode: 'kanban' | 'table';
 
   // Actions
   toggleColumn: (column: string) => void;
@@ -46,7 +48,8 @@ interface PersonalRollupState {
   setTableColumns: (columns: TableColumnConfig) => void;
   toggleTableColumn: (column: keyof TableColumnConfig) => void;
   setTableSort: (sort: TableSortConfig) => void;
-  setActiveTab: (tab: 'tasks' | 'notifications') => void;
+  setActiveTab: (tab: 'tasks' | 'notifications' | 'personal') => void;
+  setPersonalListViewMode: (mode: 'kanban' | 'table') => void;
 }
 
 export const usePersonalRollupStore = create<PersonalRollupState>()(
@@ -69,6 +72,7 @@ export const usePersonalRollupStore = create<PersonalRollupState>()(
         direction: 'asc' as const,
       },
       activeTab: 'tasks' as const,
+      personalListViewMode: 'kanban' as const,
 
       toggleColumn: (column) =>
         set((state) => ({
@@ -123,6 +127,7 @@ export const usePersonalRollupStore = create<PersonalRollupState>()(
       setTableSort: (sort) => set({ tableSort: sort }),
 
       setActiveTab: (tab) => set({ activeTab: tab }),
+      setPersonalListViewMode: (mode) => set({ personalListViewMode: mode }),
     }),
     {
       name: 'clix-pm-personal-rollup',

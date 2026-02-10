@@ -27,6 +27,8 @@ export const updateBoardSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255, 'Name must be 255 characters or less').optional(),
   statusOptions: z.array(statusOptionSchema).optional(),
   sectionOptions: z.array(sectionOptionSchema).optional(),
+  color: z.string().regex(hexColorRegex, 'Invalid color format (must be #RRGGBB)').nullable().optional(),
+  icon: z.string().max(100).nullable().optional(),
 });
 
 export const addBoardAccessSchema = z

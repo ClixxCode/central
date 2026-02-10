@@ -17,6 +17,7 @@ export interface UserPreferences {
   hiddenBoards: string[];
   hiddenColumns: string[];
   defaultView: 'table' | 'kanban';
+  hidePersonalList?: boolean;
   notifications: {
     email: NotificationChannelSettings & {
       digest: 'instant' | 'daily' | 'weekly' | 'none';

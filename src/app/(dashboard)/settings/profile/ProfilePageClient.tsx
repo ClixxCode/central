@@ -15,8 +15,11 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { updateProfile } from '@/lib/actions/profile';
+import { getUserPreferences, updatePersonalListVisibility } from '@/lib/actions/user-preferences';
 
 interface ProfilePageClientProps {
   user: {
@@ -29,6 +32,7 @@ interface ProfilePageClientProps {
 
 export function ProfilePageClient({ user }: ProfilePageClientProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = React.useState(user.name ?? '');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
@@ -84,6 +88,34 @@ export function ProfilePageClient({ user }: ProfilePageClientProps) {
     : user.email.slice(0, 2).toUpperCase();
 
   const hasChanges = name !== (user.name ?? '') || avatarFile !== null;
+
+  // Personal list preferences
+  const { data: userPrefs } = useQuery({
+    queryKey: ['userPreferences'],
+    queryFn: async () => {
+      const result = await getUserPreferences();
+      return result.success ? result.preferences : null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const [isTogglingPersonalList, setIsTogglingPersonalList] = React.useState(false);
+
+  const handleTogglePersonalList = async (checked: boolean) => {
+    setIsTogglingPersonalList(true);
+    try {
+      const result = await updatePersonalListVisibility(!checked);
+      if (result.success) {
+        queryClient.invalidateQueries({ queryKey: ['userPreferences'] });
+        toast.success(checked ? 'Personal List shown' : 'Personal List hidden');
+      } else {
+        toast.error(result.error ?? 'Failed to update preference');
+      }
+    } catch {
+      toast.error('Failed to update preference');
+    } finally {
+      setIsTogglingPersonalList(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -178,6 +210,30 @@ export function ProfilePageClient({ user }: ProfilePageClientProps) {
           </CardFooter>
         </Card>
       </form>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Personal List</CardTitle>
+          <CardDescription>
+            Manage visibility of your personal task list in My Work.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Show Personal List</Label>
+              <p className="text-xs text-muted-foreground">
+                Display the Personal List tab in My Work for managing private tasks.
+              </p>
+            </div>
+            <Switch
+              checked={!userPrefs?.hidePersonalList}
+              onCheckedChange={handleTogglePersonalList}
+              disabled={isTogglingPersonalList || !userPrefs}
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

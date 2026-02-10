@@ -25,6 +25,9 @@ export async function listFavorites(): Promise<{
         entityId: favorites.entityId,
         position: favorites.position,
         boardName: boards.name,
+        boardType: boards.type,
+        boardColor: boards.color,
+        boardIcon: boards.icon,
         clientName: clients.name,
         clientSlug: clients.slug,
         clientColor: clients.color,
@@ -46,6 +49,9 @@ export async function listFavorites(): Promise<{
       clientSlug: f.clientSlug ?? undefined,
       clientColor: f.clientColor ?? undefined,
       clientIcon: f.clientIcon ?? undefined,
+      boardType: (f.boardType as 'standard' | 'rollup' | 'personal') ?? undefined,
+      boardColor: f.boardColor ?? undefined,
+      boardIcon: f.boardIcon ?? undefined,
     }));
 
     return { success: true, data };

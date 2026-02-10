@@ -19,7 +19,7 @@ export interface BoardSearchResult {
   type: 'board';
   id: string;
   name: string;
-  boardType: 'standard' | 'rollup';
+  boardType: 'standard' | 'rollup' | 'personal';
   clientId: string;
   clientName: string;
   clientSlug: string;

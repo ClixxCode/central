@@ -71,6 +71,20 @@
       "when": 1770401294989,
       "tag": "0009_nifty_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770764088108,
+      "tag": "0010_many_kingpin",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770764088109,
+      "tag": "0011_personal_board_index",
+      "breakpoints": true
     }
   ]
 }
