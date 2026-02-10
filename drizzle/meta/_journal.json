@@ -78,6 +78,13 @@
       "when": 1770733932273,
       "tag": "0010_outgoing_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770745728791,
+      "tag": "0011_marvelous_brother_voodoo",
+      "breakpoints": true
     }
   ]
 }

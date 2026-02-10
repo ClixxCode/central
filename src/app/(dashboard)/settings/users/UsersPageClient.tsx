@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   XCircle,
+  KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,6 +65,7 @@ import {
   resendInvitation,
   revokeInvitation,
 } from '@/lib/actions/invitations';
+import { sendPasswordResetLink } from '@/lib/actions/password-reset';
 
 export function UsersPageClient() {
   const queryClient = useQueryClient();
@@ -159,6 +161,20 @@ export function UsersPageClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
       toast.success('Invitation revoked');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const sendResetMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const result = await sendPasswordResetLink(userId);
+      if (!result.success) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: () => {
+      toast.success('Password reset email sent');
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -360,6 +376,13 @@ export function UsersPageClient() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => sendResetMutation.mutate(user.id)}
+                            >
+                              <KeyRound className="h-4 w-4 mr-2" />
+                              Send Password Reset
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={() => handleDeleteUser(user)}

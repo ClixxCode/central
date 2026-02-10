@@ -35,6 +35,9 @@ export * from './task-views';
 // Email Verification
 export * from './email-verification';
 
+// Password Reset
+export * from './password-reset';
+
 // Site Settings
 export * from './site-settings';
 
