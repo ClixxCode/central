@@ -9,6 +9,7 @@ import { AssigneeAvatars } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { TaskActivityIndicators } from './TaskActivityIndicators';
 import { useSubtasks, useCreateSubtask, useDeleteTask } from '@/lib/hooks/useTasks';
+import { DeleteTaskDialog } from './DeleteTaskDialog';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 
 interface SubtasksTabProps {
@@ -31,6 +32,7 @@ export function SubtasksTab({
   const deleteTask = useDeleteTask();
 
   const [newTitle, setNewTitle] = React.useState('');
+  const [deleteSubtaskId, setDeleteSubtaskId] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const completeStatusIds = React.useMemo(
@@ -135,7 +137,7 @@ export function SubtasksTab({
                   className="absolute top-1.5 right-1.5 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive z-10"
                   onClick={(e) => {
                     e.stopPropagation();
-                    deleteTask.mutate(subtask.id);
+                    setDeleteSubtaskId(subtask.id);
                   }}
                 >
                   <Trash2 className="size-3.5" />
@@ -237,6 +239,16 @@ export function SubtasksTab({
           Break this task into smaller pieces. Click a subtask to open its full details.
         </p>
       )}
+
+      <DeleteTaskDialog
+        open={deleteSubtaskId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteSubtaskId(null); }}
+        onConfirm={() => {
+          if (deleteSubtaskId) deleteTask.mutate(deleteSubtaskId);
+          setDeleteSubtaskId(null);
+        }}
+        isSubtask
+      />
     </div>
   );
 }

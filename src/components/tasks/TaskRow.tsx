@@ -20,6 +20,7 @@ import { RecurringIndicator } from './RecurringPicker';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { CompleteParentDialog } from './CompleteParentDialog';
+import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { isCompleteStatus } from '@/lib/utils/status';
 import type { TaskWithAssignees, UpdateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
@@ -64,6 +65,7 @@ export function TaskRow({
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [editedTitle, setEditedTitle] = React.useState(task.title);
   const [completeParentOpen, setCompleteParentOpen] = React.useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
   const [pendingStatus, setPendingStatus] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const clickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -297,7 +299,7 @@ export function TaskRow({
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => onDelete(task.id)}
+              onClick={() => setDeleteConfirmOpen(true)}
               className="text-destructive focus:text-destructive"
             >
               <Trash2 className="mr-2 size-4" />
@@ -305,6 +307,12 @@ export function TaskRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <DeleteTaskDialog
+          open={deleteConfirmOpen}
+          onOpenChange={setDeleteConfirmOpen}
+          onConfirm={() => onDelete(task.id)}
+          isSubtask={isSubtask}
+        />
       </td>
     </tr>
     </>

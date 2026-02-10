@@ -64,6 +64,7 @@ import {
 import { RecurringPicker, RecurringIndicator } from './RecurringPicker';
 import { SubtasksTab } from './SubtasksTab';
 import { CompleteParentDialog } from './CompleteParentDialog';
+import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { isCompleteStatus } from '@/lib/utils/status';
 import { useClient } from '@/lib/hooks/useClients';
@@ -194,6 +195,7 @@ export function TaskModal({
   const [isSaving, setIsSaving] = useState(false);
   const [highlightedAttachmentId, setHighlightedAttachmentId] = useState<string | null>(null);
   const [completeParentOpen, setCompleteParentOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const prevOpenRef = useRef(false);
   const prevTaskIdRef = useRef<string | null>(null);
@@ -1060,14 +1062,22 @@ export function TaskModal({
           <div>
             {/* Delete button for existing tasks */}
             {!isNew && task?.id && onDelete && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={() => onDelete(task.id)}
-              >
-                Delete task
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                >
+                  Delete task
+                </Button>
+                <DeleteTaskDialog
+                  open={deleteConfirmOpen}
+                  onOpenChange={setDeleteConfirmOpen}
+                  onConfirm={() => onDelete(task.id)}
+                  isSubtask={!!task.parentTaskId}
+                />
+              </>
             )}
           </div>
           <div className="flex items-center gap-2">
