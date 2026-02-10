@@ -3,8 +3,8 @@
 import { db } from '@/lib/db';
 import { boards, boardAccess, clients, teams, users, teamMembers, statuses, sections } from '@/lib/db/schema';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
-import { eq, and, inArray, or, asc } from 'drizzle-orm';
-import { getCurrentUser, requireAdmin } from '@/lib/auth/session';
+import { eq, and, not, inArray, or, asc } from 'drizzle-orm';
+import { getCurrentUser, requireAdmin, requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import {
   createBoardSchema,
@@ -38,8 +38,10 @@ export interface BoardAccessEntry {
 export interface BoardWithAccess {
   id: string;
   name: string;
-  type: 'standard' | 'rollup';
+  type: 'standard' | 'rollup' | 'personal';
   clientId: string | null;
+  color: string | null;
+  icon: string | null;
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   createdBy: string | null;
@@ -56,7 +58,7 @@ export interface BoardWithAccess {
 export interface BoardSummary {
   id: string;
   name: string;
-  type: 'standard' | 'rollup';
+  type: 'standard' | 'rollup' | 'personal';
   clientId: string | null;
   clientName: string | null;
   clientSlug: string | null;
@@ -194,10 +196,16 @@ export async function listBoards(clientId?: string): Promise<ActionResult<BoardS
 
     const userIsAdmin = user.role === 'admin';
 
+    // Base condition: exclude personal boards from regular listings
+    const excludePersonal = not(eq(boards.type, 'personal'));
+
     if (userIsAdmin) {
       // Admin: get all boards
+      const adminConditions = [excludePersonal];
+      if (clientId) adminConditions.push(eq(boards.clientId, clientId));
+
       const allBoards = await db.query.boards.findMany({
-        where: clientId ? eq(boards.clientId, clientId) : undefined,
+        where: and(...adminConditions),
         with: {
           client: {
             columns: { id: true, name: true, slug: true },
@@ -224,8 +232,11 @@ export async function listBoards(clientId?: string): Promise<ActionResult<BoardS
 
     if (!isContractor) {
       // Non-contractors see all boards (public by default)
+      const publicConditions = [excludePersonal];
+      if (clientId) publicConditions.push(eq(boards.clientId, clientId));
+
       const allBoards = await db.query.boards.findMany({
-        where: clientId ? eq(boards.clientId, clientId) : undefined,
+        where: and(...publicConditions),
         with: {
           client: {
             columns: { id: true, name: true, slug: true },
@@ -254,7 +265,7 @@ export async function listBoards(clientId?: string): Promise<ActionResult<BoardS
       return { success: true, data: [] };
     }
 
-    const conditions = [inArray(boards.id, accessibleBoardIds)];
+    const conditions = [inArray(boards.id, accessibleBoardIds), excludePersonal];
     if (clientId) {
       conditions.push(eq(boards.clientId, clientId));
     }
@@ -336,6 +347,8 @@ export async function getBoard(boardId: string): Promise<ActionResult<BoardWithA
         name: board.name,
         type: board.type,
         clientId: board.clientId,
+        color: board.color ?? null,
+        icon: board.icon ?? null,
         statusOptions: board.statusOptions,
         sectionOptions: board.sectionOptions ?? [],
         createdBy: board.createdBy,
@@ -436,6 +449,8 @@ export async function createBoard(input: CreateBoardInput): Promise<ActionResult
         name: newBoard.name,
         type: newBoard.type,
         clientId: newBoard.clientId,
+        color: newBoard.color ?? null,
+        icon: newBoard.icon ?? null,
         statusOptions: newBoard.statusOptions,
         sectionOptions: newBoard.sectionOptions ?? [],
         createdBy: newBoard.createdBy,
@@ -519,6 +534,8 @@ export async function updateBoard(
         ...(updateData.name !== undefined && { name: updateData.name }),
         ...(updateData.statusOptions !== undefined && { statusOptions: updateData.statusOptions }),
         ...(updateData.sectionOptions !== undefined && { sectionOptions: updateData.sectionOptions }),
+        ...(updateData.color !== undefined && { color: updateData.color }),
+        ...(updateData.icon !== undefined && { icon: updateData.icon }),
       })
       .where(eq(boards.id, boardId))
       .returning();
@@ -535,6 +552,8 @@ export async function updateBoard(
         name: updatedBoard.name,
         type: updatedBoard.type,
         clientId: updatedBoard.clientId,
+        color: updatedBoard.color ?? null,
+        icon: updatedBoard.icon ?? null,
         statusOptions: updatedBoard.statusOptions,
         sectionOptions: updatedBoard.sectionOptions ?? [],
         createdBy: updatedBoard.createdBy,
@@ -575,6 +594,10 @@ export async function deleteBoard(boardId: string): Promise<ActionResult> {
 
     if (!existingBoard) {
       return { success: false, error: 'Board not found' };
+    }
+
+    if (existingBoard.type === 'personal') {
+      return { success: false, error: 'Personal boards cannot be deleted' };
     }
 
     // Delete board (access entries cascade via FK)
@@ -837,5 +860,194 @@ export async function listTeams(): Promise<ActionResult<{ id: string; name: stri
     }
     console.error('listTeams error:', error);
     return { success: false, error: 'Failed to list teams' };
+  }
+}
+
+/**
+ * Get or create a personal board for the current user
+ */
+export async function getOrCreatePersonalBoard(): Promise<ActionResult<BoardWithAccess>> {
+  try {
+    const user = await requireAuth();
+
+    // Check for existing personal board
+    const existing = await db.query.boards.findFirst({
+      where: and(
+        eq(boards.type, 'personal'),
+        eq(boards.createdBy, user.id)
+      ),
+      with: {
+        client: {
+          columns: { id: true, name: true, slug: true, color: true },
+        },
+        access: {
+          with: {
+            user: {
+              columns: { id: true, name: true, email: true, avatarUrl: true },
+            },
+            team: {
+              columns: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (existing) {
+      return {
+        success: true,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          type: existing.type,
+          clientId: existing.clientId,
+          color: existing.color ?? null,
+          icon: existing.icon ?? null,
+          statusOptions: existing.statusOptions,
+          sectionOptions: existing.sectionOptions ?? [],
+          createdBy: existing.createdBy,
+          createdAt: existing.createdAt,
+          client: existing.client,
+          access: existing.access.map((a) => ({
+            id: a.id,
+            userId: a.userId,
+            teamId: a.teamId,
+            accessLevel: a.accessLevel,
+            user: a.user,
+            team: a.team,
+          })),
+        },
+      };
+    }
+
+    // Fetch global default statuses
+    const globalStatuses = await db.query.statuses.findMany({
+      orderBy: [asc(statuses.position)],
+    });
+    const boardStatusOptions: StatusOption[] = globalStatuses.length > 0
+      ? globalStatuses.map((s) => ({
+          id: s.id,
+          label: s.label,
+          color: s.color,
+          position: s.position,
+        }))
+      : [
+          { id: 'todo', label: 'To Do', color: '#6B7280', position: 0 },
+          { id: 'in-progress', label: 'In Progress', color: '#3B82F6', position: 1 },
+          { id: 'review', label: 'Review', color: '#F59E0B', position: 2 },
+          { id: 'complete', label: 'Complete', color: '#10B981', position: 3 },
+        ];
+
+    // Fetch global default sections
+    const globalSections = await db.query.sections.findMany({
+      orderBy: [asc(sections.position)],
+    });
+    const boardSectionOptions: SectionOption[] = globalSections.length > 0
+      ? globalSections.map((s) => ({
+          id: s.id,
+          label: s.label,
+          color: s.color,
+          position: s.position,
+        }))
+      : [];
+
+    // Create personal board
+    const [newBoard] = await db
+      .insert(boards)
+      .values({
+        name: 'Personal List',
+        type: 'personal',
+        clientId: null,
+        statusOptions: boardStatusOptions,
+        sectionOptions: boardSectionOptions,
+        createdBy: user.id,
+      })
+      .returning();
+
+    return {
+      success: true,
+      data: {
+        id: newBoard.id,
+        name: newBoard.name,
+        type: newBoard.type,
+        clientId: null,
+        color: newBoard.color ?? null,
+        icon: newBoard.icon ?? null,
+        statusOptions: newBoard.statusOptions,
+        sectionOptions: newBoard.sectionOptions ?? [],
+        createdBy: newBoard.createdBy,
+        createdAt: newBoard.createdAt,
+        client: null,
+        access: [],
+      },
+    };
+  } catch (error) {
+    console.error('getOrCreatePersonalBoard error:', error);
+    return { success: false, error: 'Failed to get personal board' };
+  }
+}
+
+/**
+ * Update a personal board (owner only - name, color, icon, statuses, sections)
+ */
+export async function updatePersonalBoard(input: UpdateBoardInput): Promise<ActionResult<BoardWithAccess>> {
+  try {
+    const user = await requireAuth();
+
+    // Validate input
+    const validation = updateBoardSchema.safeParse(input);
+    if (!validation.success) {
+      return { success: false, error: validation.error.issues[0]?.message ?? 'Invalid input' };
+    }
+
+    const updateData = validation.data;
+
+    // Find the user's personal board
+    const personalBoard = await db.query.boards.findFirst({
+      where: and(
+        eq(boards.type, 'personal'),
+        eq(boards.createdBy, user.id)
+      ),
+    });
+
+    if (!personalBoard) {
+      return { success: false, error: 'Personal board not found' };
+    }
+
+    // Update board
+    const [updatedBoard] = await db
+      .update(boards)
+      .set({
+        ...(updateData.name !== undefined && { name: updateData.name }),
+        ...(updateData.statusOptions !== undefined && { statusOptions: updateData.statusOptions }),
+        ...(updateData.sectionOptions !== undefined && { sectionOptions: updateData.sectionOptions }),
+        ...(updateData.color !== undefined && { color: updateData.color }),
+        ...(updateData.icon !== undefined && { icon: updateData.icon }),
+      })
+      .where(eq(boards.id, personalBoard.id))
+      .returning();
+
+    revalidatePath('/my-tasks');
+
+    return {
+      success: true,
+      data: {
+        id: updatedBoard.id,
+        name: updatedBoard.name,
+        type: updatedBoard.type,
+        clientId: null,
+        color: updatedBoard.color ?? null,
+        icon: updatedBoard.icon ?? null,
+        statusOptions: updatedBoard.statusOptions,
+        sectionOptions: updatedBoard.sectionOptions ?? [],
+        createdBy: updatedBoard.createdBy,
+        createdAt: updatedBoard.createdAt,
+        client: null,
+        access: [],
+      },
+    };
+  } catch (error) {
+    console.error('updatePersonalBoard error:', error);
+    return { success: false, error: 'Failed to update personal board' };
   }
 }

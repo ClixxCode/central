@@ -45,4 +45,7 @@ export interface FavoriteWithDetails {
   clientSlug?: string;
   clientColor?: string;
   clientIcon?: string;
+  boardType?: 'standard' | 'rollup' | 'personal';
+  boardColor?: string;
+  boardIcon?: string;
 }

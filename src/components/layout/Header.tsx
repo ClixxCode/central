@@ -101,6 +101,13 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
       },
     },
     {
+      key: ['g', 'p'],
+      description: 'Go to Personal Tasks',
+      handler: () => {
+        router.push('/my-tasks?tab=personal');
+      },
+    },
+    {
       key: ['g', 'm'],
       description: 'Go to Replies & Mentions',
       handler: () => {

@@ -149,6 +149,7 @@ export const SHORTCUT_DEFINITIONS = [
   { key: 'n', description: 'Create new task', category: 'Tasks' },
   { key: '/', description: 'Focus search', category: 'Navigation' },
   { key: ['g', 't'], description: 'Go to My Tasks', category: 'Navigation' },
+  { key: ['g', 'p'], description: 'Go to Personal Tasks', category: 'Navigation' },
   { key: ['g', 'm'], description: 'Go to Replies & Mentions', category: 'Navigation' },
   { key: 'f plus 1-9', description: 'Go To Pinned Favorite (1–9)', category: 'Navigation' },
   { key: ['g', 's'], description: 'Go to Settings', category: 'General' },

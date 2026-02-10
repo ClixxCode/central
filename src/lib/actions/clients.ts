@@ -24,7 +24,7 @@ export interface ClientWithBoards {
   boards: {
     id: string;
     name: string;
-    type: 'standard' | 'rollup';
+    type: 'standard' | 'rollup' | 'personal';
   }[];
   leadUser?: {
     id: string;

@@ -263,6 +263,42 @@ export async function toggleInAppNotifications(enabled: boolean): Promise<{
 }
 
 /**
+ * Update personal list visibility preference
+ */
+export async function updatePersonalListVisibility(hidden: boolean): Promise<{
+  success: boolean;
+  preferences?: UserPreferences;
+  error?: string;
+}> {
+  const user = await requireAuth();
+
+  const dbUser = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { preferences: true },
+  });
+
+  if (!dbUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  const currentPrefs = mergeWithDefaults(dbUser.preferences as UserPreferences | null);
+  const newPrefs: UserPreferences = {
+    ...currentPrefs,
+    hidePersonalList: hidden,
+  };
+
+  await db
+    .update(users)
+    .set({ preferences: newPrefs, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+
+  revalidatePath('/my-tasks');
+  revalidatePath('/settings/profile');
+
+  return { success: true, preferences: newPrefs };
+}
+
+/**
  * Merge preferences with defaults to ensure all fields exist
  */
 function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
@@ -274,6 +310,7 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
     hiddenBoards: prefs.hiddenBoards ?? DEFAULT_PREFERENCES.hiddenBoards,
     hiddenColumns: prefs.hiddenColumns ?? DEFAULT_PREFERENCES.hiddenColumns,
     defaultView: prefs.defaultView ?? DEFAULT_PREFERENCES.defaultView,
+    hidePersonalList: prefs.hidePersonalList ?? false,
     notifications: {
       email: {
         enabled: prefs.notifications?.email?.enabled ?? DEFAULT_PREFERENCES.notifications.email.enabled,

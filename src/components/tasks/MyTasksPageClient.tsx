@@ -6,7 +6,10 @@ import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PersonalRollupView } from './PersonalRollupView';
 import { PersonalRollupToolbar } from './PersonalRollupToolbar';
+import { PersonalListTab } from './PersonalListTab';
 import { useMyTasks, myTasksKeys } from '@/lib/hooks/useMyTasks';
+import { useQuery } from '@tanstack/react-query';
+import { getUserPreferences } from '@/lib/actions/user-preferences';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import {
   useMentions,
@@ -25,6 +28,7 @@ import {
   MessageSquare,
   CheckSquare,
   LayoutList,
+  ListTodo,
   TableRowsSplit,
   Bell,
   Check,
@@ -643,9 +647,20 @@ export function MyTasksPageClient() {
   const { viewMode, setViewMode, activeTab: storedTab, setActiveTab, areAllClientsCollapsed, setAllClientsCollapsed, isBoardHidden } = usePersonalRollupStore();
   const [filters, setFilters] = React.useState<TaskFilters>({});
 
+  // Fetch user preferences for hidePersonalList
+  const { data: userPrefs } = useQuery({
+    queryKey: ['userPreferences'],
+    queryFn: async () => {
+      const result = await getUserPreferences();
+      return result.success ? result.preferences : null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const hidePersonalList = userPrefs?.hidePersonalList ?? false;
+
   // Derive active tab from URL param (reactive) or stored preference
   const urlTab = searchParams.get('tab');
-  const activeTabValue = urlTab === 'notifications' ? 'notifications' : urlTab === 'tasks' ? 'tasks' : storedTab;
+  const activeTabValue = urlTab === 'notifications' ? 'notifications' : urlTab === 'personal' ? 'personal' : urlTab === 'tasks' ? 'tasks' : storedTab;
 
   const unreadMentions = mentions.filter((m) => !m.readAt).length;
   const unreadReplies = replies.filter((r) => !r.readAt).length;
@@ -679,12 +694,18 @@ export function MyTasksPageClient() {
         <p className="text-muted-foreground">Tasks, mentions, and replies across all clients</p>
       </div>
 
-      <Tabs value={activeTabValue} onValueChange={(v) => setActiveTab(v as 'tasks' | 'notifications')} className="w-full">
+      <Tabs value={activeTabValue} onValueChange={(v) => setActiveTab(v as 'tasks' | 'notifications' | 'personal')} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="tasks" className="gap-2">
             <CheckSquare className="size-4" />
             Assigned Tasks
           </TabsTrigger>
+          {!hidePersonalList && (
+            <TabsTrigger value="personal" className="gap-2">
+              <ListTodo className="size-4" />
+              Personal Tasks
+            </TabsTrigger>
+          )}
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="size-4" />
             Replies & Mentions
@@ -771,6 +792,12 @@ export function MyTasksPageClient() {
             </>
           )}
         </TabsContent>
+
+        {!hidePersonalList && (
+          <TabsContent value="personal">
+            <PersonalListTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="notifications">
           <NotificationsTab />

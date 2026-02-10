@@ -13,12 +13,15 @@ import {
   removeBoardAccess,
   listUsers,
   listTeams,
+  getOrCreatePersonalBoard,
+  updatePersonalBoard,
   type BoardWithAccess,
   type BoardSummary,
   type BoardAccessEntry,
 } from '@/lib/actions/boards';
 import type { CreateBoardInput, UpdateBoardInput, AddBoardAccessInput, UpdateBoardAccessInput } from '@/lib/validations/board';
 import { clientKeys } from './useClients';
+import { favoriteKeys } from './useFavorites';
 
 // Query Keys
 export const boardKeys = {
@@ -37,6 +40,11 @@ export const userKeys = {
 export const teamKeys = {
   all: ['teams'] as const,
   list: () => [...teamKeys.all, 'list'] as const,
+};
+
+export const personalBoardKeys = {
+  all: ['personal-board'] as const,
+  detail: () => [...personalBoardKeys.all, 'detail'] as const,
 };
 
 /**
@@ -327,6 +335,64 @@ export function useTeams() {
         throw new Error(result.error ?? 'Failed to fetch teams');
       }
       return result.data ?? [];
+    },
+  });
+}
+
+/**
+ * Get or create the user's personal board
+ */
+export function usePersonalBoard() {
+  return useQuery({
+    queryKey: personalBoardKeys.detail(),
+    queryFn: async () => {
+      const result = await getOrCreatePersonalBoard();
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to get personal board');
+      }
+      return result.data!;
+    },
+  });
+}
+
+/**
+ * Update the user's personal board (name, color, icon, statuses, sections)
+ */
+export function useUpdatePersonalBoard() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateBoardInput) => {
+      const result = await updatePersonalBoard(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to update personal board');
+      }
+      return result.data!;
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: personalBoardKeys.detail() });
+      const previous = queryClient.getQueryData<BoardWithAccess>(personalBoardKeys.detail());
+      if (previous) {
+        queryClient.setQueryData<BoardWithAccess>(personalBoardKeys.detail(), {
+          ...previous,
+          ...(input.name !== undefined && { name: input.name }),
+          ...(input.color !== undefined && { color: input.color }),
+          ...(input.icon !== undefined && { icon: input.icon }),
+          ...(input.statusOptions !== undefined && { statusOptions: input.statusOptions }),
+          ...(input.sectionOptions !== undefined && { sectionOptions: input.sectionOptions }),
+        });
+      }
+      return { previous };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(personalBoardKeys.detail(), context.previous);
+      }
+      toast.error(error.message || 'Failed to update personal board');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: personalBoardKeys.detail() });
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
     },
   });
 }

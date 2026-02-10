@@ -101,6 +101,13 @@ function SortableFavoriteItem({ favorite, isActive, href, hintKey }: SortableFav
         </span>
       ) : favorite.entityType === 'rollup' ? (
         <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      ) : favorite.boardType === 'personal' ? (
+        <span
+          className="material-symbols-outlined shrink-0"
+          style={{ fontSize: '14px', color: favorite.boardColor ?? '#3B82F6' }}
+        >
+          {favorite.boardIcon ?? 'checklist'}
+        </span>
       ) : favorite.clientColor ? (
         <ClientIcon
           icon={favorite.clientIcon ?? null}
@@ -306,10 +313,14 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                 <div className="space-y-1">
                   {favorites.map((favorite, index) => {
                     const href =
-                      favorite.entityType === 'board' && favorite.clientSlug
+                      favorite.boardType === 'personal'
+                        ? '/my-tasks?tab=personal'
+                        : favorite.entityType === 'board' && favorite.clientSlug
                         ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
                         : `/rollups/${favorite.entityId}`;
-                    const isActive = pathname.startsWith(href);
+                    const isActive = favorite.boardType === 'personal'
+                      ? pathname === '/my-tasks'
+                      : pathname.startsWith(href);
 
                     return (
                       <Tooltip key={favorite.id}>
@@ -330,6 +341,13 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                             )}
                             {favorite.entityType === 'rollup' ? (
                               <Layers className="h-5 w-5" />
+                            ) : favorite.boardType === 'personal' ? (
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: '20px', color: favorite.boardColor ?? '#3B82F6' }}
+                              >
+                                {favorite.boardIcon ?? 'checklist'}
+                              </span>
                             ) : (
                               <ClientIcon
                                 icon={favorite.clientIcon ?? null}
@@ -358,10 +376,14 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                     <div className="space-y-1">
                       {favorites.map((favorite, index) => {
                         const href =
-                          favorite.entityType === 'board' && favorite.clientSlug
+                          favorite.boardType === 'personal'
+                            ? '/my-tasks?tab=personal'
+                            : favorite.entityType === 'board' && favorite.clientSlug
                             ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
                             : `/rollups/${favorite.entityId}`;
-                        const isActive = pathname.startsWith(href);
+                        const isActive = favorite.boardType === 'personal'
+                          ? pathname === '/my-tasks'
+                          : pathname.startsWith(href);
 
                         return (
                           <SortableFavoriteItem

@@ -34,6 +34,8 @@ export const boards = pgTable('boards', {
     { id: 'complete', label: 'Complete', color: '#10B981', position: 3 },
   ]),
   sectionOptions: jsonb('section_options').$type<SectionOption[]>().default([]),
+  color: varchar('color', { length: 7 }),
+  icon: varchar('icon', { length: 100 }),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

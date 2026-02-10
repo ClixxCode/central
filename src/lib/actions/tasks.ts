@@ -145,6 +145,15 @@ async function getBoardAccessLevel(
     return 'full';
   }
 
+  // Check if this is a personal board
+  const board = await db.query.boards.findFirst({
+    where: eq(boards.id, boardId),
+    columns: { type: true, createdBy: true },
+  });
+  if (board?.type === 'personal') {
+    return board.createdBy === userId ? 'full' : null;
+  }
+
   // Check if user is in a contractor team
   const isContractor = await isUserInContractorTeam(userId);
 
