@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { X, LayoutDashboard, FolderKanban, Layers, Users, Settings, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
@@ -29,6 +29,7 @@ interface MobileNavProps {
 
 export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isClient = useIsClient();
   const { sidebarOpen, setSidebarOpen } = useUIStore();
   const { data: favorites = [] } = useFavorites();
@@ -103,10 +104,14 @@ export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
                 <div className="space-y-1">
                   {favorites.map((favorite) => {
                     const href =
-                      favorite.entityType === 'board' && favorite.clientSlug
+                      favorite.boardType === 'personal'
+                        ? '/my-tasks?tab=personal'
+                        : favorite.entityType === 'board' && favorite.clientSlug
                         ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
                         : `/rollups/${favorite.entityId}`;
-                    const isActive = pathname.startsWith(href);
+                    const isActive = favorite.boardType === 'personal'
+                      ? pathname === '/my-tasks' && searchParams.get('tab') === 'personal'
+                      : pathname.startsWith(href);
 
                     return (
                       <Link
@@ -122,6 +127,13 @@ export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
                       >
                         {favorite.entityType === 'rollup' ? (
                           <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        ) : favorite.boardType === 'personal' ? (
+                          <span
+                            className="material-symbols-outlined shrink-0"
+                            style={{ fontSize: '14px', color: favorite.boardColor ?? '#3B82F6' }}
+                          >
+                            {favorite.boardIcon ?? 'checklist'}
+                          </span>
                         ) : favorite.clientColor ? (
                           <ClientIcon
                             icon={favorite.clientIcon ?? null}

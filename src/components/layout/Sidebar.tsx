@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   ChevronDown,
@@ -128,6 +128,7 @@ interface SidebarProps {
 
 export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isClient = useIsClient();
   const {
     sidebarCollapsed,
@@ -382,7 +383,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                             ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
                             : `/rollups/${favorite.entityId}`;
                         const isActive = favorite.boardType === 'personal'
-                          ? pathname === '/my-tasks'
+                          ? pathname === '/my-tasks' && searchParams.get('tab') === 'personal'
                           : pathname.startsWith(href);
 
                         return (

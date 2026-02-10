@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PersonalRollupView } from './PersonalRollupView';
 import { PersonalRollupToolbar } from './PersonalRollupToolbar';
@@ -624,6 +624,7 @@ function applyMyTasksFilters(
 
 export function MyTasksPageClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { data: session } = useSession();
   const userId = session?.user?.id;
   const { data: tasksByClient, isLoading, error, refetch } = useMyTasks();
@@ -694,7 +695,11 @@ export function MyTasksPageClient() {
         <p className="text-muted-foreground">Tasks, mentions, and replies across all clients</p>
       </div>
 
-      <Tabs value={activeTabValue} onValueChange={(v) => setActiveTab(v as 'tasks' | 'notifications' | 'personal')} className="w-full">
+      <Tabs value={activeTabValue} onValueChange={(v) => {
+        setActiveTab(v as 'tasks' | 'notifications' | 'personal');
+        // Keep URL in sync so sidebar favorites can detect active tab
+        router.replace(`/my-tasks?tab=${v}`, { scroll: false });
+      }} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="tasks" className="gap-2">
             <CheckSquare className="size-4" />
