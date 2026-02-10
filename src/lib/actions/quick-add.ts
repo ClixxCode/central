@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { users, teams, teamMembers } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { getBoardAssignableUsers } from './tasks';
 
@@ -48,7 +48,7 @@ export async function listAssignableUsers(boardId?: string): Promise<{
     return getBoardAssignableUsers(boardId);
   }
 
-  // Without boardId: return all non-contractor users
+  // Without boardId: return all active non-contractor users
   const allUsers = await db
     .select({
       id: users.id,
@@ -56,7 +56,8 @@ export async function listAssignableUsers(boardId?: string): Promise<{
       name: users.name,
       avatarUrl: users.avatarUrl,
     })
-    .from(users);
+    .from(users)
+    .where(isNull(users.deactivatedAt));
 
   // Get contractor team IDs
   const contractorTeams = await db.query.teams.findMany({
@@ -102,7 +103,8 @@ export async function listMentionableUsers(): Promise<{
       name: users.name,
       avatarUrl: users.avatarUrl,
     })
-    .from(users);
+    .from(users)
+    .where(isNull(users.deactivatedAt));
 
   return { success: true, users: allUsers };
 }

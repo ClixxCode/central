@@ -12,6 +12,7 @@ export interface TeamMember {
   name: string | null;
   email: string;
   avatarUrl: string | null;
+  deactivatedAt: Date | null;
   joinedAt: Date;
 }
 
@@ -66,6 +67,7 @@ export async function listTeamsWithMembers(): Promise<ActionResult<TeamWithMembe
           name: m.user.name,
           email: m.user.email,
           avatarUrl: m.user.avatarUrl,
+          deactivatedAt: m.user.deactivatedAt,
           joinedAt: m.joinedAt,
         })),
       })),
@@ -113,6 +115,7 @@ export async function getTeam(teamId: string): Promise<ActionResult<TeamWithMemb
           name: m.user.name,
           email: m.user.email,
           avatarUrl: m.user.avatarUrl,
+          deactivatedAt: m.user.deactivatedAt,
           joinedAt: m.joinedAt,
         })),
       },

@@ -47,6 +47,7 @@ export interface TaskWithAssignees {
     email: string;
     name: string | null;
     avatarUrl: string | null;
+    deactivatedAt: Date | null;
   }[];
   // Activity indicators
   commentCount: number;
@@ -404,6 +405,7 @@ export async function listTasks(
             email: users.email,
             name: users.name,
             avatarUrl: users.avatarUrl,
+            deactivatedAt: users.deactivatedAt,
           })
           .from(taskAssignees)
           .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -413,7 +415,7 @@ export async function listTasks(
   // Group assignees by task
   const assigneesByTask = new Map<
     string,
-    { id: string; email: string; name: string | null; avatarUrl: string | null }[]
+    { id: string; email: string; name: string | null; avatarUrl: string | null; deactivatedAt: Date | null }[]
   >();
 
   for (const a of assigneesData) {
@@ -425,6 +427,7 @@ export async function listTasks(
       email: a.email,
       name: a.name,
       avatarUrl: a.avatarUrl,
+      deactivatedAt: a.deactivatedAt,
     });
   }
 
@@ -622,6 +625,7 @@ export async function getTask(taskId: string): Promise<{
       email: users.email,
       name: users.name,
       avatarUrl: users.avatarUrl,
+      deactivatedAt: users.deactivatedAt,
     })
     .from(taskAssignees)
     .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -719,6 +723,7 @@ export async function getTask(taskId: string): Promise<{
       email: a.email,
       name: a.name,
       avatarUrl: a.avatarUrl,
+      deactivatedAt: a.deactivatedAt,
     })),
     commentCount,
     attachmentCount,
@@ -823,6 +828,7 @@ export async function createTask(input: CreateTaskInput): Promise<{
             email: users.email,
             name: users.name,
             avatarUrl: users.avatarUrl,
+            deactivatedAt: users.deactivatedAt,
           })
           .from(taskAssignees)
           .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -850,6 +856,7 @@ export async function createTask(input: CreateTaskInput): Promise<{
       email: a.email,
       name: a.name,
       avatarUrl: a.avatarUrl,
+      deactivatedAt: a.deactivatedAt,
     })),
     commentCount: 0,
     attachmentCount: 0,
@@ -1075,6 +1082,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
       email: users.email,
       name: users.name,
       avatarUrl: users.avatarUrl,
+      deactivatedAt: users.deactivatedAt,
     })
     .from(taskAssignees)
     .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -1171,6 +1179,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
       email: a.email,
       name: a.name,
       avatarUrl: a.avatarUrl,
+      deactivatedAt: a.deactivatedAt,
     })),
     commentCount,
     attachmentCount,
@@ -1302,6 +1311,7 @@ export async function listSubtasks(parentTaskId: string): Promise<{
       email: users.email,
       name: users.name,
       avatarUrl: users.avatarUrl,
+      deactivatedAt: users.deactivatedAt,
     })
     .from(taskAssignees)
     .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -1309,7 +1319,7 @@ export async function listSubtasks(parentTaskId: string): Promise<{
 
   const assigneesByTask = new Map<
     string,
-    { id: string; email: string; name: string | null; avatarUrl: string | null }[]
+    { id: string; email: string; name: string | null; avatarUrl: string | null; deactivatedAt: Date | null }[]
   >();
   for (const a of assigneesData) {
     if (!assigneesByTask.has(a.taskId)) {
@@ -1320,6 +1330,7 @@ export async function listSubtasks(parentTaskId: string): Promise<{
       email: a.email,
       name: a.name,
       avatarUrl: a.avatarUrl,
+      deactivatedAt: a.deactivatedAt,
     });
   }
 
@@ -1518,7 +1529,7 @@ export async function getBoardAssignableUsers(boardId: string): Promise<{
     return { success: false, error: 'Access denied to this board' };
   }
 
-  // Get all users with their team memberships
+  // Get all active users with their team memberships
   const allUsersWithTeams = await db
     .select({
       id: users.id,
@@ -1526,7 +1537,8 @@ export async function getBoardAssignableUsers(boardId: string): Promise<{
       name: users.name,
       avatarUrl: users.avatarUrl,
     })
-    .from(users);
+    .from(users)
+    .where(isNull(users.deactivatedAt));
 
   // Get contractor team IDs (teams with excludeFromPublic = true)
   const contractorTeams = await db.query.teams.findMany({
@@ -1712,6 +1724,7 @@ export async function listMyTasks(): Promise<{
       email: users.email,
       name: users.name,
       avatarUrl: users.avatarUrl,
+      deactivatedAt: users.deactivatedAt,
     })
     .from(taskAssignees)
     .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -1720,7 +1733,7 @@ export async function listMyTasks(): Promise<{
   // Group assignees by task
   const assigneesByTask = new Map<
     string,
-    { id: string; email: string; name: string | null; avatarUrl: string | null }[]
+    { id: string; email: string; name: string | null; avatarUrl: string | null; deactivatedAt: Date | null }[]
   >();
 
   for (const a of assigneesData) {
@@ -1732,6 +1745,7 @@ export async function listMyTasks(): Promise<{
       email: a.email,
       name: a.name,
       avatarUrl: a.avatarUrl,
+      deactivatedAt: a.deactivatedAt,
     });
   }
 
@@ -2237,6 +2251,7 @@ export async function searchTasks(query: string): Promise<{
           userId: taskAssignees.userId,
           name: users.name,
           avatarUrl: users.avatarUrl,
+          deactivatedAt: users.deactivatedAt,
         })
         .from(taskAssignees)
         .innerJoin(users, eq(users.id, taskAssignees.userId))

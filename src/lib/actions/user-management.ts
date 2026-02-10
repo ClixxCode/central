@@ -13,6 +13,7 @@ export interface ManagedUser {
   avatarUrl: string | null;
   role: 'admin' | 'user';
   authProvider: 'google' | 'credentials' | null;
+  deactivatedAt: Date | null;
   createdAt: Date;
   teamCount: number;
 }
@@ -48,6 +49,7 @@ export async function listAllUsers(): Promise<ActionResult<ManagedUser[]>> {
         avatarUrl: u.avatarUrl,
         role: u.role,
         authProvider: u.authProvider,
+        deactivatedAt: u.deactivatedAt,
         createdAt: u.createdAt,
         teamCount: u.teamMembers?.length ?? 0,
       })),
@@ -95,15 +97,15 @@ export async function updateUserRole(
 }
 
 /**
- * Delete user (admin only)
+ * Deactivate user (admin only) — soft delete
  */
-export async function deleteUser(userId: string): Promise<ActionResult> {
+export async function deactivateUser(userId: string): Promise<ActionResult> {
   try {
     const admin = await requireAdmin();
 
-    // Prevent self-deletion
+    // Prevent self-deactivation
     if (admin.id === userId) {
-      return { success: false, error: 'You cannot delete your own account' };
+      return { success: false, error: 'You cannot deactivate your own account' };
     }
 
     const user = await db.query.users.findFirst({
@@ -114,13 +116,51 @@ export async function deleteUser(userId: string): Promise<ActionResult> {
       return { success: false, error: 'User not found' };
     }
 
-    // Delete user (cascades will handle team memberships, etc.)
-    await db.delete(users).where(eq(users.id, userId));
+    if (user.deactivatedAt) {
+      return { success: false, error: 'User is already deactivated' };
+    }
+
+    await db
+      .update(users)
+      .set({ deactivatedAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, userId));
 
     revalidatePath('/settings/users');
     return { success: true };
   } catch (error) {
-    console.error('deleteUser error:', error);
-    return { success: false, error: 'Failed to delete user' };
+    console.error('deactivateUser error:', error);
+    return { success: false, error: 'Failed to deactivate user' };
+  }
+}
+
+/**
+ * Reactivate user (admin only)
+ */
+export async function reactivateUser(userId: string): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (!user.deactivatedAt) {
+      return { success: false, error: 'User is not deactivated' };
+    }
+
+    await db
+      .update(users)
+      .set({ deactivatedAt: null, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    revalidatePath('/settings/users');
+    return { success: true };
+  } catch (error) {
+    console.error('reactivateUser error:', error);
+    return { success: false, error: 'Failed to reactivate user' };
   }
 }

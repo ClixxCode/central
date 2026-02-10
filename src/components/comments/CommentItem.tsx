@@ -68,6 +68,7 @@ export function CommentItem({
   const isAuthor = comment.authorId === currentUserId;
   const canEdit = isAuthor;
   const canDelete = isAuthor || isAdmin;
+  const isDeactivatedAuthor = !!(comment.author as { deactivatedAt?: Date | null }).deactivatedAt;
 
   const handleStartEdit = useCallback(() => {
     setEditContent(comment.content);
@@ -121,7 +122,7 @@ export function CommentItem({
       )}
     >
       {/* Author avatar */}
-      <Avatar className={cn('shrink-0', isReply ? 'h-6 w-6' : 'h-8 w-8')}>
+      <Avatar className={cn('shrink-0', isReply ? 'h-6 w-6' : 'h-8 w-8', isDeactivatedAuthor && 'opacity-50 grayscale')}>
         <AvatarImage src={comment.author.avatarUrl ?? undefined} />
         <AvatarFallback className={cn(isReply ? 'text-[10px]' : 'text-xs')}>
           {getInitials(comment.author.name ?? comment.author.email)}
@@ -132,8 +133,9 @@ export function CommentItem({
       <div className="min-w-0 flex-1">
         {/* Header */}
         <div className="mb-1 flex items-center gap-2">
-          <span className="text-sm font-medium">
+          <span className={cn('text-sm font-medium', isDeactivatedAuthor && 'text-muted-foreground')}>
             {comment.author.name ?? comment.author.email.split('@')[0]}
+            {isDeactivatedAuthor && ' (deactivated)'}
           </span>
           <span className="text-xs text-muted-foreground">{timeAgo}</span>
           {wasEdited && (

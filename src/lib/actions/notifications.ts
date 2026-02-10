@@ -287,10 +287,15 @@ export async function createMentionNotification(input: {
   // Get mentioned user details
   const mentionedUser = await db.query.users.findFirst({
     where: eq(users.id, input.mentionedUserId),
-    columns: { id: true, name: true, email: true },
+    columns: { id: true, name: true, email: true, deactivatedAt: true },
   });
 
   if (!mentioner || !mentionedUser) {
+    return { success: false };
+  }
+
+  // Skip notifications for deactivated users
+  if (mentionedUser.deactivatedAt) {
     return { success: false };
   }
 
@@ -490,13 +495,28 @@ export async function createCommentAddedNotification(input: {
     return { success: true, notificationIds: [] };
   }
 
+  // Filter out deactivated users
+  const recipientUsers = recipientIds.size > 0
+    ? await db
+        .select({ id: users.id, email: users.email, name: users.name, deactivatedAt: users.deactivatedAt })
+        .from(users)
+        .where(inArray(users.id, [...recipientIds]))
+    : [];
+
+  const activeRecipients = recipientUsers.filter((u) => !u.deactivatedAt);
+
+  if (activeRecipients.length === 0) {
+    return { success: true, notificationIds: [] };
+  }
+
   const commenterName = commenter.name || commenter.email;
   const commentPreview = getPlainText(input.commentContent).slice(0, 100);
 
-  // Create notifications for all recipients
+  // Create notifications for all active recipients
   const notificationIds: string[] = [];
 
-  for (const recipientId of recipientIds) {
+  for (const recipient of activeRecipients) {
+    const recipientId = recipient.id;
     // Customize title for parent comment author when this is a reply
     const taskLabel = parentTitle ? `"${task.title}" (subtask of "${parentTitle}")` : `"${task.title}"`;
     const title = input.parentCommentAuthorId && recipientId === input.parentCommentAuthorId
@@ -516,12 +536,6 @@ export async function createCommentAddedNotification(input: {
       .returning();
 
     notificationIds.push(notification.id);
-
-    // Get recipient details for Inngest event
-    const recipient = await db.query.users.findFirst({
-      where: eq(users.id, recipientId),
-      columns: { id: true, email: true, name: true },
-    });
 
     if (recipient) {
       // Trigger notification via Inngest (email/Slack based on preferences)
@@ -571,10 +585,15 @@ export async function createAssignmentNotification(input: {
   // Get assignee details
   const assignee = await db.query.users.findFirst({
     where: eq(users.id, input.assigneeUserId),
-    columns: { id: true, name: true, email: true },
+    columns: { id: true, name: true, email: true, deactivatedAt: true },
   });
 
   if (!assigner || !assignee) {
+    return { success: false };
+  }
+
+  // Skip notifications for deactivated users
+  if (assignee.deactivatedAt) {
     return { success: false };
   }
 
@@ -658,10 +677,15 @@ export async function createDueNotification(input: {
   // Get user details
   const user = await db.query.users.findFirst({
     where: eq(users.id, input.userId),
-    columns: { id: true, name: true, email: true },
+    columns: { id: true, name: true, email: true, deactivatedAt: true },
   });
 
   if (!user) {
+    return { success: false };
+  }
+
+  // Skip notifications for deactivated users
+  if (user.deactivatedAt) {
     return { success: false };
   }
 

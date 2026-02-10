@@ -41,7 +41,7 @@ describe('Task Types', () => {
     it('allows tasks with assignees', () => {
       const task = createMockTask({
         assignees: [
-          { id: 'user-1', email: 'user@example.com', name: 'Test User', avatarUrl: null },
+          { id: 'user-1', email: 'user@example.com', name: 'Test User', avatarUrl: null, deactivatedAt: null },
         ],
       });
       expect(task.assignees).toHaveLength(1);

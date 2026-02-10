@@ -48,6 +48,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        if (user.deactivatedAt) {
+          return null;
+        }
+
         const isValid = await verifyPassword(password, user.passwordHash);
         if (!isValid) {
           return null;
@@ -68,14 +72,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return false;
       }
 
-      // For credentials login, check email verification
+      // For credentials login, check email verification and deactivation
       if (account?.provider === 'credentials') {
         const dbUser = await db.query.users.findFirst({
           where: eq(users.email, user.email),
         });
 
+        if (dbUser?.deactivatedAt) {
+          return '/login?error=AccountDeactivated';
+        }
+
         if (dbUser && !dbUser.emailVerified) {
           return '/login?error=EmailNotVerified';
+        }
+      }
+
+      // Check deactivation for Google sign-in (including allowed domains)
+      if (account?.provider === 'google') {
+        const existingGoogleUser = await db.query.users.findFirst({
+          where: eq(users.email, user.email),
+        });
+        if (existingGoogleUser?.deactivatedAt) {
+          return '/login?error=AccountDeactivated';
         }
       }
 

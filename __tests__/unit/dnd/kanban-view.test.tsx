@@ -55,7 +55,7 @@ const mockTask: TaskWithAssignees = {
   createdAt: new Date(),
   updatedAt: new Date(),
   assignees: [
-    { id: 'user-2', email: 'dev@example.com', name: 'Dev User', avatarUrl: null },
+    { id: 'user-2', email: 'dev@example.com', name: 'Dev User', avatarUrl: null, deactivatedAt: null },
   ],
   commentCount: 0,
   attachmentCount: 0,

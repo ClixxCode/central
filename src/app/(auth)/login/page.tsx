@@ -50,6 +50,7 @@ function LoginForm() {
     NoInvitation: 'An invitation is required to sign up with this email.',
     CredentialsSignin: 'Invalid email or password.',
     EmailNotVerified: 'Please verify your email before signing in.',
+    AccountDeactivated: 'Your account has been deactivated. Contact an administrator.',
     Default: 'An error occurred during sign in.',
   };
 

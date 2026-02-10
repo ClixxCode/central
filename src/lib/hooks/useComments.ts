@@ -123,6 +123,7 @@ export function useCreateComment() {
               email: '',
               name: 'You',
               avatarUrl: null,
+              deactivatedAt: null,
             },
             attachments: [],
           };

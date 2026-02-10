@@ -23,6 +23,7 @@ export interface CommentAuthor {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  deactivatedAt: Date | null;
 }
 
 export interface CommentAttachment {
@@ -203,6 +204,7 @@ export async function listComments(taskId: string): Promise<{
       authorEmail: users.email,
       authorName: users.name,
       authorAvatarUrl: users.avatarUrl,
+      authorDeactivatedAt: users.deactivatedAt,
     })
     .from(comments)
     .innerJoin(users, eq(users.id, comments.authorId))
@@ -256,6 +258,7 @@ export async function listComments(taskId: string): Promise<{
       email: c.authorEmail,
       name: c.authorName,
       avatarUrl: c.authorAvatarUrl,
+      deactivatedAt: c.authorDeactivatedAt,
     },
     attachments: attachmentsByComment.get(c.id) ?? [],
   }));
@@ -360,6 +363,7 @@ export async function createComment(input: CreateCommentInput): Promise<{
       email: true,
       name: true,
       avatarUrl: true,
+      deactivatedAt: true,
     },
   });
 
@@ -376,6 +380,7 @@ export async function createComment(input: CreateCommentInput): Promise<{
       email: author!.email,
       name: author!.name,
       avatarUrl: author!.avatarUrl,
+      deactivatedAt: author!.deactivatedAt,
     },
     attachments: commentAttachments,
   };
@@ -470,6 +475,7 @@ export async function updateComment(input: UpdateCommentInput): Promise<{
       email: true,
       name: true,
       avatarUrl: true,
+      deactivatedAt: true,
     },
   });
 
@@ -486,6 +492,7 @@ export async function updateComment(input: UpdateCommentInput): Promise<{
       email: author!.email,
       name: author!.name,
       avatarUrl: author!.avatarUrl,
+      deactivatedAt: author!.deactivatedAt,
     },
     attachments: commentAttachments,
   };

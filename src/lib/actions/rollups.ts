@@ -80,6 +80,7 @@ export interface RollupTaskWithAssignees {
     email: string;
     name: string | null;
     avatarUrl: string | null;
+    deactivatedAt: Date | null;
   }[];
   commentCount: number;
   attachmentCount: number;
@@ -873,6 +874,7 @@ export async function getRollupTasks(
               email: users.email,
               name: users.name,
               avatarUrl: users.avatarUrl,
+              deactivatedAt: users.deactivatedAt,
             })
             .from(taskAssignees)
             .innerJoin(users, eq(users.id, taskAssignees.userId))
@@ -882,7 +884,7 @@ export async function getRollupTasks(
     // Group assignees by task
     const assigneesByTask = new Map<
       string,
-      { id: string; email: string; name: string | null; avatarUrl: string | null }[]
+      { id: string; email: string; name: string | null; avatarUrl: string | null; deactivatedAt: Date | null }[]
     >();
 
     for (const a of assigneesData) {
@@ -894,6 +896,7 @@ export async function getRollupTasks(
         email: a.email,
         name: a.name,
         avatarUrl: a.avatarUrl,
+        deactivatedAt: a.deactivatedAt,
       });
     }
 

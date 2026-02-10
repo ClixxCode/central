@@ -22,6 +22,7 @@ export interface AssigneeUser {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+  deactivatedAt?: Date | string | null;
 }
 
 interface AssigneePickerProps {
@@ -185,32 +186,41 @@ export function AssigneeAvatars({
   if (showNames && assignees.length <= 2) {
     return (
       <div className="flex items-center gap-1">
-        {assignees.map((user, index) => (
-          <div key={user.id} className="flex items-center gap-1">
-            <Avatar size={size}>
-              <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name ?? user.email} />
-              <AvatarFallback>
-                {getInitials(user.name ?? user.email)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-sm">{user.name ?? user.email.split('@')[0]}</span>
-            {index < assignees.length - 1 && <span className="text-muted-foreground">,</span>}
-          </div>
-        ))}
+        {assignees.map((user, index) => {
+          const isDeactivated = !!user.deactivatedAt;
+          return (
+            <div key={user.id} className="flex items-center gap-1">
+              <Avatar size={size} className={cn(isDeactivated && 'opacity-50 grayscale')}>
+                <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name ?? user.email} />
+                <AvatarFallback>
+                  {getInitials(user.name ?? user.email)}
+                </AvatarFallback>
+              </Avatar>
+              <span className={cn('text-sm', isDeactivated && 'text-muted-foreground')}>
+                {user.name ?? user.email.split('@')[0]}
+                {isDeactivated && ' (deactivated)'}
+              </span>
+              {index < assignees.length - 1 && <span className="text-muted-foreground">,</span>}
+            </div>
+          );
+        })}
       </div>
     );
   }
 
   return (
     <AvatarGroup>
-      {assignees.slice(0, maxDisplay).map((user) => (
-        <Avatar key={user.id} size={size}>
-          <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name ?? user.email} />
-          <AvatarFallback>
-            {getInitials(user.name ?? user.email)}
-          </AvatarFallback>
-        </Avatar>
-      ))}
+      {assignees.slice(0, maxDisplay).map((user) => {
+        const isDeactivated = !!user.deactivatedAt;
+        return (
+          <Avatar key={user.id} size={size} className={cn(isDeactivated && 'opacity-50 grayscale')}>
+            <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name ?? user.email} />
+            <AvatarFallback>
+              {getInitials(user.name ?? user.email)}
+            </AvatarFallback>
+          </Avatar>
+        );
+      })}
       {remainingCount > 0 && (
         <AvatarGroupCount>+{remainingCount}</AvatarGroupCount>
       )}

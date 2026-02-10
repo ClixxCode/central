@@ -71,6 +71,7 @@ export const users = pgTable('users', {
       },
     },
   }),
+  deactivatedAt: timestamp('deactivated_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

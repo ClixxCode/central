@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   Users,
-  Trash2,
   Shield,
   ShieldCheck,
   Mail,
@@ -13,6 +12,8 @@ import {
   RefreshCw,
   XCircle,
   KeyRound,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,7 +57,8 @@ import { toast } from 'sonner';
 import {
   listAllUsers,
   updateUserRole,
-  deleteUser,
+  deactivateUser,
+  reactivateUser,
   type ManagedUser,
 } from '@/lib/actions/user-management';
 import {
@@ -122,15 +124,30 @@ export function UsersPageClient() {
     },
   });
 
-  const deleteUserMutation = useMutation({
+  const deactivateUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const result = await deleteUser(userId);
+      const result = await deactivateUser(userId);
       if (!result.success) throw new Error(result.error);
       return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast.success('User deleted');
+      toast.success('User deactivated');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const reactivateUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const result = await reactivateUser(userId);
+      if (!result.success) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('User reactivated');
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -186,11 +203,15 @@ export function UsersPageClient() {
     await inviteMutation.mutateAsync({ email: inviteEmail.trim(), role: inviteRole });
   };
 
-  const handleDeleteUser = async (user: ManagedUser) => {
-    if (!confirm(`Are you sure you want to delete ${user.name || user.email}? This action cannot be undone.`)) {
+  const handleDeactivateUser = async (user: ManagedUser) => {
+    if (!confirm(`Are you sure you want to deactivate ${user.name || user.email}? They will no longer be able to log in.`)) {
       return;
     }
-    await deleteUserMutation.mutateAsync(user.id);
+    await deactivateUserMutation.mutateAsync(user.id);
+  };
+
+  const handleReactivateUser = async (user: ManagedUser) => {
+    await reactivateUserMutation.mutateAsync(user.id);
   };
 
   const getInitials = (name: string | null, email: string) => {
@@ -317,8 +338,10 @@ export function UsersPageClient() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users?.map((user) => (
-                    <TableRow key={user.id}>
+                  {users?.map((user) => {
+                    const isDeactivated = !!user.deactivatedAt;
+                    return (
+                    <TableRow key={user.id} className={isDeactivated ? 'opacity-60' : undefined}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
@@ -328,7 +351,12 @@ export function UsersPageClient() {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{user.name ?? 'No name'}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{user.name ?? 'No name'}</p>
+                              {isDeactivated && (
+                                <Badge variant="outline" className="text-xs">Deactivated</Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground">{user.email}</p>
                           </div>
                         </div>
@@ -336,6 +364,7 @@ export function UsersPageClient() {
                       <TableCell>
                         <Select
                           value={user.role}
+                          disabled={isDeactivated}
                           onValueChange={(value) =>
                             updateRoleMutation.mutate({
                               userId: user.id,
@@ -376,25 +405,37 @@ export function UsersPageClient() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => sendResetMutation.mutate(user.id)}
-                            >
-                              <KeyRound className="h-4 w-4 mr-2" />
-                              Send Password Reset
-                            </DropdownMenuItem>
+                            {!isDeactivated && (
+                              <DropdownMenuItem
+                                onClick={() => sendResetMutation.mutate(user.id)}
+                              >
+                                <KeyRound className="h-4 w-4 mr-2" />
+                                Send Password Reset
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => handleDeleteUser(user)}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete User
-                            </DropdownMenuItem>
+                            {isDeactivated ? (
+                              <DropdownMenuItem
+                                onClick={() => handleReactivateUser(user)}
+                              >
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Reactivate
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDeactivateUser(user)}
+                              >
+                                <UserX className="h-4 w-4 mr-2" />
+                                Deactivate
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Card>
