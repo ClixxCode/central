@@ -40,7 +40,7 @@ export function taskDueEmailHtml(data: TaskDueEmailData): string {
 
   const content = `
     <h2 style="margin: 0 0 16px; font-size: 18px; ${headerStyle}">${headerText}</h2>
-    <p style="margin: 0 0 16px; color: #d1cdd9;">
+    <p style="margin: 0 0 16px; color: #d0d0d5;">
       ${messageText}
     </p>
     ${taskCard({

@@ -117,8 +117,8 @@ export function dailyDigestEmailHtml(data: DailyDigestEmailData): string {
             : 'commented on';
 
         return `
-          <div style="padding: 8px 0; border-bottom: 1px solid #403c52;">
-            <span style="color: #d1cdd9;"><strong>${notif.actorName}</strong> ${typeLabel} "${notif.taskTitle}"</span>
+          <div style="padding: 8px 0; border-bottom: 1px solid #42424a;">
+            <span style="color: #d0d0d5;"><strong>${notif.actorName}</strong> ${typeLabel} "${notif.taskTitle}"</span>
           </div>
         `;
       })
@@ -126,7 +126,7 @@ export function dailyDigestEmailHtml(data: DailyDigestEmailData): string {
 
     sections.push(`
       <div style="margin-bottom: 24px;">
-        <h3 style="margin: 0 0 12px; font-size: 16px; color: #a8a3b5; border-bottom: 2px solid #403c52; padding-bottom: 8px;">
+        <h3 style="margin: 0 0 12px; font-size: 16px; color: #a0a0a8; border-bottom: 2px solid #42424a; padding-bottom: 8px;">
           Unread Notifications (${data.unreadNotifications.length})
         </h3>
         ${notificationsHtml}
@@ -137,7 +137,7 @@ export function dailyDigestEmailHtml(data: DailyDigestEmailData): string {
   // Empty state
   if (sections.length === 0) {
     sections.push(`
-      <div style="text-align: center; padding: 24px; color: #a8a3b5;">
+      <div style="text-align: center; padding: 24px; color: #a0a0a8;">
         <p style="margin: 0;">You're all caught up! No tasks due or new notifications.</p>
       </div>
     `);
@@ -148,7 +148,7 @@ export function dailyDigestEmailHtml(data: DailyDigestEmailData): string {
 
   const content = `
     <h2 style="margin: 0 0 8px; font-size: 18px; color: #f5f5f5;">${greeting}, ${data.recipientName || 'there'}!</h2>
-    <p style="margin: 0 0 24px; color: #a8a3b5; font-size: 14px;">Here's your summary for ${formattedDate}</p>
+    <p style="margin: 0 0 24px; color: #a0a0a8; font-size: 14px;">Here's your summary for ${formattedDate}</p>
     ${sections.join('')}
     <div style="text-align: center; margin: 24px 0 8px;">
       ${emailButton('View My Tasks', myTasksUrl)}

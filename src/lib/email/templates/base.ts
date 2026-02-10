@@ -6,7 +6,7 @@ import { getAppUrl } from '../client';
 export function baseEmailTemplate(content: string, preheader?: string): string {
   const appUrl = getAppUrl();
   const preheaderHtml = preheader
-    ? `<span style="display:none;font-size:1px;color:#1e1b2e;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">${preheader}</span>`
+    ? `<span style="display:none;font-size:1px;color:#1a1a1f;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">${preheader}</span>`
     : '';
 
   return `<!DOCTYPE html>
@@ -18,21 +18,21 @@ export function baseEmailTemplate(content: string, preheader?: string): string {
     <meta name="supported-color-schemes" content="dark">
     <title>Central</title>
   </head>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #f5f5f5; max-width: 600px; margin: 0 auto; padding: 0; background-color: #1e1b2e;">
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #f5f5f5; max-width: 600px; margin: 0 auto; padding: 0; background-color: #1a1a1f;">
     ${preheaderHtml}
-    <div style="background-color: #1e1b2e; padding: 20px;">
+    <div style="background-color: #1a1a1f; padding: 20px;">
       <div style="text-align: center; padding: 24px 0 16px;">
         <img src="${appUrl}/clix_logo_white.png" alt="Clix" width="36" height="36" style="display: inline-block; vertical-align: middle; margin-right: 10px;" />
         <span style="color: #f5f5f5; font-size: 20px; font-weight: 600; vertical-align: middle;">Central</span>
       </div>
-      <div style="background: #2b2838; padding: 24px; border-radius: 12px; border: 1px solid #403c52;">
+      <div style="background: #262629; padding: 24px; border-radius: 12px; border: 1px solid #42424a;">
         ${content}
       </div>
       <div style="text-align: center; padding: 16px;">
-        <p style="color: #706a80; font-size: 12px; margin: 0;">
+        <p style="color: #6b6b74; font-size: 12px; margin: 0;">
           Clix Digital Marketing Agency
         </p>
-        <p style="color: #706a80; font-size: 11px; margin: 8px 0 0;">
+        <p style="color: #6b6b74; font-size: 11px; margin: 8px 0 0;">
           <a href="${appUrl}/settings/notifications" style="color: #7c8fff; text-decoration: underline;">Manage notification preferences</a>
         </p>
       </div>
@@ -45,7 +45,7 @@ export function baseEmailTemplate(content: string, preheader?: string): string {
  * Styled button for email CTAs
  */
 export function emailButton(text: string, href: string): string {
-  return `<a href="${href}" style="display: inline-block; background: #f5f5f5; color: #1e1b2e; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">${text}</a>`;
+  return `<a href="${href}" style="display: inline-block; background: #f5f5f5; color: #1a1a1f; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">${text}</a>`;
 }
 
 /**
@@ -59,17 +59,17 @@ export function taskCard(task: {
   boardName?: string;
 }): string {
   const dueDateHtml = task.dueDate
-    ? `<span style="color: #a8a3b5; font-size: 13px;">Due: ${task.dueDate}</span>`
+    ? `<span style="color: #a0a0a8; font-size: 13px;">Due: ${task.dueDate}</span>`
     : '';
 
   const locationHtml = task.clientName || task.boardName
-    ? `<span style="color: #706a80; font-size: 12px;">${[task.clientName, task.boardName].filter(Boolean).join(' / ')}</span>`
+    ? `<span style="color: #6b6b74; font-size: 12px;">${[task.clientName, task.boardName].filter(Boolean).join(' / ')}</span>`
     : '';
 
-  return `<div style="background: #353145; border: 1px solid #403c52; border-radius: 8px; padding: 12px; margin: 8px 0;">
+  return `<div style="background: #333338; border: 1px solid #42424a; border-radius: 8px; padding: 12px; margin: 8px 0;">
     <div style="font-weight: 500; color: #f5f5f5; margin-bottom: 4px;">${task.title}</div>
     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-      <span style="background: #403c52; color: #d1cdd9; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">${task.status}</span>
+      <span style="background: #42424a; color: #d0d0d5; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">${task.status}</span>
       ${dueDateHtml}
     </div>
     ${locationHtml ? `<div style="margin-top: 4px;">${locationHtml}</div>` : ''}

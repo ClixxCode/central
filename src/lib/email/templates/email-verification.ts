@@ -14,18 +14,18 @@ export function emailVerificationTemplate(params: {
 
   const content = `
     <p style="margin: 0 0 16px; color: #f5f5f5;">${greeting}</p>
-    <p style="margin: 0 0 16px; color: #d1cdd9;">
+    <p style="margin: 0 0 16px; color: #d0d0d5;">
       Welcome to Central! Please verify your email address to complete your registration
       and start managing your projects.
     </p>
     <p style="margin: 0 0 24px; text-align: center;">
       ${emailButton('Verify Email', verificationUrl)}
     </p>
-    <p style="margin: 0 0 16px; color: #a8a3b5; font-size: 14px;">
+    <p style="margin: 0 0 16px; color: #a0a0a8; font-size: 14px;">
       This link will expire in 24 hours. If you didn't create an account with Central,
       you can safely ignore this email.
     </p>
-    <p style="margin: 0; color: #706a80; font-size: 13px;">
+    <p style="margin: 0; color: #6b6b74; font-size: 13px;">
       If the button doesn't work, copy and paste this link into your browser:<br/>
       <a href="${verificationUrl}" style="color: #7c8fff; word-break: break-all;">${verificationUrl}</a>
     </p>
@@ -50,14 +50,14 @@ export function emailVerifiedTemplate(params: {
 
   const content = `
     <p style="margin: 0 0 16px; color: #f5f5f5;">${greeting}</p>
-    <p style="margin: 0 0 16px; color: #d1cdd9;">
+    <p style="margin: 0 0 16px; color: #d0d0d5;">
       Your email has been verified successfully! You can now sign in to Central
       and start managing your projects.
     </p>
     <p style="margin: 0 0 24px; text-align: center;">
       ${emailButton('Sign In', loginUrl)}
     </p>
-    <p style="margin: 0; color: #a8a3b5; font-size: 14px;">
+    <p style="margin: 0; color: #a0a0a8; font-size: 14px;">
       Welcome to the team!
     </p>
   `;
