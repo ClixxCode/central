@@ -3,9 +3,11 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { PersonalRollupView } from './PersonalRollupView';
 import { PersonalRollupToolbar } from './PersonalRollupToolbar';
-import { useMyTasks } from '@/lib/hooks/useMyTasks';
+import { useMyTasks, myTasksKeys } from '@/lib/hooks/useMyTasks';
+import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import {
   useMentions,
   useReplies,
@@ -618,7 +620,24 @@ function applyMyTasksFilters(
 
 export function MyTasksPageClient() {
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
   const { data: tasksByClient, isLoading, error, refetch } = useMyTasks();
+
+  // Realtime: invalidate my tasks when assignments change
+  useRealtimeInvalidation({
+    channel: `my-assignments-${userId ?? 'none'}`,
+    table: 'task_assignees',
+    filter: userId ? `user_id=eq.${userId}` : undefined,
+    queryKeys: [myTasksKeys.list()],
+    enabled: !!userId,
+  });
+  useRealtimeInvalidation({
+    channel: `my-tasks-changes-${userId ?? 'none'}`,
+    table: 'tasks',
+    queryKeys: [myTasksKeys.list()],
+    enabled: !!userId,
+  });
   const { data: mentions = [] } = useMentions();
   const { data: replies = [] } = useReplies();
   const [viewMode, setViewMode] = React.useState<'swimlane' | 'table'>('swimlane');

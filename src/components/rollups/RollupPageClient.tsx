@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { RollupBoardView, RollupViewToggle } from './RollupBoardView';
 import { TaskFilterBar } from '@/components/tasks/TaskFilterBar';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
-import { useRollupTasks } from '@/lib/hooks/useRollupBoards';
+import { useRollupTasks, rollupKeys } from '@/lib/hooks/useRollupBoards';
+import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import type { TaskFilters, TaskSortOptions } from '@/lib/actions/tasks';
 import type { RollupBoardWithSources } from '@/lib/actions/rollups';
 
@@ -21,6 +22,19 @@ export function RollupPageClient({
 }: RollupPageClientProps) {
   const { getBoardView } = useBoardViewStore();
   const viewMode = getBoardView(rollupBoard.id);
+
+  // Realtime: invalidate rollup tasks when any source board task changes
+  const sourceBoardIds = rollupBoard.sources.map((s) => s.boardId);
+  const realtimeFilter = sourceBoardIds.length > 0
+    ? `board_id=in.(${sourceBoardIds.join(',')})`
+    : undefined;
+  useRealtimeInvalidation({
+    channel: `rollup-tasks-${rollupBoard.id}`,
+    table: 'tasks',
+    filter: realtimeFilter,
+    queryKeys: [rollupKeys.tasks()],
+    enabled: sourceBoardIds.length > 0,
+  });
 
   // Filter and sort state
   const [filters, setFilters] = React.useState<TaskFilters>({});

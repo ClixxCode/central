@@ -68,6 +68,8 @@ import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { isCompleteStatus } from '@/lib/utils/status';
 import { useClient } from '@/lib/hooks/useClients';
 import { useNotificationPreferences } from '@/lib/hooks/useNotifications';
+import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
+import { commentKeys } from '@/lib/hooks/useComments';
 
 // Re-export types for backwards compatibility
 export interface StatusOption {
@@ -163,6 +165,15 @@ export function TaskModal({
   const { data: notifPrefs } = useNotificationPreferences();
   const slackLinkType = notifPrefs?.slack?.slackLinkType ?? 'web';
   const slackTeamId = process.env.NEXT_PUBLIC_SLACK_WORKSPACE_ID;
+
+  // Realtime: live comment updates when modal is open
+  useRealtimeInvalidation({
+    channel: `task-comments-${task?.id ?? 'none'}`,
+    table: 'comments',
+    filter: task?.id ? `task_id=eq.${task.id}` : undefined,
+    queryKeys: task?.id ? [commentKeys.list(task.id)] : [],
+    enabled: !isNew && !!task?.id,
+  });
 
   // Form state
   const [title, setTitle] = useState('');

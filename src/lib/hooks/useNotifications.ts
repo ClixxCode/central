@@ -27,11 +27,8 @@ export const notificationKeys = {
   replies: () => [...notificationKeys.all, 'replies'] as const,
 };
 
-// Polling interval for notifications (10 seconds)
-const NOTIFICATION_POLL_INTERVAL = 10000;
-
 /**
- * Hook to fetch notifications with optional polling
+ * Hook to fetch notifications (freshness handled by RealtimeProvider)
  */
 export function useNotifications(
   options?: {
@@ -57,12 +54,14 @@ export function useNotifications(
       };
     },
     enabled: queryOptions?.enabled ?? true,
-    refetchInterval: queryOptions?.refetchInterval ?? NOTIFICATION_POLL_INTERVAL,
+    ...(queryOptions?.refetchInterval !== undefined
+      ? { refetchInterval: queryOptions.refetchInterval }
+      : {}),
   });
 }
 
 /**
- * Hook to fetch unread notification count with polling
+ * Hook to fetch unread notification count (freshness handled by RealtimeProvider)
  */
 export function useUnreadNotificationCount(
   queryOptions?: {
@@ -80,7 +79,9 @@ export function useUnreadNotificationCount(
       return result.count!;
     },
     enabled: queryOptions?.enabled ?? true,
-    refetchInterval: queryOptions?.refetchInterval ?? NOTIFICATION_POLL_INTERVAL,
+    ...(queryOptions?.refetchInterval !== undefined
+      ? { refetchInterval: queryOptions.refetchInterval }
+      : {}),
   });
 }
 

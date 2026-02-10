@@ -19,7 +19,9 @@ import {
   useDeleteTask,
   useAssignableUsers,
   useTask,
+  taskKeys,
 } from '@/lib/hooks/useTasks';
+import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import type { TaskFilters, TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 
@@ -88,6 +90,14 @@ export function BoardPageClient({
   const createTask = useCreateTask(boardId);
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+
+  // Realtime: invalidate board tasks when any task in this board changes
+  useRealtimeInvalidation({
+    channel: `board-tasks-${boardId}`,
+    table: 'tasks',
+    filter: `board_id=eq.${boardId}`,
+    queryKeys: [taskKeys.lists(), taskKeys.details()],
+  });
 
   // Task modal state for table view
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);

@@ -87,8 +87,6 @@ export function useRollupTasks(
       return result.data!;
     },
     enabled: !!rollupId,
-    // Refetch every 10 seconds for real-time updates
-    refetchInterval: 10000,
   });
 }
 
