@@ -15,6 +15,7 @@ import { eq, and, desc, inArray } from 'drizzle-orm';
 import { del } from '@vercel/blob';
 import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import { logBoardActivity } from './board-activity';
 
 // Types
 export interface CommentAuthor {
@@ -314,6 +315,17 @@ export async function createComment(input: CreateCommentInput): Promise<{
       content,
     })
     .returning();
+
+  // Log board activity (fire-and-forget)
+  if (task) {
+    logBoardActivity({
+      boardId: task.boardId,
+      taskId: task.id,
+      taskTitle: task.title,
+      userId: user.id,
+      action: 'comment_added',
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
 
   // Create attachment records if provided
   let commentAttachments: CommentAttachment[] = [];

@@ -71,6 +71,13 @@
       "when": 1770401294989,
       "tag": "0009_nifty_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770733932273,
+      "tag": "0010_outgoing_stellaris",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,7 @@ import { eq, and, or, not, inArray, notInArray, desc, asc, sql, isNull, isNotNul
 import { getCurrentUser, requireAuth, SessionUser } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createAssignmentNotification } from './notifications';
+import { logBoardActivity } from './board-activity';
 import { inngest } from '@/lib/inngest/client';
 
 // Types
@@ -857,6 +858,15 @@ export async function createTask(input: CreateTaskInput): Promise<{
     subtaskCompletedCount: 0,
   };
 
+  // Log board activity (fire-and-forget)
+  logBoardActivity({
+    boardId: newTask.boardId,
+    taskId: newTask.id,
+    taskTitle: newTask.title,
+    userId: user.id,
+    action: input.parentTaskId ? 'subtask_created' : 'task_created',
+  }).catch((err) => console.error('Failed to log board activity:', err));
+
   revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
 
   return { success: true, task: taskWithAssignees };
@@ -989,12 +999,13 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
 
   // Update assignees if provided
   if (input.assigneeIds !== undefined) {
-    // Get current assignees to detect new ones
-    const currentAssignees = await db.query.taskAssignees.findMany({
-      where: eq(taskAssignees.taskId, input.id),
-      columns: { userId: true },
-    });
-    const currentAssigneeIds = new Set(currentAssignees.map((a) => a.userId));
+    // Get current assignees with names to detect changes and log activity
+    const currentAssigneesWithNames = await db
+      .select({ userId: taskAssignees.userId, name: users.name, email: users.email })
+      .from(taskAssignees)
+      .innerJoin(users, eq(users.id, taskAssignees.userId))
+      .where(eq(taskAssignees.taskId, input.id));
+    const currentAssigneeIds = new Set(currentAssigneesWithNames.map((a) => a.userId));
 
     // Remove existing assignees
     await db.delete(taskAssignees).where(eq(taskAssignees.taskId, input.id));
@@ -1016,6 +1027,43 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
           assignerUserId: user.id,
           taskId: input.id,
         }).catch((err) => console.error('Failed to create assignment notification:', err));
+      }
+    }
+
+    // Log assignee changes (fire-and-forget)
+    const newAssigneeIdSet = new Set(input.assigneeIds);
+    const addedIds = input.assigneeIds.filter((id) => !currentAssigneeIds.has(id));
+    const removedIds = [...currentAssigneeIds].filter((id) => !newAssigneeIdSet.has(id));
+
+    if (addedIds.length > 0 || removedIds.length > 0) {
+      // Fetch names for newly added assignees
+      const addedUsers = addedIds.length > 0
+        ? await db.select({ id: users.id, name: users.name, email: users.email })
+            .from(users)
+            .where(inArray(users.id, addedIds))
+        : [];
+      const addedMap = new Map(addedUsers.map((u) => [u.id, u.name ?? u.email]));
+      const removedMap = new Map(currentAssigneesWithNames.map((u) => [u.userId, u.name ?? u.email]));
+
+      for (const id of addedIds) {
+        logBoardActivity({
+          boardId: existingTask.boardId,
+          taskId: input.id,
+          taskTitle: updatedTask.title,
+          userId: user.id,
+          action: 'task_assigned',
+          metadata: { assigneeName: addedMap.get(id) ?? 'Unknown' },
+        }).catch((err) => console.error('Failed to log board activity:', err));
+      }
+      for (const id of removedIds) {
+        logBoardActivity({
+          boardId: existingTask.boardId,
+          taskId: input.id,
+          taskTitle: updatedTask.title,
+          userId: user.id,
+          action: 'task_unassigned',
+          metadata: { assigneeName: removedMap.get(id) ?? 'Unknown' },
+        }).catch((err) => console.error('Failed to log board activity:', err));
       }
     }
   }
@@ -1130,6 +1178,61 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
     subtaskCount: updatedSubtaskCount,
     subtaskCompletedCount: updatedSubtaskCompletedCount,
   };
+
+  // Log board activity for tracked field changes (fire-and-forget)
+  const logBase = {
+    boardId: existingTask.boardId,
+    taskId: input.id,
+    taskTitle: updatedTask.title,
+    userId: user.id,
+  };
+
+  if (input.title !== undefined && input.title !== existingTask.title) {
+    logBoardActivity({
+      ...logBase,
+      action: 'task_title_changed',
+      metadata: { oldValue: existingTask.title, newValue: input.title },
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
+
+  if (input.status !== undefined && input.status !== existingTask.status) {
+    // Resolve status labels from board options
+    const boardForLabels = await db.query.boards.findFirst({
+      where: eq(boards.id, existingTask.boardId),
+      columns: { statusOptions: true, sectionOptions: true },
+    });
+    const statusOpts = boardForLabels?.statusOptions ?? [];
+    const oldLabel = statusOpts.find((s) => s.id === existingTask.status)?.label ?? existingTask.status;
+    const newLabel = statusOpts.find((s) => s.id === input.status)?.label ?? input.status;
+    logBoardActivity({
+      ...logBase,
+      action: 'task_status_changed',
+      metadata: { oldValue: existingTask.status, newValue: input.status, oldLabel, newLabel },
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
+
+  if (input.section !== undefined && input.section !== existingTask.section) {
+    const boardForSections = await db.query.boards.findFirst({
+      where: eq(boards.id, existingTask.boardId),
+      columns: { sectionOptions: true },
+    });
+    const sectionOpts = boardForSections?.sectionOptions ?? [];
+    const oldSectionLabel = sectionOpts.find((s) => s.id === existingTask.section)?.label ?? existingTask.section ?? 'None';
+    const newSectionLabel = sectionOpts.find((s) => s.id === input.section)?.label ?? input.section ?? 'None';
+    logBoardActivity({
+      ...logBase,
+      action: 'task_section_changed',
+      metadata: { oldLabel: oldSectionLabel, newLabel: newSectionLabel },
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
+
+  if (input.dueDate !== undefined && input.dueDate !== existingTask.dueDate) {
+    logBoardActivity({
+      ...logBase,
+      action: 'task_due_date_changed',
+      metadata: { oldValue: existingTask.dueDate, newValue: input.dueDate },
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
 
   revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
 
@@ -1343,6 +1446,17 @@ export async function updateTaskPositions(
     }
   }
 
+  // For status changes via DnD, fetch old task data to log activity
+  const statusUpdates = updates.filter((u) => u.status);
+  let oldTaskData: Map<string, { title: string; status: string; boardId: string }> = new Map();
+  if (statusUpdates.length > 0) {
+    const oldTasks = await db
+      .select({ id: tasks.id, title: tasks.title, status: tasks.status, boardId: tasks.boardId })
+      .from(tasks)
+      .where(inArray(tasks.id, statusUpdates.map((u) => u.id)));
+    oldTaskData = new Map(oldTasks.map((t) => [t.id, t]));
+  }
+
   // Update positions
   await Promise.all(
     updates.map((update) =>
@@ -1356,6 +1470,29 @@ export async function updateTaskPositions(
         .where(eq(tasks.id, update.id))
     )
   );
+
+  // Log status changes from DnD (fire-and-forget)
+  for (const update of statusUpdates) {
+    const old = oldTaskData.get(update.id);
+    if (old && update.status && update.status !== old.status) {
+      // Resolve labels
+      const board = await db.query.boards.findFirst({
+        where: eq(boards.id, old.boardId),
+        columns: { statusOptions: true },
+      });
+      const opts = board?.statusOptions ?? [];
+      const oldLabel = opts.find((s) => s.id === old.status)?.label ?? old.status;
+      const newLabel = opts.find((s) => s.id === update.status)?.label ?? update.status;
+      logBoardActivity({
+        boardId: old.boardId,
+        taskId: update.id,
+        taskTitle: old.title,
+        userId: user.id,
+        action: 'task_status_changed',
+        metadata: { oldValue: old.status, newValue: update.status, oldLabel, newLabel },
+      }).catch((err) => console.error('Failed to log board activity:', err));
+    }
+  }
 
   revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
 
