@@ -25,6 +25,7 @@ import { useFavorites, useReorderFavorites } from '@/lib/hooks/useFavorites';
 import type { FavoriteWithDetails } from '@/lib/db/schema';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useIsClient } from '@/hooks/useIsClient';
+import { useFavoriteHintKeys } from '@/lib/hooks/useFavoriteHintKeys';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -54,9 +55,10 @@ interface SortableFavoriteItemProps {
   favorite: FavoriteWithDetails;
   isActive: boolean;
   href: string;
+  hintKey?: number | null;
 }
 
-function SortableFavoriteItem({ favorite, isActive, href }: SortableFavoriteItemProps) {
+function SortableFavoriteItem({ favorite, isActive, href, hintKey }: SortableFavoriteItemProps) {
   const router = useRouter();
   const wasDragged = useRef(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -93,7 +95,11 @@ function SortableFavoriteItem({ favorite, isActive, href }: SortableFavoriteItem
         router.push(href);
       }}
     >
-      {favorite.entityType === 'rollup' ? (
+      {hintKey != null ? (
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
+          {hintKey}
+        </span>
+      ) : favorite.entityType === 'rollup' ? (
         <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       ) : favorite.clientColor ? (
         <ClientIcon
@@ -124,6 +130,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
   } = useUIStore();
   const { data: favorites = [] } = useFavorites();
   const reorderFavorites = useReorderFavorites();
+  const fKeyHeld = useFavoriteHintKeys();
   const { resolvedTheme } = useTheme();
 
   const sensors = useSensors(
@@ -286,7 +293,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
 
               {isCollapsed ? (
                 <div className="space-y-1">
-                  {favorites.map((favorite) => {
+                  {favorites.map((favorite, index) => {
                     const href =
                       favorite.entityType === 'board' && favorite.clientSlug
                         ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
@@ -299,12 +306,17 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                           <Link
                             href={href}
                             className={cn(
-                              'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+                              'relative flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
                               isActive
                                 ? 'bg-primary/10 text-primary'
                                 : 'text-muted-foreground hover:bg-accent'
                             )}
                           >
+                            {fKeyHeld && index < 9 && (
+                              <span className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
+                                {index + 1}
+                              </span>
+                            )}
                             {favorite.entityType === 'rollup' ? (
                               <Layers className="h-5 w-5" />
                             ) : (
@@ -333,7 +345,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="space-y-1">
-                      {favorites.map((favorite) => {
+                      {favorites.map((favorite, index) => {
                         const href =
                           favorite.entityType === 'board' && favorite.clientSlug
                             ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
@@ -346,6 +358,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                             favorite={favorite}
                             isActive={isActive}
                             href={href}
+                            hintKey={fKeyHeld && index < 9 ? index + 1 : null}
                           />
                         );
                       })}

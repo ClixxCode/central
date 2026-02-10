@@ -90,6 +90,7 @@ export {
   rollupSharingKeys,
 } from './useRollupSharing';
 export { useSiteSettings, useUpdateSiteSettings, siteSettingsKeys } from './useSiteSettings';
+export { useFavoriteHintKeys } from './useFavoriteHintKeys';
 export {
   useQuickAddUsers,
   useMentionableUsers,

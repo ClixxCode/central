@@ -97,21 +97,19 @@ export function PersonalRollupToolbar({ tasksByClient, viewMode = 'swimlane' }: 
           <Button variant="outline" size="sm" className="gap-2">
             <FolderKanban className="size-4" />
             Boards
-            {hiddenBoardCount > 0 && (
-              <Badge variant="secondary" className="ml-1 px-1.5 py-0">
-                {visibleBoardCount}/{allBoards.length}
-              </Badge>
-            )}
+            <Badge variant="secondary" className="ml-1 px-1.5 py-0 tabular-nums">
+              {visibleBoardCount}/{allBoards.length}
+            </Badge>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-72 p-0">
-          <div className="p-3 border-b">
+        <PopoverContent align="end" className="w-72 p-0 max-h-[min(400px,var(--radix-popover-content-available-height))] flex flex-col">
+          <div className="p-3 border-b shrink-0">
             <h4 className="font-medium text-sm">Toggle boards</h4>
             <p className="text-xs text-muted-foreground mt-0.5">
               Show or hide boards in your task view
             </p>
           </div>
-          <ScrollArea className="max-h-64">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-2 space-y-1">
               {allBoards.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
@@ -150,7 +148,7 @@ export function PersonalRollupToolbar({ tasksByClient, viewMode = 'swimlane' }: 
             </div>
           </ScrollArea>
           {hiddenBoardCount > 0 && (
-            <div className="p-2 border-t">
+            <div className="p-2 border-t shrink-0">
               <Button
                 variant="ghost"
                 size="sm"

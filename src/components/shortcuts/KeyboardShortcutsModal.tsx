@@ -29,17 +29,21 @@ function ShortcutKey({ children }: ShortcutKeyProps) {
 // Parse shortcut keys - now handles string | string[]
 function parseShortcutKeys(key: string | readonly string[]): React.ReactNode {
   const formatted = formatShortcutKey(key as string | string[]);
-  
-  if (formatted.includes(' then ')) {
-    const parts = formatted.split(' then ');
+
+  // Split on separators: " then " or " + "
+  const separatorRegex = / (then|plus) /;
+  if (separatorRegex.test(formatted)) {
+    const tokens = formatted.split(separatorRegex);
+    // tokens alternates: [key, separator, key, separator, key, ...]
     return (
       <span className="flex items-center gap-1">
-        {parts.map((part, i) => (
-          <span key={i} className="flex items-center gap-1">
-            {i > 0 && <span className="text-muted-foreground text-xs">then</span>}
-            <ShortcutKey>{part}</ShortcutKey>
-          </span>
-        ))}
+        {tokens.map((token, i) =>
+          i % 2 === 1 ? (
+            <span key={i} className="text-muted-foreground text-xs">{token}</span>
+          ) : (
+            <ShortcutKey key={i}>{token}</ShortcutKey>
+          )
+        )}
       </span>
     );
   }

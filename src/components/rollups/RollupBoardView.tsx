@@ -570,6 +570,7 @@ function RollupBoardSwimlane({
                                 statusOptions={statusOptions}
                                 sectionOptions={sectionOptions}
                                 onTaskClick={onTaskClick}
+                                hiddenItems={hiddenCardItems}
                               />
                             )}
                           </React.Fragment>
@@ -675,6 +676,7 @@ function RollupKanbanColumn({
                     statusOptions={statusOptions}
                     sectionOptions={sectionOptions}
                     onTaskClick={onTaskClick}
+                    hiddenItems={hiddenCardItems}
                   />
                 )}
               </React.Fragment>

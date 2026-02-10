@@ -148,13 +148,12 @@ export function useKeyboardShortcuts(
 export const SHORTCUT_DEFINITIONS = [
   { key: 'n', description: 'Create new task', category: 'Tasks' },
   { key: '/', description: 'Focus search', category: 'Navigation' },
-  { key: '?', description: 'Show keyboard shortcuts', category: 'Help' },
+  { key: ['g', 't'], description: 'Go to My Tasks', category: 'Navigation' },
+  { key: ['g', 'm'], description: 'Go to Replies & Mentions', category: 'Navigation' },
+  { key: 'f plus 1-9', description: 'Go To Pinned Favorite (1–9)', category: 'Navigation' },
+  { key: ['g', 's'], description: 'Go to Settings', category: 'General' },
   { key: 'Escape', description: 'Close modal or cancel', category: 'General' },
-  { key: 'r', description: 'Refresh current view', category: 'General' },
-  { key: ['g', 'm'], description: 'Go to My Tasks', category: 'Navigation' },
-  { key: ['g', 'r'], description: 'Go to Rollups', category: 'Navigation' },
-  { key: ['g', 'b'], description: 'Go to Boards', category: 'Navigation' },
-  { key: ['g', 's'], description: 'Go to Settings', category: 'Navigation' },
+  { key: '?', description: 'Show keyboard shortcuts', category: 'Help' },
 ] as const;
 
 /** Format a shortcut key for display */

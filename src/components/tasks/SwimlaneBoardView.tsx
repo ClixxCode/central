@@ -306,6 +306,7 @@ export function SwimlaneBoardView({
                         statusOptions={statusOptions}
                         sectionOptions={sectionOptions}
                         onTaskClick={setSelectedTaskId}
+                        hiddenItems={hiddenItems}
                       />
                     )}
                   </React.Fragment>

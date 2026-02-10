@@ -197,6 +197,7 @@ export function TaskModal({
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const prevOpenRef = useRef(false);
   const prevTaskIdRef = useRef<string | null>(null);
+  const titleFocusedRef = useRef(false);
 
   // For existing tasks, always in edit mode (click-to-edit with auto-save)
   // For new tasks, we need to collect all data before create
@@ -298,7 +299,11 @@ export function TaskModal({
   useEffect(() => {
     if (open) {
       if (task) {
-        setTitle(task.title);
+        // Skip resetting title if user is actively editing it (focused),
+        // unless we navigated to a different task
+        if (!titleFocusedRef.current || task.id !== prevTaskIdRef.current) {
+          setTitle(task.title);
+        }
         setDescription(task.description as TiptapContent | null);
         setStatus(task.status);
         setSection(task.section);
@@ -443,6 +448,8 @@ export function TaskModal({
                   debouncedSaveTitle(e.target.value);
                 }
               }}
+              onFocus={() => { titleFocusedRef.current = true; }}
+              onBlur={() => { titleFocusedRef.current = false; }}
               placeholder="Task title"
               className="flex-1 border-0 bg-transparent p-0 text-lg font-semibold shadow-none focus-visible:ring-0"
             />

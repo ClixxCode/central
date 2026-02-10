@@ -297,6 +297,7 @@ export function KanbanBoardView({
                         statusOptions={statusOptions}
                         sectionOptions={sectionOptions}
                         onTaskClick={setSelectedTaskId}
+                        hiddenItems={hiddenItems}
                       />
                     )}
                   </React.Fragment>

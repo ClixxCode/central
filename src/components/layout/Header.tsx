@@ -20,6 +20,7 @@ import { GlobalSearch } from '@/components/search';
 import { KeyboardShortcutsModal } from '@/components/shortcuts';
 import { QuickAddDialog } from '@/components/quick-add';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
+import { useFavorites } from '@/lib/hooks/useFavorites';
 import * as React from 'react';
 
 interface HeaderProps {
@@ -41,6 +42,22 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const { data: favorites = [] } = useFavorites();
+
+  // Build favorite shortcuts (b then 1-9)
+  const favoriteShortcuts = React.useMemo(() => {
+    return favorites.slice(0, 9).map((fav, index) => ({
+      key: ['f', String(index + 1)] as string[],
+      description: `Go to ${fav.name}`,
+      handler: () => {
+        const href =
+          fav.entityType === 'board' && fav.clientSlug
+            ? `/clients/${fav.clientSlug}/boards/${fav.entityId}`
+            : `/rollups/${fav.entityId}`;
+        router.push(href);
+      },
+    }));
+  }, [favorites, router]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -77,17 +94,17 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
     },
     // Navigation shortcuts (multi-key sequences)
     {
-      key: ['g', 'm'],
+      key: ['g', 't'],
       description: 'Go to My Tasks',
       handler: () => {
-        router.push('/my-tasks');
+        router.push('/my-tasks?tab=tasks');
       },
     },
     {
-      key: ['g', 'r'],
-      description: 'Go to Rollups',
+      key: ['g', 'm'],
+      description: 'Go to Replies & Mentions',
       handler: () => {
-        router.push('/rollups');
+        router.push('/my-tasks?tab=notifications');
       },
     },
     {
@@ -97,6 +114,7 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
         router.push('/settings');
       },
     },
+    ...favoriteShortcuts,
   ]);
 
   const initials = user.name

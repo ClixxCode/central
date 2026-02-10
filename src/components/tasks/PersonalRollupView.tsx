@@ -585,6 +585,7 @@ function MyWorkBoardSwimlane({
                                 statusOptions={group.statusOptions}
                                 sectionOptions={group.sectionOptions}
                                 onTaskClick={onSubtaskClick}
+                                hiddenItems={hiddenCardItems}
                               />
                             )}
                           </React.Fragment>

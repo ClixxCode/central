@@ -14,6 +14,7 @@ interface ExpandedSubtasksProps {
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   onTaskClick?: (taskId: string) => void;
+  hiddenItems?: Set<string>;
 }
 
 export function ExpandedSubtasks({
@@ -21,6 +22,7 @@ export function ExpandedSubtasks({
   statusOptions,
   sectionOptions,
   onTaskClick,
+  hiddenItems,
 }: ExpandedSubtasksProps) {
   const { data: subtasks, isLoading } = useSubtasks(parentTaskId);
 
@@ -69,7 +71,7 @@ export function ExpandedSubtasks({
               }}
             >
               {/* Section Badge */}
-              {section && (
+              {!hiddenItems?.has('section') && section && (
                 <span
                   className="mb-2 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
                   style={{
@@ -98,7 +100,7 @@ export function ExpandedSubtasks({
                   )}
 
                   {/* Due Date */}
-                  {subtask.dueDate && (
+                  {!hiddenItems?.has('dueDate') && subtask.dueDate && (
                     <div className="flex items-center gap-1">
                       <Calendar className="size-3" />
                       <DateDisplay
@@ -116,7 +118,7 @@ export function ExpandedSubtasks({
                     attachmentCount={subtask.attachmentCount}
                     hasNewComments={subtask.hasNewComments}
                   />
-                  {subtask.assignees.length > 0 && (
+                  {!hiddenItems?.has('assignees') && subtask.assignees.length > 0 && (
                     <AssigneeAvatars
                       assignees={subtask.assignees}
                       maxDisplay={2}

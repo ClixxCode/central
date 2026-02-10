@@ -36,11 +36,9 @@ export function TableColumnsButton({ columns, visibleColumns, onToggle, label = 
         <Button variant="outline" size="sm" className="gap-2">
           <Icon className="size-4" />
           {label}
-          {hiddenCount > 0 && (
-            <Badge variant="secondary" className="ml-1 px-1.5 py-0">
-              {columns.length - hiddenCount}/{columns.length}
-            </Badge>
-          )}
+          <Badge variant="secondary" className="ml-1 px-1.5 py-0 tabular-nums">
+            {columns.length - hiddenCount}/{columns.length}
+          </Badge>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
