@@ -4,6 +4,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Mention from '@tiptap/extension-mention';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
 import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
 import type { AnyExtension } from '@tiptap/core';
 
@@ -141,6 +145,14 @@ export function getEditorExtensions(options?: {
     TaskItem.configure({
       nested: true,
     }),
+
+    Table.configure({
+      resizable: true,
+      HTMLAttributes: { class: 'tiptap-table' },
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
   ];
 
   // Add mention extension if suggestion config provided

@@ -5,7 +5,6 @@ import {
   Bold,
   Italic,
   Strikethrough,
-  Code,
   List,
   ListOrdered,
   Quote,
@@ -16,6 +15,12 @@ import {
   ImageIcon,
   Loader2,
   ListChecks,
+  Heading,
+  ChevronDown,
+  SquareCode,
+  Table2,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -76,9 +81,27 @@ function ToolbarButton({
   );
 }
 
+const headingOptions = [
+  { label: 'Normal', level: 0 },
+  { label: 'Heading 1', level: 1 },
+  { label: 'Heading 2', level: 2 },
+  { label: 'Heading 3', level: 3 },
+] as const;
+
+function getActiveHeadingLabel(editor: Editor): string {
+  for (const opt of headingOptions) {
+    if (opt.level > 0 && editor.isActive('heading', { level: opt.level })) {
+      return opt.label;
+    }
+  }
+  return 'Normal';
+}
+
 export function EditorToolbar({ editor, className, onUploadImage }: EditorToolbarProps) {
   const [linkUrl, setLinkUrl] = useState('');
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [headingPopoverOpen, setHeadingPopoverOpen] = useState(false);
+  const [tablePopoverOpen, setTablePopoverOpen] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -113,7 +136,6 @@ export function EditorToolbar({ editor, className, onUploadImage }: EditorToolba
       console.error('Failed to upload image:', error);
     } finally {
       setIsUploadingImage(false);
-      // Reset the input so the same file can be selected again
       if (imageInputRef.current) {
         imageInputRef.current.value = '';
       }
@@ -123,6 +145,8 @@ export function EditorToolbar({ editor, className, onUploadImage }: EditorToolba
   if (!editor) {
     return null;
   }
+
+  const isInTable = editor.isActive('table');
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -136,6 +160,53 @@ export function EditorToolbar({ editor, className, onUploadImage }: EditorToolba
           e.preventDefault();
         }}
       >
+        {/* Heading dropdown */}
+        <Popover open={headingPopoverOpen} onOpenChange={setHeadingPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className={cn(
+                'ml-1 gap-0.5 px-1',
+                editor.isActive('heading') && 'bg-accent text-accent-foreground'
+              )}
+            >
+              <Heading className="h-3.5 w-3.5" />
+              <ChevronDown className="h-2.5 w-2.5 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-40 p-1" side="bottom" align="start">
+            {headingOptions.map((opt) => (
+              <Button
+                key={opt.level}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  'w-full justify-start text-sm font-normal',
+                  opt.level === 0
+                    ? editor.isActive('paragraph') && !editor.isActive('heading') && 'bg-accent'
+                    : editor.isActive('heading', { level: opt.level }) && 'bg-accent'
+                )}
+                onClick={() => {
+                  if (opt.level === 0) {
+                    editor.chain().focus().setParagraph().run();
+                  } else {
+                    editor.chain().focus().toggleHeading({ level: opt.level as 1 | 2 | 3 }).run();
+                  }
+                  setHeadingPopoverOpen(false);
+                }}
+              >
+                {opt.level === 1 && <span className="text-lg font-bold">{opt.label}</span>}
+                {opt.level === 2 && <span className="text-base font-semibold">{opt.label}</span>}
+                {opt.level === 3 && <span className="text-sm font-medium">{opt.label}</span>}
+                {opt.level === 0 && <span>{opt.label}</span>}
+              </Button>
+            ))}
+          </PopoverContent>
+        </Popover>
+
         {/* Text formatting */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
@@ -162,15 +233,6 @@ export function EditorToolbar({ editor, className, onUploadImage }: EditorToolba
           tooltip="Strikethrough"
         >
           <Strikethrough className="h-4 w-4" />
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          isActive={editor.isActive('code')}
-          disabled={!editor.can().chain().focus().toggleCode().run()}
-          tooltip="Inline code"
-        >
-          <Code className="h-4 w-4" />
         </ToolbarButton>
 
         <Separator orientation="vertical" className="mx-1 h-5" />
@@ -206,6 +268,15 @@ export function EditorToolbar({ editor, className, onUploadImage }: EditorToolba
           tooltip="Quote"
         >
           <Quote className="h-4 w-4" />
+        </ToolbarButton>
+
+        {/* Code block */}
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          isActive={editor.isActive('codeBlock')}
+          tooltip="Code block"
+        >
+          <SquareCode className="h-4 w-4" />
         </ToolbarButton>
 
         <Separator orientation="vertical" className="mx-1 h-5" />
@@ -279,6 +350,97 @@ export function EditorToolbar({ editor, className, onUploadImage }: EditorToolba
               )}
             </ToolbarButton>
           </>
+        )}
+
+        <Separator orientation="vertical" className="mx-1 h-5" />
+
+        {/* Table */}
+        {!isInTable ? (
+          <ToolbarButton
+            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+            tooltip="Insert table"
+          >
+            <Table2 className="h-4 w-4" />
+          </ToolbarButton>
+        ) : (
+          <Popover open={tablePopoverOpen} onOpenChange={setTablePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="bg-accent text-accent-foreground"
+              >
+                <Table2 className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-1" side="bottom" align="start">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-sm font-normal"
+                onClick={() => { editor.chain().focus().addRowBefore().run(); setTablePopoverOpen(false); }}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add row above
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-sm font-normal"
+                onClick={() => { editor.chain().focus().addRowAfter().run(); setTablePopoverOpen(false); }}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add row below
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-sm font-normal"
+                onClick={() => { editor.chain().focus().addColumnBefore().run(); setTablePopoverOpen(false); }}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add column before
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-sm font-normal"
+                onClick={() => { editor.chain().focus().addColumnAfter().run(); setTablePopoverOpen(false); }}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add column after
+              </Button>
+              <Separator className="my-1" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-sm font-normal text-destructive hover:text-destructive"
+                onClick={() => { editor.chain().focus().deleteRow().run(); setTablePopoverOpen(false); }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete row
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-sm font-normal text-destructive hover:text-destructive"
+                onClick={() => { editor.chain().focus().deleteColumn().run(); setTablePopoverOpen(false); }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete column
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2 text-sm font-normal text-destructive hover:text-destructive"
+                onClick={() => { editor.chain().focus().deleteTable().run(); setTablePopoverOpen(false); }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete table
+              </Button>
+            </PopoverContent>
+          </Popover>
         )}
 
         <Separator orientation="vertical" className="mx-1 h-5" />

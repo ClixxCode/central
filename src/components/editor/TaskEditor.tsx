@@ -9,6 +9,10 @@ import Mention from '@tiptap/extension-mention';
 import Image from '@tiptap/extension-image';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
 import { Suggestion } from '@tiptap/suggestion';
 import {
   forwardRef,
@@ -483,9 +487,16 @@ export const TaskEditor = forwardRef<TaskEditorRef, TaskEditorProps>(
         TaskItem.configure({
           nested: true,
         }),
+        Table.configure({
+          resizable: true,
+          HTMLAttributes: { class: 'tiptap-table' },
+        }),
+        TableRow,
+        TableHeader,
+        TableCell,
       ],
       content: content ?? undefined,
-      editable,
+      editable: true, // Always start editable so table resize plugin registers; useEffect below syncs actual state
       editorProps: {
         attributes: {
           class: cn(
