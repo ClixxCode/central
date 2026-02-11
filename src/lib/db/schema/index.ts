@@ -47,6 +47,9 @@ export * from './board-activity-log';
 // Google Calendar
 export * from './google-calendar';
 
+// Templates
+export * from './templates';
+
 // Re-export types
 export type { UserPreferences, NotificationChannelSettings } from './users';
 export type { StatusOption, SectionOption } from './boards';

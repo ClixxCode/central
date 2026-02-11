@@ -129,3 +129,19 @@ export {
   useUpdateCalendarPreferences,
   calendarKeys,
 } from './useGoogleCalendar';
+export {
+  useTemplates,
+  useTemplate,
+  useCreateTemplate,
+  useCreateTaskList,
+  useCreateTemplateFromBoard,
+  useUpdateTemplate,
+  useDeleteTemplate,
+  useAddTemplateTask,
+  useUpdateTemplateTask,
+  useDeleteTemplateTask,
+  useCreateBoardFromTemplate,
+  useApplyTemplateTasksToBoard,
+  useUpdateTemplateTaskPositions,
+  templateKeys,
+} from './useTemplates';

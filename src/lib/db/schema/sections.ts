@@ -23,9 +23,15 @@ export const sectionsRelations = relations(sections, ({ }) => ({
 
 // Default sections to seed (agency workflow based)
 export const DEFAULT_SECTIONS = [
-  { label: 'Strategy', color: '#8B5CF6', position: 0 },
-  { label: 'Creative', color: '#EC4899', position: 1 },
-  { label: 'Development', color: '#3B82F6', position: 2 },
-  { label: 'Review', color: '#F59E0B', position: 3 },
-  { label: 'Deployment', color: '#10B981', position: 4 },
+  { label: 'SEO', color: '#3B82F6', position: 0 },
+  { label: 'Automation', color: '#A855F7', position: 1 },
+  { label: 'Web Dev/Designer', color: '#14B8A6', position: 2 },
+  { label: 'PPC / Paid Media', color: '#EF4444', position: 3 },
+  { label: 'Organic Social Media', color: '#EAB308', position: 4 },
+  { label: 'Media', color: '#22C55E', position: 5 },
+  { label: 'Client Onboarding', color: '#6366F1', position: 6 },
+  { label: 'SEO Onboarding', color: '#D946EF', position: 7 },
+  { label: 'Initial Local Optimizations', color: '#8B5CF6', position: 8 },
+  { label: 'Technical Onboarding', color: '#6B7FBF', position: 9 },
+  { label: 'Admin', color: '#6B7280', position: 10 },
 ] as const;

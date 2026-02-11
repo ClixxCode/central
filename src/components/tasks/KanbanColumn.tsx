@@ -72,15 +72,14 @@ export function KanbanColumn({
         items={taskIds}
         className="flex-1 overflow-y-auto p-2"
       >
-        {taskCount === 0 ? (
+        {taskCount === 0 && (
           <div className="flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/20 text-sm text-muted-foreground">
             No tasks
           </div>
-        ) : (
-          <div className="space-y-2">
-            {children}
-          </div>
         )}
+        <div className="space-y-2">
+          {children}
+        </div>
 
         {/* Hover "Add task" button */}
         {onAddTask && (

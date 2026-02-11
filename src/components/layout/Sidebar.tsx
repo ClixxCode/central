@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Plus,
   FolderKanban,
+  LayoutTemplate,
   Layers,
   PanelLeftClose,
   PanelLeft,
@@ -192,6 +193,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
     { href: '/my-tasks', label: 'My Work', icon: LayoutDashboard },
     ...(calPrefs?.showScheduleInSidebar ? [{ href: '/schedule', label: 'Schedule', icon: CalendarDays }] : []),
     { href: '/rollups', label: 'Rollups', icon: FolderKanban },
+    { href: '/templates', label: 'Templates', icon: LayoutTemplate },
   ];
 
   // Prevent hydration mismatch by not rendering until client-side
