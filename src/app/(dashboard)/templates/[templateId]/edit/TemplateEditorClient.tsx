@@ -2,15 +2,33 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, LayoutTemplate, ListChecks } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, LayoutTemplate, ListChecks, Plus, Settings, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTemplate, useUpdateTemplate } from '@/lib/hooks';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useTemplate, useUpdateTemplate, useDeleteTemplate } from '@/lib/hooks';
 import { TemplateKanbanEditor } from '@/components/templates/TemplateKanbanEditor';
 import { TemplateTableEditor } from '@/components/templates/TemplateTableEditor';
+import { CreateBoardFromTemplateDialog } from '@/components/templates/CreateBoardFromTemplateDialog';
+import { ApplyTemplateTasksDialog } from '@/components/templates/ApplyTemplateTasksDialog';
 import { cn } from '@/lib/utils';
 
 interface TemplateEditorClientProps {
@@ -19,12 +37,17 @@ interface TemplateEditorClientProps {
 }
 
 export function TemplateEditorClient({ templateId, isAdmin }: TemplateEditorClientProps) {
+  const router = useRouter();
   const { data: template, isLoading } = useTemplate(templateId);
   const updateTemplate = useUpdateTemplate();
+  const deleteTemplate = useDeleteTemplate();
 
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [hasChanges, setHasChanges] = React.useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [createBoardOpen, setCreateBoardOpen] = React.useState(false);
+  const [applyTasksOpen, setApplyTasksOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (template) {
@@ -44,6 +67,12 @@ export function TemplateEditorClient({ templateId, isAdmin }: TemplateEditorClie
       },
       { onSuccess: () => setHasChanges(false) }
     );
+  };
+
+  const handleDelete = () => {
+    deleteTemplate.mutate(templateId, {
+      onSuccess: () => router.push('/templates'),
+    });
   };
 
   const isBoardTemplate = template?.type === 'board_template';
@@ -119,6 +148,36 @@ export function TemplateEditorClient({ templateId, isAdmin }: TemplateEditorClie
               )}
             </div>
           </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            {isBoardTemplate && isAdmin && (
+              <Button variant="outline" size="sm" onClick={() => setCreateBoardOpen(true)}>
+                <Plus className="mr-1.5 size-3.5" />
+                Create Board
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setApplyTasksOpen(true)}>
+              <Plus className="mr-1.5 size-3.5" />
+              Add Tasks to Board
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Settings className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 className="mr-2 size-4" />
+                  Delete template
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 
@@ -136,6 +195,46 @@ export function TemplateEditorClient({ templateId, isAdmin }: TemplateEditorClie
           />
         )}
       </div>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{template.name}</strong>? This will
+              delete all tasks in this template. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteTemplate.isPending}
+              className="bg-destructive hover:bg-destructive/90 focus:ring-destructive"
+            >
+              {deleteTemplate.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={deleteTemplate.isPending}>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create board from template */}
+      {isBoardTemplate && (
+        <CreateBoardFromTemplateDialog
+          open={createBoardOpen}
+          onOpenChange={setCreateBoardOpen}
+          templateId={templateId}
+          templateName={template.name}
+        />
+      )}
+
+      {/* Apply tasks to existing board */}
+      <ApplyTemplateTasksDialog
+        open={applyTasksOpen}
+        onOpenChange={setApplyTasksOpen}
+        template={template}
+      />
     </div>
   );
 }

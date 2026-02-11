@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, LayoutTemplate, ListChecks, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +16,6 @@ import { useTemplates } from '@/lib/hooks';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { CreateTemplateDialog } from '@/components/templates/CreateTemplateDialog';
 import { CreateTaskListDialog } from '@/components/templates/CreateTaskListDialog';
-import { TemplatePreviewDialog } from '@/components/templates/TemplatePreviewDialog';
 import { cn } from '@/lib/utils';
 
 interface TemplatesPageClientProps {
@@ -25,11 +25,11 @@ interface TemplatesPageClientProps {
 type FilterTab = 'all' | 'board_template' | 'task_list';
 
 export function TemplatesPageClient({ isAdmin }: TemplatesPageClientProps) {
+  const router = useRouter();
   const [filterTab, setFilterTab] = React.useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [createTemplateOpen, setCreateTemplateOpen] = React.useState(false);
   const [createTaskListOpen, setCreateTaskListOpen] = React.useState(false);
-  const [previewTemplateId, setPreviewTemplateId] = React.useState<string | null>(null);
 
   const typeFilter = filterTab === 'all' ? undefined : filterTab;
   const { data: templates = [], isLoading } = useTemplates(typeFilter);
@@ -148,7 +148,7 @@ export function TemplatesPageClient({ isAdmin }: TemplatesPageClientProps) {
             <TemplateCard
               key={template.id}
               template={template}
-              onClick={() => setPreviewTemplateId(template.id)}
+              onClick={() => router.push(`/templates/${template.id}/edit`)}
             />
           ))}
         </div>
@@ -163,16 +163,6 @@ export function TemplatesPageClient({ isAdmin }: TemplatesPageClientProps) {
         open={createTaskListOpen}
         onOpenChange={setCreateTaskListOpen}
       />
-      {previewTemplateId && (
-        <TemplatePreviewDialog
-          templateId={previewTemplateId}
-          isAdmin={isAdmin}
-          open={!!previewTemplateId}
-          onOpenChange={(open) => {
-            if (!open) setPreviewTemplateId(null);
-          }}
-        />
-      )}
     </div>
   );
 }
