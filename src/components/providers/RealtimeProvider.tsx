@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSession } from 'next-auth/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { notificationKeys } from '@/lib/hooks/useNotifications';
+import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
-  const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const { user } = useCurrentUser();
+  const userId = user?.id;
   const queryClient = useQueryClient();
 
   useEffect(() => {

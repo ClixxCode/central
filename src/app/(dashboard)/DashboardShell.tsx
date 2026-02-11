@@ -1,6 +1,7 @@
 'use client';
 
 import { Sidebar, Header, MobileNav } from '@/components/layout';
+import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
 import { StoreHydration } from '@/lib/stores/StoreHydration';
 import { signOutUser } from '@/lib/actions/auth';
 
@@ -26,6 +27,10 @@ interface DashboardShellProps {
   user: User;
   clients: Client[];
   isAdmin: boolean;
+  impersonation?: {
+    userName?: string;
+    userEmail?: string;
+  };
 }
 
 export function DashboardShell({
@@ -33,28 +38,37 @@ export function DashboardShell({
   user,
   clients,
   isAdmin,
+  impersonation,
 }: DashboardShellProps) {
   const handleSignOut = async () => {
     await signOutUser();
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <StoreHydration />
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:flex h-full">
-        <Sidebar clients={clients} isAdmin={isAdmin} />
-      </div>
+    <div className="flex flex-col h-screen overflow-hidden">
+      {impersonation && (
+        <ImpersonationBanner
+          userName={impersonation.userName}
+          userEmail={impersonation.userEmail}
+        />
+      )}
+      <div className="flex flex-1 overflow-hidden">
+        <StoreHydration />
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:flex h-full">
+          <Sidebar clients={clients} isAdmin={isAdmin} />
+        </div>
 
-      {/* Mobile Navigation */}
-      <MobileNav clients={clients} isAdmin={isAdmin} />
+        {/* Mobile Navigation */}
+        <MobileNav clients={clients} isAdmin={isAdmin} />
 
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header user={user} isAdmin={isAdmin} onSignOut={handleSignOut} />
-        <main className="flex-1 overflow-auto bg-background p-4 lg:p-6">
-          {children}
-        </main>
+        {/* Main Content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Header user={user} isAdmin={isAdmin} onSignOut={handleSignOut} />
+          <main className="flex-1 overflow-auto bg-background p-4 lg:p-6">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/auth/session';
+import { getCurrentUser, getImpersonationState } from '@/lib/auth/session';
 import { listClients } from '@/lib/actions/clients';
 import { DashboardShell } from './DashboardShell';
 
@@ -17,6 +17,8 @@ export default async function DashboardLayout({
   // Fetch clients with boards for sidebar
   const clientsResult = await listClients();
   const clients = clientsResult.success ? clientsResult.data ?? [] : [];
+
+  const impersonation = await getImpersonationState();
 
   return (
     <DashboardShell
@@ -39,6 +41,10 @@ export default async function DashboardLayout({
         })),
       }))}
       isAdmin={user.role === 'admin'}
+      impersonation={impersonation.isImpersonating ? {
+        userName: impersonation.userName,
+        userEmail: impersonation.userEmail,
+      } : undefined}
     >
       {children}
     </DashboardShell>

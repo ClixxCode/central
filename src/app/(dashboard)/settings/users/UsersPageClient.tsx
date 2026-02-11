@@ -15,6 +15,7 @@ import {
   UserX,
   UserCheck,
   Trash2,
+  LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,6 +81,7 @@ import {
   revokeInvitation,
 } from '@/lib/actions/invitations';
 import { sendPasswordResetLink } from '@/lib/actions/password-reset';
+import { startImpersonation } from '@/lib/actions/impersonation';
 
 export function UsersPageClient() {
   const queryClient = useQueryClient();
@@ -282,6 +284,15 @@ export function UsersPageClient() {
     setResetTarget(null);
   };
 
+  const handleLoginAs = async (user: ManagedUser) => {
+    const result = await startImpersonation(user.id);
+    if (result.success) {
+      window.location.href = '/my-tasks';
+    } else {
+      toast.error(result.error ?? 'Failed to impersonate user');
+    }
+  };
+
   const getInitials = (name: string | null, email: string) => {
     if (name) {
       return name
@@ -474,12 +485,20 @@ export function UsersPageClient() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             {!isDeactivated && (
-                              <DropdownMenuItem
-                                onClick={() => handleSendReset(user)}
-                              >
-                                <KeyRound className="h-4 w-4 mr-2" />
-                                Send Password Reset
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleLoginAs(user)}
+                                >
+                                  <LogIn className="h-4 w-4 mr-2" />
+                                  Login As
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleSendReset(user)}
+                                >
+                                  <KeyRound className="h-4 w-4 mr-2" />
+                                  Send Password Reset
+                                </DropdownMenuItem>
+                              </>
                             )}
                             <DropdownMenuSeparator />
                             {isDeactivated ? (

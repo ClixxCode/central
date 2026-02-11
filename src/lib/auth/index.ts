@@ -3,6 +3,8 @@ export { hashPassword, verifyPassword, validatePassword } from './password';
 export {
   getSession,
   getCurrentUser,
+  getRealUser,
+  getImpersonationState,
   requireAuth,
   requireAdmin,
   isAuthenticated,

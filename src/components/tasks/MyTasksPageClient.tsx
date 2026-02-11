@@ -3,7 +3,6 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { PersonalRollupView } from './PersonalRollupView';
 import { PersonalRollupToolbar } from './PersonalRollupToolbar';
 import { PersonalListTab } from './PersonalListTab';
@@ -625,8 +624,8 @@ function applyMyTasksFilters(
 export function MyTasksPageClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { data: session } = useSession();
-  const userId = session?.user?.id;
+  const { user: currentSessionUser } = useCurrentUser();
+  const userId = currentSessionUser?.id;
   const { data: tasksByClient, isLoading, error, refetch } = useMyTasks();
 
   // Realtime: invalidate my tasks when assignments change
