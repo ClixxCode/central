@@ -2,10 +2,11 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Loader2, Building2, LayoutGrid, CheckSquare2 } from 'lucide-react';
+import { Search, Loader2, Building2, LayoutGrid, CheckSquare2, Archive } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSearch, type GlobalSearchResult, type TaskSearchResult, type ClientSearchResult, type BoardSearchResult } from '@/lib/hooks/useSearch';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface GlobalSearchProps {
@@ -253,7 +254,15 @@ function TaskResultItem({ result, isSelected, onClick }: { result: TaskSearchRes
         <CheckSquare2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{result.title}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium truncate">{result.title}</p>
+          {result.archivedAt && (
+            <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 h-4">
+              <Archive className="mr-0.5 h-2.5 w-2.5" />
+              Archived
+            </Badge>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground truncate">
           {result.clientName} / {result.boardName}
         </p>

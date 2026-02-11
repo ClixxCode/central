@@ -131,6 +131,7 @@ describe('useSearch', () => {
         assignees: [],
         parentTaskId: null,
         parentTaskTitle: null,
+        archivedAt: null,
       },
     ];
 

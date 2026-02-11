@@ -11,12 +11,17 @@ import {
   deleteTask,
   updateTaskPositions,
   getBoardAssignableUsers,
+  archiveTask,
+  unarchiveTask,
+  bulkArchiveDone,
+  listArchivedTasks,
   TaskWithAssignees,
   CreateTaskInput,
   UpdateTaskInput,
   TaskFilters,
   TaskSortOptions,
   MyTasksByClient,
+  ArchivedTaskSummary,
 } from '@/lib/actions/tasks';
 
 // Query key factory
@@ -31,6 +36,8 @@ export const taskKeys = {
     [...taskKeys.all, 'assignableUsers', boardId] as const,
   subtasks: (parentTaskId: string) =>
     [...taskKeys.all, 'subtasks', parentTaskId] as const,
+  archivedTasks: (boardId: string) =>
+    [...taskKeys.all, 'archived', boardId] as const,
 };
 
 /**
@@ -140,6 +147,7 @@ export function useCreateTask(boardId: string) {
             hasNewComments: false,
             subtaskCount: 0,
             subtaskCompletedCount: 0,
+            archivedAt: null,
           };
           return [...old, optimisticTask];
         }
@@ -283,6 +291,7 @@ export function useDeleteTask() {
       await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
       await queryClient.cancelQueries({ queryKey: ['myTasks'] });
       await queryClient.cancelQueries({ queryKey: ['rollups', 'tasks'] });
+      await queryClient.cancelQueries({ queryKey: [...taskKeys.all, 'archived'] });
 
       // Snapshot the previous values
       const previousTask = queryClient.getQueryData<TaskWithAssignees>(
@@ -333,6 +342,15 @@ export function useDeleteTask() {
         }
       );
 
+      // Optimistically remove from archived task lists
+      queryClient.setQueriesData<ArchivedTaskSummary[]>(
+        { queryKey: [...taskKeys.all, 'archived'] },
+        (old) => {
+          if (!old) return old;
+          return old.filter((task) => task.id !== taskId);
+        }
+      );
+
       // Remove from detail cache
       queryClient.removeQueries({ queryKey: taskKeys.detail(taskId) });
 
@@ -367,9 +385,10 @@ export function useDeleteTask() {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       // Invalidate subtask caches (deleting a subtask affects parent counts)
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'subtasks'] });
-      // Invalidate My Tasks and rollup caches
+      // Invalidate My Tasks, rollup, and archived caches
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
       queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
+      queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
     },
   });
 }
@@ -478,6 +497,98 @@ export function useCreateSubtask(parentTaskId: string, boardId: string) {
       queryClient.invalidateQueries({ queryKey: taskKeys.subtasks(parentTaskId) });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(parentTaskId) });
+    },
+  });
+}
+
+/**
+ * Hook to fetch archived tasks for a board
+ */
+export function useArchivedTasks(boardId: string, search?: string) {
+  return useQuery({
+    queryKey: [...taskKeys.archivedTasks(boardId), search],
+    queryFn: async () => {
+      const result = await listArchivedTasks(boardId, search);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to fetch archived tasks');
+      }
+      return result.tasks!;
+    },
+    enabled: !!boardId,
+  });
+}
+
+/**
+ * Hook to archive a task
+ */
+export function useArchiveTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const result = await archiveTask(taskId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to archive task');
+      }
+    },
+    onSuccess: () => {
+      toast.success('Task archived');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.details() });
+      queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+    },
+  });
+}
+
+/**
+ * Hook to unarchive a task
+ */
+export function useUnarchiveTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      const result = await unarchiveTask(taskId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to unarchive task');
+      }
+    },
+    onSuccess: () => {
+      toast.success('Task unarchived');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.details() });
+      queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+    },
+  });
+}
+
+/**
+ * Hook to bulk archive all done tasks on a board
+ */
+export function useBulkArchiveDone(boardId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const result = await bulkArchiveDone(boardId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to archive tasks');
+      }
+      return result.archivedCount!;
+    },
+    onSuccess: (count) => {
+      toast.success(`Archived ${count} task${count === 1 ? '' : 's'}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.archivedTasks(boardId) });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
     },
   });
 }

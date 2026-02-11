@@ -112,6 +112,7 @@ describe('GlobalSearch', () => {
         assignees: [],
         parentTaskId: null,
         parentTaskTitle: null,
+        archivedAt: null,
       },
     ];
 
@@ -149,6 +150,7 @@ describe('GlobalSearch', () => {
         assignees: [],
         parentTaskId: null,
         parentTaskTitle: null,
+        archivedAt: null,
       },
       {
         id: '2',
@@ -162,6 +164,7 @@ describe('GlobalSearch', () => {
         assignees: [],
         parentTaskId: null,
         parentTaskTitle: null,
+        archivedAt: null,
       },
     ];
 

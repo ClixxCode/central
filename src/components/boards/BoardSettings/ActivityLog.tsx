@@ -84,6 +84,12 @@ function buildDescription(entry: BoardActivityEntry): {
       };
     case 'comment_added':
       return { text: `${userName} commented on`, taskTitle };
+    case 'task_archived':
+      return { text: `${userName} archived`, taskTitle };
+    case 'task_unarchived':
+      return { text: `${userName} unarchived`, taskTitle };
+    case 'tasks_bulk_archived':
+      return { text: `${userName} bulk archived`, taskTitle };
     default:
       return { text: `${userName} updated`, taskTitle };
   }

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Plus } from 'lucide-react';
+import { Archive, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { DroppableContainer } from '@/components/dnd';
@@ -23,6 +23,7 @@ interface KanbanColumnProps {
   children: React.ReactNode;
   taskIds: string[];
   onAddTask?: () => void;
+  onArchiveAll?: () => void;
 }
 
 export function KanbanColumn({
@@ -31,6 +32,7 @@ export function KanbanColumn({
   children,
   taskIds,
   onAddTask,
+  onArchiveAll,
 }: KanbanColumnProps) {
   return (
     <section
@@ -45,9 +47,23 @@ export function KanbanColumn({
           style={{ backgroundColor: status.color }}
         />
         <span className="font-medium text-sm">{status.label}</span>
-        <Badge variant="secondary" className="ml-auto text-xs">
-          {taskCount}
-        </Badge>
+        {onArchiveAll && taskCount > 0 ? (
+          <button
+            type="button"
+            onClick={onArchiveAll}
+            className="group/archive ml-auto"
+            aria-label="Archive all tasks in this column"
+          >
+            <Badge variant="secondary" className="text-xs cursor-pointer hover:bg-secondary/80 transition-colors">
+              <span className="group-hover/archive:hidden">{taskCount}</span>
+              <Archive className="hidden group-hover/archive:block h-3 w-3" />
+            </Badge>
+          </button>
+        ) : (
+          <Badge variant="secondary" className="ml-auto text-xs">
+            {taskCount}
+          </Badge>
+        )}
       </header>
 
       {/* Column Content */}

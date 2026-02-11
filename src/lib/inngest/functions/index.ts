@@ -11,3 +11,4 @@ export { sendAssignmentSlackNotification } from './send-assignment-slack-notific
 export { sendDueDateSlackNotification } from './send-due-date-slack-notification';
 export { createNextRecurringTask } from './create-next-recurring-task';
 export { sendCommentAddedEmail } from './send-comment-added-email';
+export { autoArchiveTasks } from './auto-archive-tasks';

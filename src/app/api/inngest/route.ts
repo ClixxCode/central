@@ -9,6 +9,7 @@ import {
   scheduleDailyDigests,
   createNextRecurringTask,
   sendCommentAddedEmail,
+  autoArchiveTasks,
   sendCommentSlackNotification,
   sendMentionSlackNotification,
   sendAssignmentSlackNotification,
@@ -34,5 +35,6 @@ export const { GET, POST, PUT } = serve({
     checkDueDates,
     scheduleDailyDigests,
     createNextRecurringTask,
+    autoArchiveTasks,
   ],
 });

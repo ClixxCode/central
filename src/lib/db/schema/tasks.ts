@@ -63,6 +63,7 @@ export const tasks = pgTable('tasks', {
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  archivedAt: timestamp('archived_at'),
 });
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({

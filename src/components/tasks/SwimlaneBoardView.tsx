@@ -10,7 +10,8 @@ import { CompleteParentDialog } from './CompleteParentDialog';
 import { TaskModal } from './TaskModal';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
-import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask } from '@/lib/hooks/useTasks';
+import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
+import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 import { isCompleteStatus } from '@/lib/utils/status';
 import type { TaskWithAssignees, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
@@ -52,6 +53,8 @@ export function SwimlaneBoardView({
   const updateTaskPositions = useUpdateTaskPositions();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const bulkArchive = useBulkArchiveDone(boardId);
+  const { isAdmin } = useCurrentUser();
 
   // Expanded subtasks state
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
@@ -288,6 +291,7 @@ export function SwimlaneBoardView({
                 onToggleCollapse={() => toggleSwimlane(boardId, status.id)}
                 taskIds={taskIds}
                 onAddTask={() => openQuickAddWithContext(boardId, status.id)}
+                onArchiveAll={isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
               >
                 {swimlaneTasks.map((task) => (
                   <React.Fragment key={task.id}>

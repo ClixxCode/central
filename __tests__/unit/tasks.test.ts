@@ -25,6 +25,7 @@ function createMockTask(overrides: Partial<TaskWithAssignees> = {}): TaskWithAss
     parentTaskId: null,
     subtaskCount: 0,
     subtaskCompletedCount: 0,
+    archivedAt: null,
     ...overrides,
   };
 }

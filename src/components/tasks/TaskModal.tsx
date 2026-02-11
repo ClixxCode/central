@@ -46,6 +46,8 @@ import { recordTaskView } from '@/lib/actions/task-views';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import {
+  Archive,
+  ArchiveRestore,
   CalendarIcon,
   Users,
   Paperclip,
@@ -67,6 +69,7 @@ import { CompleteParentDialog } from './CompleteParentDialog';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { isCompleteStatus } from '@/lib/utils/status';
+import { useArchiveTask, useUnarchiveTask } from '@/lib/hooks/useTasks';
 import { useClient } from '@/lib/hooks/useClients';
 import { useNotificationPreferences } from '@/lib/hooks/useNotifications';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
@@ -197,6 +200,10 @@ export function TaskModal({
   const [completeParentOpen, setCompleteParentOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+
+  // Archive hooks
+  const archiveTaskMutation = useArchiveTask();
+  const unarchiveTaskMutation = useUnarchiveTask();
   const prevOpenRef = useRef(false);
   const prevTaskIdRef = useRef<string | null>(null);
   const titleFocusedRef = useRef(false);
@@ -490,6 +497,12 @@ export function TaskModal({
                     </TabsTrigger>
                   )}
                 </TabsList>
+                {!isNew && task?.archivedAt && (
+                  <Badge variant="secondary" className="ml-2">
+                    <Archive className="mr-1 h-3 w-3" />
+                    Archived {format(new Date(task.archivedAt), 'MMM d, yyyy')}
+                  </Badge>
+                )}
                 {!isNew && task?.id && taskBasePath && (
                   <div className="ml-auto flex items-center gap-1">
                     {slackChannelUrl && (
@@ -1059,7 +1072,7 @@ export function TaskModal({
 
         {/* Footer */}
         <div className="flex items-center justify-between border-t px-6 py-4 shrink-0">
-          <div>
+          <div className="flex items-center gap-2">
             {/* Delete button for existing tasks */}
             {!isNew && task?.id && onDelete && (
               <>
@@ -1078,6 +1091,36 @@ export function TaskModal({
                   isSubtask={!!task.parentTaskId}
                 />
               </>
+            )}
+            {/* Archive button for done non-archived parent tasks (admin only) */}
+            {isAdmin && !isNew && task?.id && !task.parentTaskId && !task.archivedAt && isCompleteStatus(task.status, statusOptions) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  archiveTaskMutation.mutate(task.id);
+                  onOpenChange(false);
+                }}
+                disabled={archiveTaskMutation.isPending}
+              >
+                <Archive className="mr-1 h-4 w-4" />
+                Archive
+              </Button>
+            )}
+            {/* Unarchive button for archived tasks (admin only) */}
+            {isAdmin && !isNew && task?.id && task.archivedAt && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  unarchiveTaskMutation.mutate(task.id);
+                  onOpenChange(false);
+                }}
+                disabled={unarchiveTaskMutation.isPending}
+              >
+                <ArchiveRestore className="mr-1 h-4 w-4" />
+                Unarchive
+              </Button>
             )}
           </div>
           <div className="flex items-center gap-2">

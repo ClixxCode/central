@@ -18,7 +18,7 @@ export function BoardHeader({
   boardName,
   clientName,
   clientSlug,
-  canEdit
+  canEdit,
 }: BoardHeaderProps) {
   return (
     <div className="flex items-center justify-between">

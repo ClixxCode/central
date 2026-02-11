@@ -295,6 +295,7 @@ export function BoardPageClient({
         taskBasePath={`/clients/${clientSlug}/boards/${boardId}`}
         onOpenSubtask={setSelectedTaskId}
       />
+
     </div>
   );
 }

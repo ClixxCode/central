@@ -63,6 +63,7 @@ const mockTask: TaskWithAssignees = {
   parentTaskId: null,
   subtaskCount: 0,
   subtaskCompletedCount: 0,
+  archivedAt: null,
 };
 
 describe('Swimlane', () => {

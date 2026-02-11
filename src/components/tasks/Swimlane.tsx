@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,7 @@ interface SwimlaneProps {
   children: React.ReactNode;
   taskIds: string[];
   onAddTask?: () => void;
+  onArchiveAll?: () => void;
 }
 
 export function Swimlane({
@@ -33,6 +34,7 @@ export function Swimlane({
   children,
   taskIds,
   onAddTask,
+  onArchiveAll,
 }: SwimlaneProps) {
   return (
     <div
@@ -65,9 +67,34 @@ export function Swimlane({
 
         <span className="font-medium">{status.label}</span>
 
-        <Badge variant="secondary" className="ml-auto">
-          {taskCount}
-        </Badge>
+        {onArchiveAll && taskCount > 0 ? (
+          <span
+            role="button"
+            tabIndex={0}
+            className="group/archive ml-auto"
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchiveAll();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                e.preventDefault();
+                onArchiveAll();
+              }
+            }}
+            aria-label="Archive all tasks in this lane"
+          >
+            <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80 transition-colors">
+              <span className="group-hover/archive:hidden">{taskCount}</span>
+              <Archive className="hidden group-hover/archive:block h-3 w-3" />
+            </Badge>
+          </span>
+        ) : (
+          <Badge variant="secondary" className="ml-auto">
+            {taskCount}
+          </Badge>
+        )}
       </button>
 
       {/* Swimlane Content */}

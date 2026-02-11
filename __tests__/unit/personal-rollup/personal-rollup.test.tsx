@@ -140,6 +140,7 @@ const createMockTask = (overrides: Partial<MyTaskWithContext> = {}): MyTaskWithC
   parentTaskId: null,
   subtaskCount: 0,
   subtaskCompletedCount: 0,
+  archivedAt: null,
   parentTask: null,
   board: {
     id: 'board-1',

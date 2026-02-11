@@ -88,6 +88,7 @@ export interface RollupTaskWithAssignees {
   parentTaskId: string | null;
   subtaskCount: number;
   subtaskCompletedCount: number;
+  archivedAt: Date | null;
 }
 
 export interface ActionResult<T = void> {
@@ -1104,6 +1105,7 @@ export async function getRollupTasks(
         parentTaskId: task.parentTaskId ?? null,
         subtaskCount: subtaskCountByParent.get(task.id) ?? 0,
         subtaskCompletedCount: completedSubtaskCountByParent.get(task.id) ?? 0,
+        archivedAt: task.archivedAt ?? null,
       };
     });
 

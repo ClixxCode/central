@@ -27,6 +27,10 @@ export {
   useUpdateTaskPositions,
   useSubtasks,
   useCreateSubtask,
+  useArchivedTasks,
+  useArchiveTask,
+  useUnarchiveTask,
+  useBulkArchiveDone,
   taskKeys,
 } from './useTasks';
 export {

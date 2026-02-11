@@ -1,7 +1,7 @@
 import { inngest } from '../client';
 import { db } from '@/lib/db';
 import { tasks, taskAssignees, users, boards, clients } from '@/lib/db/schema';
-import { eq, and, inArray, lt, lte } from 'drizzle-orm';
+import { eq, and, inArray, lt, lte, isNull } from 'drizzle-orm';
 import type { UserPreferences } from '@/lib/db/schema/users';
 import { createDueNotification } from '@/lib/actions/notifications';
 
@@ -37,7 +37,8 @@ export const checkDueDates = inngest.createFunction(
         .from(tasks)
         .where(
           and(
-            lte(tasks.dueDate, tomorrowStr)
+            lte(tasks.dueDate, tomorrowStr),
+            isNull(tasks.archivedAt)
           )
         );
     });

@@ -8,7 +8,8 @@ import { KanbanTaskCard } from './KanbanTaskCard';
 import { ExpandedSubtasks } from './ExpandedSubtasks';
 import { CompleteParentDialog } from './CompleteParentDialog';
 import { TaskModal } from './TaskModal';
-import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask } from '@/lib/hooks/useTasks';
+import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
+import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 import { useQuickActionsStore } from '@/lib/stores';
 import { isCompleteStatus } from '@/lib/utils/status';
 import type { TaskWithAssignees, CreateTaskInput } from '@/lib/actions/tasks';
@@ -49,6 +50,8 @@ export function KanbanBoardView({
   const updateTaskPositions = useUpdateTaskPositions();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const bulkArchive = useBulkArchiveDone(boardId);
+  const { isAdmin } = useCurrentUser();
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
 
   // Expanded subtasks state
@@ -279,6 +282,7 @@ export function KanbanBoardView({
                 taskCount={columnTasks.length}
                 taskIds={taskIds}
                 onAddTask={() => openQuickAddWithContext(boardId, status.id)}
+                onArchiveAll={isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
               >
                 {columnTasks.map((task) => (
                   <React.Fragment key={task.id}>

@@ -1,6 +1,7 @@
 import { pgTable, uuid, jsonb, timestamp } from 'drizzle-orm/pg-core';
 
 export interface SiteSettings {
+  autoArchiveDays?: number | null;
 }
 
 export const siteSettings = pgTable('site_settings', {

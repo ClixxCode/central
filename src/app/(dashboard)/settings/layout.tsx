@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Bell, Users, Tags, User, ShieldCheck, Plug } from 'lucide-react';
+import { Archive, Bell, Users, Tags, User, ShieldCheck, Plug } from 'lucide-react';
 import { isAdmin } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +44,11 @@ const adminNav: NavItem[] = [
     name: 'Statuses & Sections',
     href: '/settings/admin/statuses',
     icon: Tags,
+  },
+  {
+    name: 'Archive',
+    href: '/settings/admin/archive',
+    icon: Archive,
   },
 ];
 

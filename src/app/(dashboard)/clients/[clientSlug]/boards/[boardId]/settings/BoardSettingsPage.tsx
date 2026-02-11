@@ -11,6 +11,7 @@ import { StatusOptionsEditor } from '@/components/boards/BoardSettings/StatusOpt
 import { SectionOptionsEditor } from '@/components/boards/BoardSettings/SectionOptionsEditor';
 import { AccessManagement } from '@/components/boards/BoardSettings/AccessManagement';
 import { ActivityLog } from '@/components/boards/BoardSettings/ActivityLog';
+import { ArchivedTasksTab } from '@/components/boards/BoardSettings/ArchivedTasksTab';
 import { useBoard, useUpdateBoard } from '@/lib/hooks';
 import type { BoardWithAccess } from '@/lib/actions/boards';
 
@@ -93,8 +94,9 @@ export function BoardSettingsPage({
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="activity">Activity Log</TabsTrigger>
           {isAdmin && <TabsTrigger value="access">Access</TabsTrigger>}
+          <TabsTrigger value="activity">Activity Log</TabsTrigger>
+          {isAdmin && <TabsTrigger value="archived">Archived Tasks</TabsTrigger>}
         </TabsList>
 
         {/* General Tab */}
@@ -188,6 +190,27 @@ export function BoardSettingsPage({
               </CardHeader>
               <CardContent>
                 <AccessManagement boardId={boardId} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* Archived Tasks Tab (Admin only) */}
+        {isAdmin && (
+          <TabsContent value="archived" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Archived Tasks</CardTitle>
+                <CardDescription>
+                  Browse and restore archived tasks on this board.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ArchivedTasksTab
+                  boardId={boardId}
+                  clientSlug={clientSlug}
+                  statusOptions={displayBoard.statusOptions}
+                />
               </CardContent>
             </Card>
           </TabsContent>

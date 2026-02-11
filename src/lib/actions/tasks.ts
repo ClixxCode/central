@@ -56,6 +56,8 @@ export interface TaskWithAssignees {
   // Subtask counts (0 for subtasks themselves)
   subtaskCount: number;
   subtaskCompletedCount: number;
+  // Archive
+  archivedAt: Date | null;
 }
 
 export interface CreateTaskInput {
@@ -256,8 +258,8 @@ export async function listTasks(
     return { success: false, error: 'Access denied to this board' };
   }
 
-  // Build query conditions - exclude subtasks from board views
-  const conditions = [eq(tasks.boardId, boardId), isNull(tasks.parentTaskId)];
+  // Build query conditions - exclude subtasks and archived tasks from board views
+  const conditions = [eq(tasks.boardId, boardId), isNull(tasks.parentTaskId), isNull(tasks.archivedAt)];
 
   // Apply filters
   if (filters?.status) {
@@ -598,6 +600,7 @@ export async function listTasks(
       createdBy: task.createdBy,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
+      archivedAt: task.archivedAt,
       assignees: assigneesByTask.get(task.id) ?? [],
       commentCount: commentCountByTask.get(task.id) ?? 0,
       attachmentCount: attachmentCountByTask.get(task.id) ?? 0,
@@ -727,6 +730,7 @@ export async function getTask(taskId: string): Promise<{
     createdBy: task.createdBy,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
+    archivedAt: task.archivedAt,
     assignees: assigneesData.map((a) => ({
       id: a.userId,
       email: a.email,
@@ -860,6 +864,7 @@ export async function createTask(input: CreateTaskInput): Promise<{
     createdBy: newTask.createdBy,
     createdAt: newTask.createdAt,
     updatedAt: newTask.updatedAt,
+    archivedAt: newTask.archivedAt,
     assignees: assigneesData.map((a) => ({
       id: a.userId,
       email: a.email,
@@ -1183,6 +1188,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
     createdBy: updatedTask.createdBy,
     createdAt: updatedTask.createdAt,
     updatedAt: updatedTask.updatedAt,
+    archivedAt: updatedTask.archivedAt,
     assignees: assigneesData.map((a) => ({
       id: a.userId,
       email: a.email,
@@ -1316,11 +1322,11 @@ export async function listSubtasks(parentTaskId: string): Promise<{
     return { success: false, error: 'Parent task not found or access denied' };
   }
 
-  // Fetch subtasks ordered by position
+  // Fetch subtasks ordered by position (exclude archived)
   const subtaskList = await db
     .select()
     .from(tasks)
-    .where(eq(tasks.parentTaskId, parentTaskId))
+    .where(and(eq(tasks.parentTaskId, parentTaskId), isNull(tasks.archivedAt)))
     .orderBy(asc(tasks.position));
 
   if (subtaskList.length === 0) {
@@ -1451,6 +1457,7 @@ export async function listSubtasks(parentTaskId: string): Promise<{
       createdBy: task.createdBy,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
+      archivedAt: task.archivedAt,
       assignees: assigneesByTask.get(task.id) ?? [],
       commentCount: commentCountByTask.get(task.id) ?? 0,
       attachmentCount: attachmentCountByTask.get(task.id) ?? 0,
@@ -1718,7 +1725,7 @@ export async function listMyTasks(): Promise<{
     .from(tasks)
     .innerJoin(boards, eq(tasks.boardId, boards.id))
     .innerJoin(clients, eq(boards.clientId, clients.id))
-    .where(inArray(tasks.id, assignedTaskIds))
+    .where(and(inArray(tasks.id, assignedTaskIds), isNull(tasks.archivedAt)))
     .orderBy(asc(clients.name), asc(boards.name), asc(tasks.position));
 
   if (tasksWithContext.length === 0) {
@@ -1945,6 +1952,7 @@ export async function listMyTasks(): Promise<{
       createdBy: row.taskCreatedBy,
       createdAt: row.taskCreatedAt,
       updatedAt: row.taskUpdatedAt,
+      archivedAt: null,
       assignees: assigneesByTask.get(row.taskId) ?? [],
       commentCount: commentCountByTask.get(row.taskId) ?? 0,
       attachmentCount: attachmentCountByTask.get(row.taskId) ?? 0,
@@ -2209,6 +2217,7 @@ export interface SearchResult {
   clientSlug: string;
   parentTaskId: string | null;
   parentTaskTitle: string | null;
+  archivedAt: Date | null;
   assignees: {
     id: string;
     name: string | null;
@@ -2238,6 +2247,7 @@ export async function searchTasks(query: string): Promise<{
       taskTitle: tasks.title,
       taskStatus: tasks.status,
       taskParentTaskId: tasks.parentTaskId,
+      taskArchivedAt: tasks.archivedAt,
       boardId: boards.id,
       boardName: boards.name,
       clientId: clients.id,
@@ -2313,8 +2323,274 @@ export async function searchTasks(query: string): Promise<{
     clientSlug: r.clientSlug,
     parentTaskId: r.taskParentTaskId,
     parentTaskTitle: r.taskParentTaskId ? searchParentMap.get(r.taskParentTaskId) ?? null : null,
+    archivedAt: r.taskArchivedAt,
     assignees: assigneesByTask.get(r.taskId) || [],
   }));
 
   return { success: true, results };
+}
+
+// ─── Archive Actions ────────────────────────────────────────────────────────
+
+export interface ArchivedTaskSummary {
+  id: string;
+  title: string;
+  status: string;
+  archivedAt: Date;
+  assignees: {
+    id: string;
+    name: string | null;
+    avatarUrl: string | null;
+  }[];
+}
+
+/**
+ * Archive a completed task (and its subtasks)
+ */
+export async function archiveTask(taskId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  const { canAccess, task } = await canAccessTask(user.id, taskId, isAdmin);
+  if (!canAccess || !task) {
+    return { success: false, error: 'Task not found or access denied' };
+  }
+
+  // Get board status options to check if task is complete
+  const board = await db.query.boards.findFirst({
+    where: eq(boards.id, task.boardId),
+    columns: { statusOptions: true },
+  });
+
+  const { isCompleteStatus } = await import('@/lib/utils/status');
+  if (!isCompleteStatus(task.status, board?.statusOptions ?? [])) {
+    return { success: false, error: 'Only completed tasks can be archived' };
+  }
+
+  const now = new Date();
+
+  // Archive the task + all its subtasks
+  await db
+    .update(tasks)
+    .set({ archivedAt: now })
+    .where(eq(tasks.id, taskId));
+
+  await db
+    .update(tasks)
+    .set({ archivedAt: now })
+    .where(eq(tasks.parentTaskId, taskId));
+
+  // Log activity
+  logBoardActivity({
+    boardId: task.boardId,
+    taskId,
+    taskTitle: task.title,
+    userId: user.id,
+    action: 'task_archived',
+  }).catch((err) => console.error('Failed to log board activity:', err));
+
+  return { success: true };
+}
+
+/**
+ * Unarchive a task (and cascade to parent/subtasks)
+ */
+export async function unarchiveTask(taskId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  const { canAccess, task } = await canAccessTask(user.id, taskId, isAdmin);
+  if (!canAccess || !task) {
+    return { success: false, error: 'Task not found or access denied' };
+  }
+
+  const now = new Date();
+
+  // Unarchive the task and reset updatedAt so auto-archive timer resets
+  await db
+    .update(tasks)
+    .set({ archivedAt: null, updatedAt: now })
+    .where(eq(tasks.id, taskId));
+
+  if (task.parentTaskId) {
+    // If this is a subtask, also unarchive the parent
+    await db
+      .update(tasks)
+      .set({ archivedAt: null, updatedAt: now })
+      .where(eq(tasks.id, task.parentTaskId));
+  } else {
+    // If this is a parent, unarchive all its subtasks
+    await db
+      .update(tasks)
+      .set({ archivedAt: null, updatedAt: now })
+      .where(eq(tasks.parentTaskId, taskId));
+  }
+
+  // Log activity
+  logBoardActivity({
+    boardId: task.boardId,
+    taskId,
+    taskTitle: task.title,
+    userId: user.id,
+    action: 'task_unarchived',
+  }).catch((err) => console.error('Failed to log board activity:', err));
+
+  return { success: true };
+}
+
+/**
+ * Bulk archive all done tasks on a board
+ */
+export async function bulkArchiveDone(boardId: string): Promise<{
+  success: boolean;
+  archivedCount?: number;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+  if (!accessLevel) {
+    return { success: false, error: 'Access denied to this board' };
+  }
+
+  // Get board's complete status IDs
+  const board = await db.query.boards.findFirst({
+    where: eq(boards.id, boardId),
+    columns: { statusOptions: true },
+  });
+
+  const { getCompleteStatusIds } = await import('@/lib/utils/status');
+  const completeIds = getCompleteStatusIds(board?.statusOptions ?? []);
+
+  if (completeIds.length === 0) {
+    return { success: true, archivedCount: 0 };
+  }
+
+  const now = new Date();
+
+  // Find done parent tasks that aren't already archived
+  const doneTasks = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.boardId, boardId),
+        inArray(tasks.status, completeIds),
+        isNull(tasks.archivedAt),
+        isNull(tasks.parentTaskId)
+      )
+    );
+
+  if (doneTasks.length === 0) {
+    return { success: true, archivedCount: 0 };
+  }
+
+  const doneTaskIds = doneTasks.map((t) => t.id);
+
+  // Archive parent tasks
+  await db
+    .update(tasks)
+    .set({ archivedAt: now })
+    .where(inArray(tasks.id, doneTaskIds));
+
+  // Archive their subtasks
+  await db
+    .update(tasks)
+    .set({ archivedAt: now })
+    .where(inArray(tasks.parentTaskId, doneTaskIds));
+
+  // Log activity for bulk archive
+  logBoardActivity({
+    boardId,
+    taskId: doneTaskIds[0],
+    taskTitle: `${doneTaskIds.length} completed tasks`,
+    userId: user.id,
+    action: 'tasks_bulk_archived',
+    metadata: { count: doneTaskIds.length },
+  }).catch((err) => console.error('Failed to log board activity:', err));
+
+  return { success: true, archivedCount: doneTaskIds.length };
+}
+
+/**
+ * List archived tasks for a board
+ */
+export async function listArchivedTasks(
+  boardId: string,
+  search?: string
+): Promise<{
+  success: boolean;
+  tasks?: ArchivedTaskSummary[];
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+  if (!accessLevel) {
+    return { success: false, error: 'Access denied to this board' };
+  }
+
+  const conditions = [
+    eq(tasks.boardId, boardId),
+    isNotNull(tasks.archivedAt),
+    isNull(tasks.parentTaskId),
+  ];
+
+  if (search && search.trim().length >= 2) {
+    conditions.push(sql`LOWER(${tasks.title}) LIKE ${'%' + search.trim().toLowerCase() + '%'}`);
+  }
+
+  const archivedTasks = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      status: tasks.status,
+      archivedAt: tasks.archivedAt,
+    })
+    .from(tasks)
+    .where(and(...conditions))
+    .orderBy(desc(tasks.archivedAt))
+    .limit(100);
+
+  if (archivedTasks.length === 0) {
+    return { success: true, tasks: [] };
+  }
+
+  // Get assignees
+  const taskIds = archivedTasks.map((t) => t.id);
+  const assigneesData = await db
+    .select({
+      taskId: taskAssignees.taskId,
+      userId: taskAssignees.userId,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(taskAssignees)
+    .innerJoin(users, eq(users.id, taskAssignees.userId))
+    .where(inArray(taskAssignees.taskId, taskIds));
+
+  const assigneesByTask = new Map<string, ArchivedTaskSummary['assignees']>();
+  for (const a of assigneesData) {
+    const existing = assigneesByTask.get(a.taskId) || [];
+    existing.push({ id: a.userId, name: a.name, avatarUrl: a.avatarUrl });
+    assigneesByTask.set(a.taskId, existing);
+  }
+
+  const result: ArchivedTaskSummary[] = archivedTasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    archivedAt: t.archivedAt!,
+    assignees: assigneesByTask.get(t.id) || [],
+  }));
+
+  return { success: true, tasks: result };
 }
