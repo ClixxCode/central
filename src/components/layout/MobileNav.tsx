@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { X, LayoutDashboard, FolderKanban, Layers, Users, Settings, ChevronRight } from 'lucide-react';
+import { X, LayoutDashboard, CalendarDays, FolderKanban, Layers, Users, Settings, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
 import { useFavorites } from '@/lib/hooks/useFavorites';
+import { useCalendarPreferences } from '@/lib/hooks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useIsClient } from '@/hooks/useIsClient';
 import { Button } from '@/components/ui/button';
@@ -33,12 +34,14 @@ export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
   const isClient = useIsClient();
   const { sidebarOpen, setSidebarOpen } = useUIStore();
   const { data: favorites = [] } = useFavorites();
+  const { data: calPrefs } = useCalendarPreferences();
 
   // Don't render the sheet until client-side to prevent hydration mismatch
   const isOpen = isClient ? sidebarOpen : false;
 
   const navItems = [
     { href: '/my-tasks', label: 'My Tasks', icon: LayoutDashboard },
+    ...(calPrefs?.showScheduleInSidebar ? [{ href: '/schedule', label: 'Schedule', icon: CalendarDays }] : []),
     { href: '/rollups', label: 'Rollups', icon: FolderKanban },
   ];
 

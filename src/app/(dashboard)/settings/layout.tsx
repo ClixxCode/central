@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Bell, Users, Tags, User, ShieldCheck } from 'lucide-react';
+import { Bell, Users, Tags, User, ShieldCheck, Plug } from 'lucide-react';
 import { isAdmin } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +21,11 @@ const settingsNav: NavItem[] = [
     name: 'Notifications',
     href: '/settings/notifications',
     icon: Bell,
+  },
+  {
+    name: 'Integrations',
+    href: '/settings/integrations',
+    icon: Plug,
   },
 ];
 

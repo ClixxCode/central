@@ -18,6 +18,10 @@ export interface UserPreferences {
   hiddenColumns: string[];
   defaultView: 'table' | 'kanban';
   hidePersonalList?: boolean;
+  calendar?: {
+    showScheduleInSidebar?: boolean;
+    showEventsInMyWork?: boolean;
+  };
   notifications: {
     email: NotificationChannelSettings & {
       digest: 'instant' | 'daily' | 'weekly' | 'none';

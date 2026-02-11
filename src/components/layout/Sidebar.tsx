@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   Plus,
@@ -26,6 +27,7 @@ import type { FavoriteWithDetails } from '@/lib/db/schema';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useIsClient } from '@/hooks/useIsClient';
 import { useFavoriteHintKeys } from '@/lib/hooks/useFavoriteHintKeys';
+import { useCalendarPreferences } from '@/lib/hooks';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -138,6 +140,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
     toggleSection,
     isSectionCollapsed,
   } = useUIStore();
+  const { data: calPrefs } = useCalendarPreferences();
   const { data: favorites = [] } = useFavorites();
   const reorderFavorites = useReorderFavorites();
   const fKeyHeld = useFavoriteHintKeys();
@@ -187,6 +190,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
 
   const navItems = [
     { href: '/my-tasks', label: 'My Work', icon: LayoutDashboard },
+    ...(calPrefs?.showScheduleInSidebar ? [{ href: '/schedule', label: 'Schedule', icon: CalendarDays }] : []),
     { href: '/rollups', label: 'Rollups', icon: FolderKanban },
   ];
 

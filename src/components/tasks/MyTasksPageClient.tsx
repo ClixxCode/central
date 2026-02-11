@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { TodaysEvents } from '@/components/calendar/TodaysEvents';
 import { PersonalRollupView } from './PersonalRollupView';
 import { PersonalRollupToolbar } from './PersonalRollupToolbar';
 import { PersonalListTab } from './PersonalListTab';
@@ -657,6 +658,7 @@ export function MyTasksPageClient() {
     staleTime: 5 * 60 * 1000,
   });
   const hidePersonalList = userPrefs?.hidePersonalList ?? false;
+  const showCalendarEvents = userPrefs?.calendar?.showEventsInMyWork ?? true;
 
   // Derive active tab from URL param (reactive) or stored preference
   const urlTab = searchParams.get('tab');
@@ -693,6 +695,8 @@ export function MyTasksPageClient() {
         <h1 className="text-2xl font-bold text-foreground">My Work</h1>
         <p className="text-muted-foreground">Tasks, mentions, and replies across all clients</p>
       </div>
+
+      {showCalendarEvents && <TodaysEvents />}
 
       <Tabs value={activeTabValue} onValueChange={(v) => {
         setActiveTab(v as 'tasks' | 'notifications' | 'personal');

@@ -114,3 +114,14 @@ export {
   useQuickAddCreateTask,
   quickAddKeys,
 } from './useQuickAdd';
+export {
+  useCalendarConnection,
+  useTodaysEvents,
+  useTeamAvailability,
+  useCreateCalendarHolds,
+  useDisconnectCalendar,
+  useAllUsers,
+  useCalendarPreferences,
+  useUpdateCalendarPreferences,
+  calendarKeys,
+} from './useGoogleCalendar';

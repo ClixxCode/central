@@ -44,6 +44,9 @@ export * from './site-settings';
 // Board Activity Log
 export * from './board-activity-log';
 
+// Google Calendar
+export * from './google-calendar';
+
 // Re-export types
 export type { UserPreferences, NotificationChannelSettings } from './users';
 export type { StatusOption, SectionOption } from './boards';
