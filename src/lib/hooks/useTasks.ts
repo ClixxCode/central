@@ -16,6 +16,7 @@ import {
   UpdateTaskInput,
   TaskFilters,
   TaskSortOptions,
+  MyTasksByClient,
 } from '@/lib/actions/tasks';
 
 // Query key factory
@@ -280,6 +281,8 @@ export function useDeleteTask() {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) });
       await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: ['myTasks'] });
+      await queryClient.cancelQueries({ queryKey: ['rollups', 'tasks'] });
 
       // Snapshot the previous values
       const previousTask = queryClient.getQueryData<TaskWithAssignees>(
@@ -288,8 +291,14 @@ export function useDeleteTask() {
       const previousTasks = queryClient.getQueriesData<TaskWithAssignees[]>({
         queryKey: taskKeys.lists(),
       });
+      const previousMyTasks = queryClient.getQueriesData({
+        queryKey: ['myTasks'],
+      });
+      const previousRollupTasks = queryClient.getQueriesData({
+        queryKey: ['rollups', 'tasks'],
+      });
 
-      // Optimistically remove from lists
+      // Optimistically remove from board lists
       queryClient.setQueriesData<TaskWithAssignees[]>(
         { queryKey: taskKeys.lists() },
         (old) => {
@@ -298,10 +307,36 @@ export function useDeleteTask() {
         }
       );
 
+      // Optimistically remove from My Tasks
+      queryClient.setQueriesData<MyTasksByClient[]>(
+        { queryKey: ['myTasks', 'list'] },
+        (old) => {
+          if (!old) return old;
+          return old.map((clientGroup) => ({
+            ...clientGroup,
+            tasks: clientGroup.tasks.filter((task) => task.id !== taskId),
+          }));
+        }
+      );
+
+      // Optimistically remove from rollup task lists
+      queryClient.setQueriesData(
+        { queryKey: ['rollups', 'tasks'] },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object') return old;
+          const data = old as { tasks?: { id: string }[] };
+          if (!data.tasks) return old;
+          return {
+            ...data,
+            tasks: data.tasks.filter((task) => task.id !== taskId),
+          };
+        }
+      );
+
       // Remove from detail cache
       queryClient.removeQueries({ queryKey: taskKeys.detail(taskId) });
 
-      return { previousTask, previousTasks };
+      return { previousTask, previousTasks, previousMyTasks, previousRollupTasks };
     },
     onSuccess: () => {
       toast.success('Task deleted');
@@ -316,12 +351,25 @@ export function useDeleteTask() {
           queryClient.setQueryData(queryKey, data);
         }
       }
+      if (context?.previousMyTasks) {
+        for (const [queryKey, data] of context.previousMyTasks) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      if (context?.previousRollupTasks) {
+        for (const [queryKey, data] of context.previousRollupTasks) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
     },
     onSettled: () => {
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       // Invalidate subtask caches (deleting a subtask affects parent counts)
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'subtasks'] });
+      // Invalidate My Tasks and rollup caches
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
     },
   });
 }
