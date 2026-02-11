@@ -30,6 +30,8 @@ interface SmartTaskInputProps {
   onDateRemove: () => void;
   onStatusRemove: () => void;
   onSubmit?: () => void;
+  onMultiLinePaste?: (lines: string[]) => void;
+  hasBoardSelected?: boolean;
   selectedBoardId?: string;
   statusOptions?: { id: string; label: string; color: string; position: number }[];
   pills: InputPill[];
@@ -48,6 +50,8 @@ export function SmartTaskInput({
   onDateRemove,
   onStatusRemove,
   onSubmit,
+  onMultiLinePaste,
+  hasBoardSelected,
   selectedBoardId,
   statusOptions,
   pills,
@@ -231,6 +235,27 @@ export function SmartTaskInput({
     [trigger, onBoardRemove, onUserRemove, onDateRemove, onStatusRemove, onTitleChange, extractTitle, onSubmit]
   );
 
+  // Intercept multi-line pastes
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      if (!onMultiLinePaste || !hasBoardSelected) return;
+
+      const text = e.clipboardData.getData('text/plain');
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.replace(/\t/g, ' ').trim())
+        .filter(Boolean)
+        .map((line) => line.replace(/^(?:[-*+]|\d+[.)]\s*|#{1,6}\s+)\s*/, ''))
+        .filter(Boolean);
+
+      if (lines.length >= 2) {
+        e.preventDefault();
+        onMultiLinePaste(lines);
+      }
+    },
+    [onMultiLinePaste, hasBoardSelected]
+  );
+
   // Insert a pill span replacing the trigger text
   const insertPill = useCallback(
     (type: 'board' | 'assignee' | 'date' | 'status', id: string, label: string, colorClasses: string) => {
@@ -336,6 +361,7 @@ export function SmartTaskInput({
         data-placeholder={placeholder}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         role="textbox"
         aria-label="Task name"
       />

@@ -17,10 +17,15 @@ import { useBoard } from '@/lib/hooks/useBoards';
 import { useQuickAddCreateTask, useQuickAddUsers } from '@/lib/hooks/useQuickAdd';
 import { useQuickActionsStore } from '@/lib/stores';
 import { SmartTaskInput, type InputPill } from './SmartTaskInput';
+import { MultiLinePasteDialog } from './MultiLinePasteDialog';
 import { cn } from '@/lib/utils';
 import { getDateSuggestions } from '@/lib/utils/parse-natural-date';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Calendar } from '@/components/ui/calendar';
+import { createTask as createTaskAction } from '@/lib/actions/tasks';
+import { taskKeys } from '@/lib/hooks/useTasks';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import type {
   BoardSelection,
   UserSelection,
@@ -46,11 +51,15 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [pasteLines, setPasteLines] = useState<string[] | null>(null);
+  const [isBatchCreating, setIsBatchCreating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ completed: number; total: number } | null>(null);
   const boardDropdownRef = React.useRef<HTMLDivElement>(null);
   const assigneeDropdownRef = React.useRef<HTMLDivElement>(null);
   const dateDropdownRef = React.useRef<HTMLDivElement>(null);
   const statusDropdownRef = React.useRef<HTMLDivElement>(null);
 
+  const queryClient = useQueryClient();
   const { data: clients } = useClients();
   const { data: boardData } = useBoard(selectedBoard?.boardId ?? '');
   const { data: assignableUsers } = useQuickAddUsers(selectedBoard?.boardId);
@@ -136,6 +145,9 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
     setDueDate(null);
     setStatus(null);
     setPills([]);
+    setPasteLines(null);
+    setIsBatchCreating(false);
+    setBatchProgress(null);
   }, []);
 
   const handleClose = useCallback(
@@ -247,9 +259,55 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
     );
   }, [selectedBoard, title, status, boardData, assignees, dueDate, description, createTask, resetForm, onOpenChange]);
 
+  const handleBatchCreate = useCallback(async () => {
+    if (!pasteLines || !selectedBoard) return;
+
+    const MAX_LINES = 50;
+    const lines = pasteLines.slice(0, MAX_LINES);
+    const statusToUse = status ?? boardData?.statusOptions?.[0]?.id ?? 'todo';
+    const assigneeIdList = assignees.map((a) => a.id);
+    const dueDateStr = dueDate ? format(dueDate.date, 'yyyy-MM-dd') : undefined;
+
+    setIsBatchCreating(true);
+    setBatchProgress({ completed: 0, total: lines.length });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const line of lines) {
+      const result = await createTaskAction({
+        boardId: selectedBoard.boardId,
+        title: line,
+        status: statusToUse,
+        assigneeIds: assigneeIdList,
+        dueDate: dueDateStr,
+      });
+
+      if (result.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+
+      setBatchProgress({ completed: successCount + failCount, total: lines.length });
+    }
+
+    await queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+
+    if (failCount === 0) {
+      toast.success(`Created ${successCount} tasks`);
+    } else {
+      toast.warning(`Created ${successCount} tasks, ${failCount} failed`);
+    }
+
+    resetForm();
+    onOpenChange(false);
+  }, [pasteLines, selectedBoard, status, boardData, assignees, dueDate, queryClient, resetForm, onOpenChange]);
+
   const canSubmit = !!selectedBoard && !!title.trim() && !createTask.isPending;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="gap-3" style={{ maxWidth: '48vw', minWidth: '360px' }} showCloseButton={false}>
         <DialogHeader>
@@ -268,6 +326,8 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
           onDateRemove={handleDateRemove}
           onStatusRemove={handleStatusRemove}
           onSubmit={handleSubmit}
+          onMultiLinePaste={setPasteLines}
+          hasBoardSelected={!!selectedBoard}
           selectedBoardId={selectedBoard?.boardId}
           statusOptions={boardData?.statusOptions}
           pills={pills}
@@ -570,5 +630,17 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      <MultiLinePasteDialog
+        open={!!pasteLines}
+        onOpenChange={(open) => {
+          if (!open) setPasteLines(null);
+        }}
+        lines={pasteLines ?? []}
+        onConfirm={handleBatchCreate}
+        isCreating={isBatchCreating}
+        progress={batchProgress}
+      />
+    </>
   );
 }
