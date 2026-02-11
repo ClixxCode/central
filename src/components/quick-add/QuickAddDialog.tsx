@@ -309,7 +309,7 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
   return (
     <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="gap-3" style={{ maxWidth: '48vw', minWidth: '360px' }} showCloseButton={false}>
+      <DialogContent className="gap-3 overflow-hidden" style={{ maxWidth: '48vw', minWidth: '360px' }} showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-base">Quick Add Task</DialogTitle>
         </DialogHeader>
@@ -350,7 +350,7 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
         />
 
         {/* Footer: option dropdowns + actions */}
-        <DialogFooter className="!flex-row !justify-start items-center gap-1">
+        <DialogFooter className="!flex-row !justify-start items-center gap-1 flex-wrap">
           {/* Option dropdowns */}
             {/* Board selector */}
             <div ref={boardDropdownRef} className="relative">
@@ -369,10 +369,12 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
                   selectedBoard && 'border-blue-300 text-blue-700 bg-blue-50 dark:border-blue-500/30 dark:text-blue-300 dark:bg-blue-500/20'
                 )}
               >
-                <Building2 className="h-3.5 w-3.5" />
-                {selectedBoard
-                  ? selectedBoard.boardName
-                  : 'Board'}
+                <Building2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate max-w-[180px]">
+                  {selectedBoard
+                    ? selectedBoard.boardName
+                    : 'Board'}
+                </span>
               </Button>
 
               {boardDropdownOpen && clients && (
