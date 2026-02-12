@@ -7,14 +7,18 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  Maximize2,
+  Minimize2,
   Users,
   Video,
 } from 'lucide-react';
 import { useTodaysEvents } from '@/lib/hooks';
+import type { CalendarEvent } from '@/lib/google-calendar/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
 const COLLAPSE_KEY = 'central-todays-events-collapsed';
+const MINIMIZE_KEY = 'central-todays-events-minimized';
 
 function formatEventTime(dateTime?: string, date?: string): string {
   if (date) return 'All day';
@@ -45,10 +49,13 @@ export function TodaysEvents() {
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const { data, isLoading } = useTodaysEvents(timeZone);
   const [collapsed, setCollapsed] = useState(false);
+  const [minimized, setMinimized] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(COLLAPSE_KEY);
     if (stored === 'true') setCollapsed(true);
+    const storedMin = localStorage.getItem(MINIMIZE_KEY);
+    if (storedMin === 'true') setMinimized(true);
   }, []);
 
   const toggleCollapsed = () => {
@@ -56,6 +63,40 @@ export function TodaysEvents() {
     setCollapsed(next);
     localStorage.setItem(COLLAPSE_KEY, String(next));
   };
+
+  const toggleMinimized = () => {
+    const next = !minimized;
+    setMinimized(next);
+    localStorage.setItem(MINIMIZE_KEY, String(next));
+  };
+
+  const events = (data && 'events' in data) ? data.events : [];
+
+  // When minimized, show the most recent current/past event + next 2 upcoming
+  const visibleEvents = useMemo(() => {
+    if (!minimized || events.length === 0) return events;
+    const now = Date.now();
+
+    // Find the most recent event that's currently happening or already started
+    let mostRecentIdx = -1;
+    for (let i = events.length - 1; i >= 0; i--) {
+      const evt = events[i];
+      const startMs = evt.start.dateTime ? new Date(evt.start.dateTime).getTime() : 0;
+      const isAllDay = !!evt.start.date;
+      if (isAllDay || startMs <= now) {
+        mostRecentIdx = i;
+        break;
+      }
+    }
+
+    if (mostRecentIdx === -1) {
+      // No current/past events — just show first 3 upcoming
+      return events.slice(0, 3);
+    }
+
+    // Most recent + up to 2 upcoming
+    return events.slice(mostRecentIdx, mostRecentIdx + 3);
+  }, [events, minimized]);
 
   // Not connected — show subtle prompt
   if (data && !data.connected) {
@@ -88,32 +129,50 @@ export function TodaysEvents() {
   // Connected but no data yet
   if (!data || !data.connected) return null;
 
-  const { events } = data;
-
   return (
     <div className="mb-4">
-      <button
-        onClick={toggleCollapsed}
-        className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-2"
-      >
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4" />
-        ) : (
-          <ChevronDown className="h-4 w-4" />
-        )}
-        <Calendar className="h-4 w-4" />
-        Today&apos;s Events
-        {events.length > 0 && (
-          <span className="ml-1 text-xs">({events.length})</span>
-        )}
-      </button>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+          <Calendar className="h-4 w-4" />
+          Today&apos;s Events
+          {events.length > 0 && (
+            <span className="ml-1 text-xs">({events.length})</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {!collapsed && events.length > 3 && (
+            <button
+              onClick={toggleMinimized}
+              className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+              title={minimized ? 'Show all events' : 'Show fewer events'}
+            >
+              {minimized ? (
+              <Maximize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Minimize2 className="h-3.5 w-3.5" />
+            )}
+            </button>
+          )}
+          <button
+            onClick={toggleCollapsed}
+            className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+            title={collapsed ? 'Expand events' : 'Collapse events'}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
 
       {!collapsed && (
         <div className="space-y-1">
           {events.length === 0 ? (
             <p className="text-sm text-muted-foreground pl-7">No events today</p>
           ) : (
-            events.map((event) => {
+            visibleEvents.map((event) => {
               const current = isCurrentEvent(event.start, event.end);
               return (
                 <div

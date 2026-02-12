@@ -9,6 +9,7 @@ export interface CalendarEvent {
   htmlLink?: string;
   attendees?: { email: string; responseStatus: string }[];
   status: string;
+  eventType?: string;
 }
 
 export interface BusyBlock {
@@ -65,7 +66,9 @@ export async function fetchTodaysEvents(
 
   const data = await response.json();
   return (data.items ?? []).filter(
-    (event: CalendarEvent) => event.status !== 'cancelled'
+    (event: CalendarEvent) =>
+      event.status !== 'cancelled' &&
+      event.eventType !== 'workingLocation'
   );
 }
 
