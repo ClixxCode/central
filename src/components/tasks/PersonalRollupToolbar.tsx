@@ -11,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
+import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
 import { TableColumnsButton } from '@/components/shared/TableColumnsButton';
 import type { MyTasksByClient } from '@/lib/actions/tasks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
@@ -39,14 +40,10 @@ interface PersonalRollupToolbarProps {
 
 export function PersonalRollupToolbar({ tasksByClient, viewMode = 'swimlane' }: PersonalRollupToolbarProps) {
   const {
-    hiddenColumns,
-    toggleColumn,
-    toggleBoard,
-    isColumnHidden,
-    isBoardHidden,
     tableColumns,
     toggleTableColumn,
   } = usePersonalRollupStore();
+  const { isColumnHidden, toggleColumn, toggleBoard, isBoardHidden, setHiddenBoards } = useMyWorkPreferences();
 
   // Get all unique boards across all clients
   const allBoards = React.useMemo(() => {
@@ -150,14 +147,7 @@ export function PersonalRollupToolbar({ tasksByClient, viewMode = 'swimlane' }: 
                 variant="ghost"
                 size="sm"
                 className="w-full text-xs"
-                onClick={() => {
-                  // Show all boards
-                  allBoards.forEach((board) => {
-                    if (isBoardHidden(board.id)) {
-                      toggleBoard(board.id);
-                    }
-                  });
-                }}
+                onClick={() => setHiddenBoards([])}
               >
                 Show all boards
               </Button>

@@ -69,26 +69,44 @@ vi.mock('@/lib/actions/tasks', async (importOriginal) => {
 
 // Mock the Zustand store
 const mockToggleClient = vi.fn();
-const mockToggleColumn = vi.fn();
-const mockToggleBoard = vi.fn();
 const mockIsClientCollapsed = vi.fn().mockReturnValue(false);
-const mockIsBoardHidden = vi.fn().mockReturnValue(false);
-const mockIsColumnHidden = vi.fn().mockReturnValue(false);
 
 const mockSetAllClientsCollapsed = vi.fn();
 const mockAreAllClientsCollapsed = vi.fn().mockReturnValue(false);
 
 vi.mock('@/lib/stores/personalRollupStore', () => ({
   usePersonalRollupStore: () => ({
-    hiddenColumns: [],
     toggleClient: mockToggleClient,
-    toggleColumn: mockToggleColumn,
-    toggleBoard: mockToggleBoard,
     isClientCollapsed: mockIsClientCollapsed,
-    isBoardHidden: mockIsBoardHidden,
-    isColumnHidden: mockIsColumnHidden,
     setAllClientsCollapsed: mockSetAllClientsCollapsed,
     areAllClientsCollapsed: mockAreAllClientsCollapsed,
+  }),
+}));
+
+// Mock the useMyWorkPreferences hook (DB-backed preferences)
+const mockToggleBoard = vi.fn();
+const mockIsBoardHidden = vi.fn().mockReturnValue(false);
+const mockSetHiddenBoards = vi.fn();
+const mockToggleColumn = vi.fn();
+const mockIsColumnHidden = vi.fn().mockReturnValue(false);
+
+vi.mock('@/lib/hooks/useMyWorkPreferences', () => ({
+  useMyWorkPreferences: () => ({
+    hiddenBoards: [],
+    isBoardHidden: mockIsBoardHidden,
+    toggleBoard: mockToggleBoard,
+    setHiddenBoards: mockSetHiddenBoards,
+    hiddenColumns: [],
+    isColumnHidden: mockIsColumnHidden,
+    toggleColumn: mockToggleColumn,
+    myWorkFilters: {},
+    setMyWorkFilters: vi.fn(),
+    personalTaskFilters: {},
+    setPersonalTaskFilters: vi.fn(),
+    todaysEventsCollapsed: false,
+    todaysEventsMinimized: false,
+    setTodaysEventsCollapsed: vi.fn(),
+    setTodaysEventsMinimized: vi.fn(),
   }),
 }));
 

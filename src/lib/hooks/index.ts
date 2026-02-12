@@ -158,3 +158,4 @@ export {
   useRevokeExtensionToken,
   extensionTokenKeys,
 } from './useExtensionTokens';
+export { useMyWorkPreferences } from './useMyWorkPreferences';

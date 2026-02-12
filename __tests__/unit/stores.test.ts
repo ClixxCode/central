@@ -133,34 +133,8 @@ describe('Board View Store', () => {
 describe('Personal Rollup Store', () => {
   beforeEach(() => {
     usePersonalRollupStore.setState({
-      hiddenColumns: [],
-      hiddenBoards: [],
       collapsedClients: [],
     });
-  });
-
-  it('toggles column visibility', () => {
-    const store = usePersonalRollupStore.getState();
-
-    expect(store.isColumnHidden('dueDate')).toBe(false);
-
-    store.toggleColumn('dueDate');
-    expect(usePersonalRollupStore.getState().isColumnHidden('dueDate')).toBe(true);
-
-    store.toggleColumn('dueDate');
-    expect(usePersonalRollupStore.getState().isColumnHidden('dueDate')).toBe(false);
-  });
-
-  it('toggles board visibility', () => {
-    const store = usePersonalRollupStore.getState();
-
-    expect(store.isBoardHidden('board-1')).toBe(false);
-
-    store.toggleBoard('board-1');
-    expect(usePersonalRollupStore.getState().isBoardHidden('board-1')).toBe(true);
-
-    store.toggleBoard('board-1');
-    expect(usePersonalRollupStore.getState().isBoardHidden('board-1')).toBe(false);
   });
 
   it('toggles client collapsed state', () => {
@@ -173,25 +147,5 @@ describe('Personal Rollup Store', () => {
 
     store.toggleClient('client-1');
     expect(usePersonalRollupStore.getState().isClientCollapsed('client-1')).toBe(false);
-  });
-
-  it('sets hidden columns directly', () => {
-    const store = usePersonalRollupStore.getState();
-
-    store.setHiddenColumns(['dueDate', 'section']);
-
-    expect(usePersonalRollupStore.getState().isColumnHidden('dueDate')).toBe(true);
-    expect(usePersonalRollupStore.getState().isColumnHidden('section')).toBe(true);
-    expect(usePersonalRollupStore.getState().isColumnHidden('status')).toBe(false);
-  });
-
-  it('sets hidden boards directly', () => {
-    const store = usePersonalRollupStore.getState();
-
-    store.setHiddenBoards(['board-1', 'board-2']);
-
-    expect(usePersonalRollupStore.getState().isBoardHidden('board-1')).toBe(true);
-    expect(usePersonalRollupStore.getState().isBoardHidden('board-2')).toBe(true);
-    expect(usePersonalRollupStore.getState().isBoardHidden('board-3')).toBe(false);
   });
 });

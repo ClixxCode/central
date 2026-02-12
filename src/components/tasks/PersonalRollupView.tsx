@@ -10,6 +10,7 @@ import { DndProvider, type DragEndEvent } from '@/components/dnd';
 import { DroppableContainer } from '@/components/dnd/DroppableContainer';
 import { SortableTask } from '@/components/dnd/SortableTask';
 import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
+import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
 import { useQuickActionsStore } from '@/lib/stores';
 import { useUpdateMyTask } from '@/lib/hooks/useMyTasks';
 import { useDeleteTask, useTask } from '@/lib/hooks/useTasks';
@@ -43,12 +44,11 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
   const {
     isClientCollapsed,
     toggleClient,
-    isBoardHidden,
-    hiddenColumns,
     tableColumns,
     tableSort,
     setTableSort,
   } = usePersonalRollupStore();
+  const { isBoardHidden, hiddenColumns } = useMyWorkPreferences();
 
   const updateTask = useUpdateMyTask();
   const deleteTask = useDeleteTask();

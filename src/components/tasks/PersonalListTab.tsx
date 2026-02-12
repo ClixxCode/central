@@ -20,7 +20,8 @@ import {
 import { useToggleFavorite } from '@/lib/hooks/useFavorites';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
-import type { TaskFilters, TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
+import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
+import type { TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
 
 const HIDDEN_ITEMS = new Set(['assignees']);
 const TABLE_COLUMNS = { title: true, status: true, section: true, assignees: false, dueDate: true } as const;
@@ -34,7 +35,7 @@ export function PersonalListTab() {
   const sectionOptions = board?.sectionOptions ?? [];
 
   // Fetch tasks
-  const [filters, setFilters] = React.useState<TaskFilters>({});
+  const { personalTaskFilters: filters, setPersonalTaskFilters: setFilters } = useMyWorkPreferences();
   const [sort, setSort] = React.useState<TaskSortOptions>({ field: 'position', direction: 'asc' });
   const { data: tasks = [], isLoading: tasksLoading } = useTasks(boardId, filters, sort);
 

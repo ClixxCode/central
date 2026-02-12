@@ -12,12 +12,27 @@ export interface NotificationChannelSettings {
   replies: boolean;
 }
 
+// Saved filter shape for My Work preferences (stored in DB)
+export interface SavedTaskFilters {
+  status?: string[];
+  statusMode?: 'is' | 'is_not';
+  section?: string[];
+  sectionMode?: 'is' | 'is_not';
+  overdue?: boolean;
+}
+
 // User preferences type
 export interface UserPreferences {
   hiddenBoards: string[];
   hiddenColumns: string[];
   defaultView: 'table' | 'kanban';
   hidePersonalList?: boolean;
+  myWorkFilters?: SavedTaskFilters;
+  personalTaskFilters?: SavedTaskFilters;
+  todaysEvents?: {
+    collapsed?: boolean;
+    minimized?: boolean;
+  };
   calendar?: {
     showScheduleInSidebar?: boolean;
     showEventsInMyWork?: boolean;

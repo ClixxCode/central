@@ -55,6 +55,7 @@ import type { AssigneeUser } from './AssigneePicker';
 import type { NotificationWithTask } from '@/lib/actions/notifications';
 import { useTask, useAssignableUsers } from '@/lib/hooks/useTasks';
 import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
+import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
 import { useMentionableUsers } from '@/lib/hooks/useQuickAdd';
 import { CommentsSection } from '@/components/comments';
 import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
@@ -645,8 +646,8 @@ export function MyTasksPageClient() {
   });
   const { data: mentions = [] } = useMentions();
   const { data: replies = [] } = useReplies();
-  const { viewMode, setViewMode, activeTab: storedTab, setActiveTab, areAllClientsCollapsed, setAllClientsCollapsed, isBoardHidden } = usePersonalRollupStore();
-  const [filters, setFilters] = React.useState<TaskFilters>({});
+  const { viewMode, setViewMode, activeTab: storedTab, setActiveTab, areAllClientsCollapsed, setAllClientsCollapsed } = usePersonalRollupStore();
+  const { isBoardHidden, myWorkFilters: filters, setMyWorkFilters: setFilters } = useMyWorkPreferences();
 
   // Fetch user preferences for hidePersonalList
   const { data: userPrefs } = useQuery({

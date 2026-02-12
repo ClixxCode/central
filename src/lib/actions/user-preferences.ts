@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { users, teamMembers } from '@/lib/db/schema';
-import type { UserPreferences } from '@/lib/db/schema/users';
+import type { UserPreferences, SavedTaskFilters } from '@/lib/db/schema/users';
 import { eq } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
@@ -390,6 +390,50 @@ export async function updateCalendarPreferences(input: {
 }
 
 /**
+ * Update My Work page preferences (boards, card items, filters, today's events)
+ */
+export async function updateMyWorkPreferences(input: {
+  hiddenBoards?: string[];
+  hiddenColumns?: string[];
+  myWorkFilters?: SavedTaskFilters;
+  personalTaskFilters?: SavedTaskFilters;
+  todaysEvents?: { collapsed?: boolean; minimized?: boolean };
+}): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const user = await requireAuth();
+
+  const dbUser = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { preferences: true },
+  });
+
+  if (!dbUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  const currentPrefs = mergeWithDefaults(dbUser.preferences as UserPreferences | null);
+  const newPrefs: UserPreferences = {
+    ...currentPrefs,
+    ...(input.hiddenBoards !== undefined && { hiddenBoards: input.hiddenBoards }),
+    ...(input.hiddenColumns !== undefined && { hiddenColumns: input.hiddenColumns }),
+    ...(input.myWorkFilters !== undefined && { myWorkFilters: input.myWorkFilters }),
+    ...(input.personalTaskFilters !== undefined && { personalTaskFilters: input.personalTaskFilters }),
+    ...(input.todaysEvents !== undefined && {
+      todaysEvents: { ...currentPrefs.todaysEvents, ...input.todaysEvents },
+    }),
+  };
+
+  await db
+    .update(users)
+    .set({ preferences: newPrefs, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+
+  return { success: true };
+}
+
+/**
  * Merge preferences with defaults to ensure all fields exist
  */
 function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
@@ -402,6 +446,9 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
     hiddenColumns: prefs.hiddenColumns ?? DEFAULT_PREFERENCES.hiddenColumns,
     defaultView: prefs.defaultView ?? DEFAULT_PREFERENCES.defaultView,
     hidePersonalList: prefs.hidePersonalList ?? false,
+    myWorkFilters: prefs.myWorkFilters,
+    personalTaskFilters: prefs.personalTaskFilters,
+    todaysEvents: prefs.todaysEvents,
     calendar: {
       showScheduleInSidebar: prefs.calendar?.showScheduleInSidebar ?? false,
       showEventsInMyWork: prefs.calendar?.showEventsInMyWork ?? true,

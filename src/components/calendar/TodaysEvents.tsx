@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import {
   Calendar,
@@ -13,6 +13,7 @@ import {
   Video,
 } from 'lucide-react';
 import { useTodaysEvents, useAllUsers, useCurrentUser } from '@/lib/hooks';
+import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
 import { getMeetingLink } from '@/lib/google-calendar/api';
 import type { CalendarEvent } from '@/lib/google-calendar/api';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,8 +27,6 @@ function getInitials(nameOrEmail: string): string {
   return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
 }
 
-const COLLAPSE_KEY = 'central-todays-events-collapsed';
-const MINIMIZE_KEY = 'central-todays-events-minimized';
 
 function formatEventTime(dateTime?: string, date?: string): string {
   if (date) return 'All day';
@@ -146,27 +145,15 @@ export function TodaysEvents() {
     () => new Map(allUsers.map((u) => [u.email.toLowerCase(), u])),
     [allUsers]
   );
-  const [collapsed, setCollapsed] = useState(false);
-  const [minimized, setMinimized] = useState(false);
+  const {
+    todaysEventsCollapsed: collapsed,
+    todaysEventsMinimized: minimized,
+    setTodaysEventsCollapsed,
+    setTodaysEventsMinimized,
+  } = useMyWorkPreferences();
 
-  useEffect(() => {
-    const stored = localStorage.getItem(COLLAPSE_KEY);
-    if (stored === 'true') setCollapsed(true);
-    const storedMin = localStorage.getItem(MINIMIZE_KEY);
-    if (storedMin === 'true') setMinimized(true);
-  }, []);
-
-  const toggleCollapsed = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    localStorage.setItem(COLLAPSE_KEY, String(next));
-  };
-
-  const toggleMinimized = () => {
-    const next = !minimized;
-    setMinimized(next);
-    localStorage.setItem(MINIMIZE_KEY, String(next));
-  };
+  const toggleCollapsed = () => setTodaysEventsCollapsed(!collapsed);
+  const toggleMinimized = () => setTodaysEventsMinimized(!minimized);
 
   const events = (data && 'events' in data) ? data.events : [];
 

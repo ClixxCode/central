@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { AssigneeAvatars } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { SubtaskIndicator } from './SubtaskIndicator';
-import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
+import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
 import type { MyTaskWithContext } from '@/lib/actions/tasks';
 
 interface PersonalTaskCardProps {
@@ -22,7 +22,7 @@ export function PersonalTaskCard({
   showClient,
   clientName,
 }: PersonalTaskCardProps) {
-  const { isColumnHidden } = usePersonalRollupStore();
+  const { isColumnHidden } = useMyWorkPreferences();
 
   const section = task.board.sectionOptions.find((s) => s.id === task.section);
   const status = task.board.statusOptions.find((s) => s.id === task.status);
