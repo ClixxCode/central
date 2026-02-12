@@ -7,6 +7,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from 'next-themes';
 import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { OfflineIndicator } from '@/components/pwa/OfflineIndicator';
+import { PWAUpdateHandler } from '@/components/pwa/PWAUpdateHandler';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
 
 function makeQueryClient() {
@@ -50,6 +51,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             {children}
             <PWAInstallPrompt />
             <OfflineIndicator />
+            <PWAUpdateHandler />
           </ThemeProvider>
         </RealtimeProvider>
         <ReactQueryDevtools initialIsOpen={false} />

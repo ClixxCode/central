@@ -46,24 +46,17 @@ const withPWA = withPWAInit({
       },
     },
     {
-      urlPattern: /\.(?:js)$/i,
+      // Only cache non-Next.js JS (e.g. third-party scripts). Next.js bundles
+      // use content-hashed filenames under /_next/ so Vercel's CDN handles them.
+      urlPattern: ({ url }: { url: URL }) => {
+        return url.pathname.endsWith('.js') && !url.pathname.startsWith('/_next/');
+      },
       handler: "StaleWhileRevalidate",
       options: {
         cacheName: "static-js-assets",
         expiration: {
-          maxEntries: 48,
-          maxAgeSeconds: 7 * 24 * 60 * 60, // 1 week
-        },
-      },
-    },
-    {
-      urlPattern: /\.(?:css|less)$/i,
-      handler: "StaleWhileRevalidate",
-      options: {
-        cacheName: "static-style-assets",
-        expiration: {
-          maxEntries: 32,
-          maxAgeSeconds: 7 * 24 * 60 * 60, // 1 week
+          maxEntries: 16,
+          maxAgeSeconds: 24 * 60 * 60, // 1 day
         },
       },
     },
