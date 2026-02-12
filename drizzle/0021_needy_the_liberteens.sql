@@ -1,0 +1,1 @@
+ALTER TABLE "extension_tokens" DROP COLUMN "revoked_at";

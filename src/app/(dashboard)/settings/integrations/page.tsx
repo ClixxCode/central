@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { CalendarConnectionCard } from '@/components/calendar/CalendarConnectionCard';
+import { ExtensionTokenCard } from '@/components/extension/ExtensionTokenCard';
 
 export const metadata: Metadata = {
   title: 'Integrations | Central',
@@ -16,6 +17,7 @@ export default function IntegrationsPage() {
         </p>
       </div>
       <CalendarConnectionCard />
+      <ExtensionTokenCard />
     </div>
   );
 }

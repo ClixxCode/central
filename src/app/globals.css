@@ -308,6 +308,8 @@
   .tiptap .mention {
     @apply bg-primary/10 text-primary rounded px-1 py-0.5 font-medium;
   }
+
+  /* Front conversation card — styles are inline in NodeView */
 }
 
 /* Drag and Drop Styles */

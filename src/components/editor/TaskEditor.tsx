@@ -170,6 +170,201 @@ const FileMention = Node.create({
   },
 });
 
+// Custom Front Conversation card — block node for linked Front conversations
+const FrontConversation = Node.create({
+  name: 'frontConversation',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: false,
+
+  addAttributes() {
+    const attr = (name: string, dataAttr?: string) => ({
+      default: null,
+      parseHTML: (element: HTMLElement) => element.getAttribute(dataAttr || `data-${name}`),
+      renderHTML: (attributes: Record<string, string | null>) => {
+        if (!attributes[name]) return {};
+        return { [dataAttr || `data-${name}`]: attributes[name] };
+      },
+    });
+    return {
+      url: attr('url', 'data-url'),
+      subject: attr('subject', 'data-subject'),
+      sender: attr('sender', 'data-sender'),
+      senderEmail: attr('senderEmail', 'data-sender-email'),
+      recipient: attr('recipient', 'data-recipient'),
+      date: attr('date', 'data-date'),
+      body: attr('body', 'data-body'),
+      preview: attr('preview', 'data-preview'), // legacy compat
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-type="frontConversation"]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, {
+        'data-type': 'frontConversation',
+        class: 'front-conversation-card',
+      }),
+    ];
+  },
+
+  addNodeView() {
+    return ({ node }) => {
+      // All styles inline to avoid CSS delivery / layer / purge issues
+      const dom = document.createElement('div');
+      dom.setAttribute('data-type', 'frontConversation');
+      dom.contentEditable = 'false';
+      Object.assign(dom.style, {
+        border: '1px solid var(--border)',
+        borderRadius: '0.5rem',
+        margin: '0.75rem 0',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        background: 'var(--card)',
+      });
+      dom.addEventListener('mouseenter', () => { dom.style.background = 'var(--accent)'; });
+      dom.addEventListener('mouseleave', () => { dom.style.background = 'var(--card)'; });
+
+      const url = node.attrs.url || '';
+      const subject = node.attrs.subject || '';
+      const sender = node.attrs.sender;
+      const senderEmail = node.attrs.senderEmail;
+      const recipient = node.attrs.recipient;
+      const date = node.attrs.date;
+      const body = node.attrs.body || node.attrs.preview || '';
+
+      if (url) {
+        dom.addEventListener('click', () => {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        });
+      }
+
+      // ── Header row: avatar + sender/to + date ──
+      const header = document.createElement('div');
+      Object.assign(header.style, {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '0.75rem',
+        padding: '0.75rem 1rem 0',
+      });
+
+      // Avatar
+      const avatar = document.createElement('div');
+      Object.assign(avatar.style, {
+        width: '2rem',
+        height: '2rem',
+        borderRadius: '9999px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '0.7rem',
+        fontWeight: '500',
+        flexShrink: '0',
+        background: 'var(--muted)',
+        color: 'var(--muted-foreground)',
+      });
+      const cleanName = (sender || '').replace(/\s*\(.*?\)\s*/g, ' ').trim();
+      const initials = cleanName
+        ? cleanName.split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
+        : senderEmail ? senderEmail[0].toUpperCase() : '?';
+      avatar.textContent = initials;
+      header.appendChild(avatar);
+
+      // Meta column
+      const meta = document.createElement('div');
+      Object.assign(meta.style, { flex: '1', minWidth: '0' });
+
+      const senderLine = document.createElement('div');
+      Object.assign(senderLine.style, { fontSize: '0.875rem', lineHeight: '1.375' });
+      if (sender) {
+        const nameSpan = document.createElement('span');
+        nameSpan.style.fontWeight = '600';
+        nameSpan.textContent = sender;
+        senderLine.appendChild(nameSpan);
+      }
+      if (senderEmail) {
+        const emailSpan = document.createElement('span');
+        Object.assign(emailSpan.style, { color: 'var(--muted-foreground)', fontWeight: '400' });
+        emailSpan.textContent = sender ? ` <${senderEmail}>` : senderEmail;
+        senderLine.appendChild(emailSpan);
+      }
+      if (!sender && !senderEmail && subject) {
+        const subjectSpan = document.createElement('span');
+        subjectSpan.style.fontWeight = '600';
+        subjectSpan.textContent = subject;
+        senderLine.appendChild(subjectSpan);
+      }
+      meta.appendChild(senderLine);
+
+      if (recipient) {
+        const toLine = document.createElement('div');
+        Object.assign(toLine.style, {
+          fontSize: '0.75rem',
+          color: 'var(--muted-foreground)',
+          marginTop: '0.125rem',
+        });
+        toLine.textContent = recipient;
+        meta.appendChild(toLine);
+      }
+      header.appendChild(meta);
+
+      // Date
+      if (date) {
+        const dateDiv = document.createElement('div');
+        Object.assign(dateDiv.style, {
+          fontSize: '0.75rem',
+          color: 'var(--muted-foreground)',
+          flexShrink: '0',
+          paddingTop: '0.125rem',
+        });
+        dateDiv.textContent = date;
+        header.appendChild(dateDiv);
+      }
+
+      dom.appendChild(header);
+
+      // ── Subject ──
+      if (subject && (sender || senderEmail)) {
+        const subjectDiv = document.createElement('div');
+        Object.assign(subjectDiv.style, {
+          fontSize: '0.75rem',
+          color: 'var(--muted-foreground)',
+          padding: '0.25rem 1rem 0',
+        });
+        subjectDiv.textContent = subject;
+        dom.appendChild(subjectDiv);
+      }
+
+      // ── Body ──
+      if (body) {
+        const bodyDiv = document.createElement('div');
+        Object.assign(bodyDiv.style, {
+          fontSize: '0.875rem',
+          padding: '0.5rem 1rem 0.75rem',
+          whiteSpace: 'pre-line',
+          display: '-webkit-box',
+          WebkitLineClamp: '4',
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        });
+        bodyDiv.textContent = body;
+        dom.appendChild(bodyDiv);
+      }
+
+      return { dom };
+    };
+  },
+
+  renderText({ node }) {
+    return node.attrs.subject || 'Front Conversation';
+  },
+});
+
 export interface TaskEditorProps {
   content?: TiptapContent | null;
   placeholder?: string;
@@ -494,6 +689,7 @@ export const TaskEditor = forwardRef<TaskEditorRef, TaskEditorProps>(
         TableRow,
         TableHeader,
         TableCell,
+        FrontConversation,
       ],
       content: content ?? undefined,
       editable: true, // Always start editable so table resize plugin registers; useEffect below syncs actual state

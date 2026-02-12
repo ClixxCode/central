@@ -151,3 +151,9 @@ export {
   useUpdateTemplateTaskPositions,
   templateKeys,
 } from './useTemplates';
+export {
+  useExtensionTokens,
+  useCreateExtensionToken,
+  useRevokeExtensionToken,
+  extensionTokenKeys,
+} from './useExtensionTokens';
