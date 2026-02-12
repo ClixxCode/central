@@ -130,6 +130,11 @@ export {
   calendarKeys,
 } from './useGoogleCalendar';
 export {
+  useSidebarPreferences,
+  useUpdateSidebarPreferences,
+  sidebarPreferencesKeys,
+} from './useSidebarPreferences';
+export {
   useTemplates,
   useTemplate,
   useCreateTemplate,

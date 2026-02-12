@@ -22,6 +22,10 @@ export interface UserPreferences {
     showScheduleInSidebar?: boolean;
     showEventsInMyWork?: boolean;
   };
+  sidebar?: {
+    hiddenNavItems?: string[];
+    navOrder?: string[];
+  };
   notifications: {
     email: NotificationChannelSettings & {
       digest: 'instant' | 'daily' | 'weekly' | 'none';

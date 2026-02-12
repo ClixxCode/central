@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { X, LayoutDashboard, CalendarDays, FolderKanban, Layers, Users, Settings, ChevronRight } from 'lucide-react';
+import { X, LayoutDashboard, CalendarDays, FolderKanban, LayoutTemplate, Layers, Users, Settings, ChevronRight, Building2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
 import { useFavorites } from '@/lib/hooks/useFavorites';
-import { useCalendarPreferences } from '@/lib/hooks';
+import { useCalendarPreferences, useSidebarPreferences } from '@/lib/hooks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useIsClient } from '@/hooks/useIsClient';
 import { Button } from '@/components/ui/button';
@@ -35,15 +36,33 @@ export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
   const { sidebarOpen, setSidebarOpen } = useUIStore();
   const { data: favorites = [] } = useFavorites();
   const { data: calPrefs } = useCalendarPreferences();
+  const { data: sidebarPrefs } = useSidebarPreferences();
 
   // Don't render the sheet until client-side to prevent hydration mismatch
   const isOpen = isClient ? sidebarOpen : false;
 
-  const navItems = [
-    { href: '/my-tasks', label: 'My Tasks', icon: LayoutDashboard },
-    ...(calPrefs?.showScheduleInSidebar ? [{ href: '/schedule', label: 'Schedule', icon: CalendarDays }] : []),
-    { href: '/rollups', label: 'Rollups', icon: FolderKanban },
-  ];
+  const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
+  const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Schedule', 'Templates'];
+  const savedNavOrder = sidebarPrefs?.navOrder;
+  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_NAV_ORDER;
+
+  const navItemDefs: Record<string, { href: string; label: string; icon: LucideIcon; alwaysVisible: boolean }> = {
+    'My Work': { href: '/my-tasks', label: 'My Tasks', icon: LayoutDashboard, alwaysVisible: true },
+    'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
+    'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
+    'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
+    'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
+  };
+
+  const availableLabels = new Set(Object.keys(navItemDefs));
+  if (!calPrefs?.showScheduleInSidebar) availableLabels.delete('Schedule');
+
+  const navItems = navOrder
+    .filter((label) => availableLabels.has(label))
+    .map((label) => navItemDefs[label])
+    .filter((item) => item.alwaysVisible || !hiddenNavItems.includes(item.label));
+
+  const showClientsSection = !hiddenNavItems.includes('Clients');
 
   const adminItems = [
     { href: '/settings/users', label: 'Users', icon: Users },
@@ -154,6 +173,7 @@ export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
             )}
 
             {/* Clients Section */}
+            {showClientsSection && clients.length > 0 && (
             <div>
               <div className="px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -205,6 +225,7 @@ export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
                 ))}
               </div>
             </div>
+            )}
 
             {/* Admin Section */}
             {isAdmin && (

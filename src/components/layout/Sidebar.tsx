@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -16,7 +16,12 @@ import {
   PanelLeftClose,
   PanelLeft,
   Star,
+  MoreHorizontal,
+  X,
+  Building2,
+  GripVertical,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -28,7 +33,8 @@ import type { FavoriteWithDetails } from '@/lib/db/schema';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useIsClient } from '@/hooks/useIsClient';
 import { useFavoriteHintKeys } from '@/lib/hooks/useFavoriteHintKeys';
-import { useCalendarPreferences } from '@/lib/hooks';
+import { useCalendarPreferences, useSidebarPreferences, useUpdateSidebarPreferences } from '@/lib/hooks';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -124,6 +130,60 @@ function SortableFavoriteItem({ favorite, isActive, href, hintKey }: SortableFav
   );
 }
 
+const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Schedule', 'Templates'];
+
+interface SortableNavEditItemProps {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  alwaysVisible: boolean;
+  isHidden: boolean;
+  onToggle: (checked: boolean) => void;
+}
+
+function SortableNavEditItem({ id, label, icon: Icon, alwaysVisible, isHidden, onToggle }: SortableNavEditItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-3 py-1.5 rounded-md',
+        isDragging && 'opacity-50 bg-accent',
+      )}
+    >
+      <button
+        className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/50 hover:text-muted-foreground"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      {!alwaysVisible ? (
+        <label className="flex flex-1 items-center gap-3 cursor-pointer">
+          <Checkbox
+            checked={!isHidden}
+            onCheckedChange={(checked) => onToggle(!!checked)}
+          />
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm">{label}</span>
+        </label>
+      ) : (
+        <div className="flex flex-1 items-center gap-3">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm">{label}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface SidebarProps {
   clients: Client[];
   isAdmin?: boolean;
@@ -142,10 +202,57 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
     isSectionCollapsed,
   } = useUIStore();
   const { data: calPrefs } = useCalendarPreferences();
+  const { data: sidebarPrefs } = useSidebarPreferences();
+  const updateSidebarPrefs = useUpdateSidebarPreferences();
   const { data: favorites = [] } = useFavorites();
   const reorderFavorites = useReorderFavorites();
   const fKeyHeld = useFavoriteHintKeys();
   const { resolvedTheme } = useTheme();
+
+  // Edit mode state
+  const [editMode, setEditMode] = useState(false);
+  const [draftHiddenNav, setDraftHiddenNav] = useState<string[]>([]);
+  const [draftNavOrder, setDraftNavOrder] = useState<string[]>(DEFAULT_NAV_ORDER);
+
+  const enterEditMode = () => {
+    setDraftHiddenNav(sidebarPrefs?.hiddenNavItems ?? []);
+    const savedOrder = sidebarPrefs?.navOrder;
+    setDraftNavOrder(savedOrder && savedOrder.length > 0 ? savedOrder : DEFAULT_NAV_ORDER);
+    setEditMode(true);
+  };
+
+  const cancelEditMode = () => {
+    setEditMode(false);
+  };
+
+  const saveEditMode = () => {
+    updateSidebarPrefs.mutate({
+      hiddenNavItems: draftHiddenNav,
+      navOrder: draftNavOrder,
+    });
+    setEditMode(false);
+  };
+
+  const handleNavEditDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setDraftNavOrder((prev) => {
+        const oldIndex = prev.indexOf(active.id as string);
+        const newIndex = prev.indexOf(over.id as string);
+        const next = [...prev];
+        const [removed] = next.splice(oldIndex, 1);
+        next.splice(newIndex, 0, removed);
+        return next;
+      });
+    }
+  };
+
+  // Exit edit mode when sidebar is collapsed
+  useEffect(() => {
+    if (sidebarCollapsed) {
+      setEditMode(false);
+    }
+  }, [sidebarCollapsed]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -189,12 +296,38 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
   const isCollapsed = isClient ? sidebarCollapsed : false;
   const clientsExpanded = isClient ? expandedClients : [];
 
-  const navItems = [
-    { href: '/my-tasks', label: 'My Work', icon: LayoutDashboard },
-    ...(calPrefs?.showScheduleInSidebar ? [{ href: '/schedule', label: 'Schedule', icon: CalendarDays }] : []),
-    { href: '/rollups', label: 'Rollups', icon: FolderKanban },
-    { href: '/templates', label: 'Templates', icon: LayoutTemplate },
-  ];
+  const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
+  const savedNavOrder = sidebarPrefs?.navOrder;
+  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_NAV_ORDER;
+
+  const navItemDefs: Record<string, { href: string; label: string; icon: LucideIcon; alwaysVisible: boolean }> = {
+    'My Work': { href: '/my-tasks', label: 'My Work', icon: LayoutDashboard, alwaysVisible: true },
+    'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
+    'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
+    'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
+    'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
+  };
+
+  // Build available items based on settings, then sort by saved order
+  const availableLabels = new Set(Object.keys(navItemDefs));
+  if (!calPrefs?.showScheduleInSidebar) availableLabels.delete('Schedule');
+
+  const allNavItems = navOrder
+    .filter((label) => availableLabels.has(label))
+    .map((label) => navItemDefs[label]);
+
+  // Include any items not yet in the saved order (e.g. newly added items)
+  for (const label of availableLabels) {
+    if (!navOrder.includes(label)) {
+      allNavItems.push(navItemDefs[label]);
+    }
+  }
+
+  const navItems = allNavItems.filter(
+    (item) => item.alwaysVisible || !hiddenNavItems.includes(item.label)
+  );
+
+  const showClientsSection = !hiddenNavItems.includes('Clients');
 
   // Prevent hydration mismatch by not rendering until client-side
   // This avoids the sidebar "sliding in" when localStorage state differs from SSR default
@@ -250,6 +383,68 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
         </div>
 
         <ScrollArea className="flex-1 overflow-hidden">
+          {editMode && !isCollapsed ? (
+            <div className="flex flex-col h-full">
+              {/* Edit mode header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <span className="text-sm font-semibold">Edit sidebar</span>
+                <button
+                  onClick={cancelEditMode}
+                  className="p-1 rounded-md hover:bg-accent"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+
+              <div className="px-3 py-4">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleNavEditDragEnd}
+                >
+                  <SortableContext
+                    items={draftNavOrder.filter((label) => availableLabels.has(label))}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1">
+                      {draftNavOrder
+                        .filter((label) => availableLabels.has(label))
+                        .map((label) => {
+                          const def = navItemDefs[label];
+                          return (
+                            <SortableNavEditItem
+                              key={label}
+                              id={label}
+                              label={def.label}
+                              icon={def.icon}
+                              alwaysVisible={def.alwaysVisible}
+                              isHidden={draftHiddenNav.includes(label)}
+                              onToggle={(checked) => {
+                                setDraftHiddenNav((prev) =>
+                                  checked
+                                    ? prev.filter((n) => n !== label)
+                                    : [...prev, label]
+                                );
+                              }}
+                            />
+                          );
+                        })}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center gap-2 px-4 py-3 border-t mt-auto">
+                <Button variant="outline" size="sm" onClick={cancelEditMode} className="flex-1">
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={saveEditMode} className="flex-1">
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
           <div className="px-2 py-4">
           {/* Main Navigation */}
           <nav className="space-y-1">
@@ -278,20 +473,40 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                 );
               }
 
+              const isMyWork = item.label === 'My Work';
+
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                    isActive
-                      ? 'bg-blue-100 text-blue-700 font-medium'
-                      : 'text-muted-foreground hover:bg-accent'
+                <div key={item.href} className={cn(isMyWork && 'group relative')}>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                      isActive
+                        ? 'bg-blue-100 text-blue-700 font-medium'
+                        : 'text-muted-foreground hover:bg-accent'
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                  {isMyWork && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            enterEditMode();
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                        >
+                          <MoreHorizontal className="h-4 w-4 text-foreground" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>Edit sidebar</TooltipContent>
+                    </Tooltip>
                   )}
-                >
-                  <Icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
+                </div>
               );
             })}
           </nav>
@@ -410,38 +625,22 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
           )}
 
           {/* Clients Section */}
-          {!isCollapsed && (
+          {!isCollapsed && showClientsSection && clients.length > 0 && (
             <div className="mt-6">
-              <div className="group flex items-center justify-between px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Link
-                    href="/clients"
-                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Clients
-                  </Link>
-                  <button onClick={() => toggleSection('clients')}>
-                    <ChevronDown
-                      className={cn(
-                        'h-3 w-3 text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-all',
-                        isSectionCollapsed('clients') && '-rotate-90'
-                      )}
-                    />
-                  </button>
-                </div>
-                {isAdmin && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
-                        <Link href="/clients/new">
-                          <Plus className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Add Client</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+              <button
+                onClick={() => toggleSection('clients')}
+                className="group flex items-center gap-2 px-3 py-2 w-full"
+              >
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Clients
+                </span>
+                <ChevronDown
+                  className={cn(
+                    'h-3 w-3 text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-all',
+                    isSectionCollapsed('clients') && '-rotate-90'
+                  )}
+                />
+              </button>
 
               {!isSectionCollapsed('clients') && <div className="space-y-1">
                 {clients.map((client) => {
@@ -545,6 +744,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
             </div>
           )}
           </div>
+          )}
         </ScrollArea>
       </aside>
     </TooltipProvider>

@@ -299,6 +299,46 @@ export async function updatePersonalListVisibility(hidden: boolean): Promise<{
 }
 
 /**
+ * Update sidebar display preferences
+ */
+export async function updateSidebarPreferences(input: {
+  hiddenNavItems?: string[];
+  navOrder?: string[];
+}): Promise<{
+  success: boolean;
+  preferences?: UserPreferences;
+  error?: string;
+}> {
+  const user = await requireAuth();
+
+  const dbUser = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { preferences: true },
+  });
+
+  if (!dbUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  const currentPrefs = mergeWithDefaults(dbUser.preferences as UserPreferences | null);
+  const newPrefs: UserPreferences = {
+    ...currentPrefs,
+    sidebar: {
+      ...currentPrefs.sidebar,
+      ...(input.hiddenNavItems !== undefined && { hiddenNavItems: input.hiddenNavItems }),
+      ...(input.navOrder !== undefined && { navOrder: input.navOrder }),
+    },
+  };
+
+  await db
+    .update(users)
+    .set({ preferences: newPrefs, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+
+  return { success: true, preferences: newPrefs };
+}
+
+/**
  * Update calendar display preferences
  */
 export async function updateCalendarPreferences(input: {
@@ -357,6 +397,10 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
     calendar: {
       showScheduleInSidebar: prefs.calendar?.showScheduleInSidebar ?? false,
       showEventsInMyWork: prefs.calendar?.showEventsInMyWork ?? true,
+    },
+    sidebar: {
+      hiddenNavItems: prefs.sidebar?.hiddenNavItems ?? [],
+      navOrder: prefs.sidebar?.navOrder ?? [],
     },
     notifications: {
       email: {
