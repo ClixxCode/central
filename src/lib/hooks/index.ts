@@ -26,6 +26,7 @@ export {
   useDeleteTask,
   useUpdateTaskPositions,
   useBulkUpdateTasks,
+  useBulkDuplicateTasks,
   useSubtasks,
   useCreateSubtask,
   useArchivedTasks,

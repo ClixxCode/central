@@ -2729,3 +2729,161 @@ export async function bulkUpdateTasks(input: BulkUpdateTasksInput): Promise<{
 
   return { success: true, updatedCount: input.taskIds.length };
 }
+
+/**
+ * Duplicate multiple tasks (including their subtasks and assignees)
+ */
+export async function bulkDuplicateTasks(taskIds: string[]): Promise<{
+  success: boolean;
+  duplicatedCount?: number;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  if (!taskIds.length) {
+    return { success: false, error: 'No tasks specified' };
+  }
+
+  // Fetch all source tasks
+  const sourceTasks = await db
+    .select()
+    .from(tasks)
+    .where(inArray(tasks.id, taskIds));
+
+  if (sourceTasks.length !== taskIds.length) {
+    return { success: false, error: 'Some tasks not found' };
+  }
+
+  // Verify board access for all unique boards
+  const uniqueBoardIds = [...new Set(sourceTasks.map((t) => t.boardId))];
+  for (const boardId of uniqueBoardIds) {
+    const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+    if (!accessLevel) {
+      return { success: false, error: 'Access denied to one or more boards' };
+    }
+  }
+
+  // Fetch assignees for all source tasks
+  const sourceAssignees = await db
+    .select({ taskId: taskAssignees.taskId, userId: taskAssignees.userId })
+    .from(taskAssignees)
+    .where(inArray(taskAssignees.taskId, taskIds));
+
+  const assigneesByTask = new Map<string, string[]>();
+  for (const a of sourceAssignees) {
+    const list = assigneesByTask.get(a.taskId) ?? [];
+    list.push(a.userId);
+    assigneesByTask.set(a.taskId, list);
+  }
+
+  // Fetch subtasks for all source tasks
+  const sourceSubtasks = await db
+    .select()
+    .from(tasks)
+    .where(inArray(tasks.parentTaskId, taskIds));
+
+  const subtasksByParent = new Map<string, (typeof sourceSubtasks)[number][]>();
+  for (const st of sourceSubtasks) {
+    const list = subtasksByParent.get(st.parentTaskId!) ?? [];
+    list.push(st);
+    subtasksByParent.set(st.parentTaskId!, list);
+  }
+
+  // Fetch assignees for all subtasks
+  const subtaskIds = sourceSubtasks.map((st) => st.id);
+  const subtaskAssignees = subtaskIds.length > 0
+    ? await db
+        .select({ taskId: taskAssignees.taskId, userId: taskAssignees.userId })
+        .from(taskAssignees)
+        .where(inArray(taskAssignees.taskId, subtaskIds))
+    : [];
+
+  const subtaskAssigneesByTask = new Map<string, string[]>();
+  for (const a of subtaskAssignees) {
+    const list = subtaskAssigneesByTask.get(a.taskId) ?? [];
+    list.push(a.userId);
+    subtaskAssigneesByTask.set(a.taskId, list);
+  }
+
+  // Duplicate each task
+  let duplicatedCount = 0;
+
+  for (const source of sourceTasks) {
+    // Get max position for the board (scoped to top-level tasks)
+    const maxPosResult = await db
+      .select({ maxPos: sql<number>`COALESCE(MAX(${tasks.position}), -1)` })
+      .from(tasks)
+      .where(and(eq(tasks.boardId, source.boardId), isNull(tasks.parentTaskId)));
+
+    const newPosition = (maxPosResult[0]?.maxPos ?? -1) + 1;
+
+    // Create the duplicate task
+    const [newTask] = await db
+      .insert(tasks)
+      .values({
+        boardId: source.boardId,
+        title: `${source.title} (copy)`,
+        description: source.description,
+        status: source.status,
+        section: source.section,
+        dueDate: source.dueDate,
+        dateFlexibility: source.dateFlexibility,
+        parentTaskId: null,
+        position: newPosition,
+        createdBy: user.id,
+      })
+      .returning();
+
+    // Copy assignees
+    const taskAssigneeIds = assigneesByTask.get(source.id) ?? [];
+    if (taskAssigneeIds.length > 0) {
+      await db.insert(taskAssignees).values(
+        taskAssigneeIds.map((userId) => ({ taskId: newTask.id, userId }))
+      );
+    }
+
+    // Duplicate subtasks
+    const subtasks = subtasksByParent.get(source.id) ?? [];
+    for (const subtask of subtasks) {
+      const [newSubtask] = await db
+        .insert(tasks)
+        .values({
+          boardId: newTask.boardId,
+          title: subtask.title,
+          description: subtask.description,
+          status: subtask.status,
+          section: subtask.section,
+          dueDate: subtask.dueDate,
+          dateFlexibility: subtask.dateFlexibility,
+          parentTaskId: newTask.id,
+          position: subtask.position,
+          createdBy: user.id,
+        })
+        .returning();
+
+      // Copy subtask assignees
+      const stAssigneeIds = subtaskAssigneesByTask.get(subtask.id) ?? [];
+      if (stAssigneeIds.length > 0) {
+        await db.insert(taskAssignees).values(
+          stAssigneeIds.map((userId) => ({ taskId: newSubtask.id, userId }))
+        );
+      }
+    }
+
+    // Log board activity
+    logBoardActivity({
+      boardId: newTask.boardId,
+      taskId: newTask.id,
+      taskTitle: newTask.title,
+      userId: user.id,
+      action: 'task_created',
+    }).catch((err) => console.error('Failed to log board activity:', err));
+
+    duplicatedCount++;
+  }
+
+  revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
+
+  return { success: true, duplicatedCount };
+}

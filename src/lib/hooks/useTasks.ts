@@ -16,6 +16,7 @@ import {
   bulkArchiveDone,
   listArchivedTasks,
   bulkUpdateTasks,
+  bulkDuplicateTasks,
   TaskWithAssignees,
   CreateTaskInput,
   UpdateTaskInput,
@@ -615,6 +616,31 @@ export function useBulkArchiveDone(boardId: string) {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.archivedTasks(boardId) });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+    },
+  });
+}
+
+/**
+ * Hook to duplicate multiple tasks (including subtasks and assignees)
+ */
+export function useBulkDuplicateTasks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskIds: string[]) => {
+      const result = await bulkDuplicateTasks(taskIds);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to duplicate tasks');
+      }
+      return result.duplicatedCount!;
+    },
+    onSuccess: (count) => {
+      toast.success(`Duplicated ${count} task${count === 1 ? '' : 's'}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.details() });
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
     },
   });

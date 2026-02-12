@@ -23,6 +23,7 @@ import {
   useAssignableUsers,
   useTask,
   useBulkUpdateTasks,
+  useBulkDuplicateTasks,
   taskKeys,
 } from '@/lib/hooks/useTasks';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
@@ -95,6 +96,7 @@ export function BoardPageClient({
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const bulkUpdate = useBulkUpdateTasks();
+  const bulkDuplicate = useBulkDuplicateTasks();
 
   // Realtime: invalidate board tasks when any task in this board changes
   useRealtimeInvalidation({
@@ -194,6 +196,13 @@ export function BoardPageClient({
     },
     [selectedTaskIds, bulkUpdate, clearSelection]
   );
+
+  // Handle duplicate
+  const handleBulkDuplicate = React.useCallback(() => {
+    bulkDuplicate.mutate(Array.from(selectedTaskIds), {
+      onSuccess: () => clearSelection(),
+    });
+  }, [selectedTaskIds, bulkDuplicate, clearSelection]);
 
   // Handle confirmed move
   const handleConfirmMove = React.useCallback(() => {
@@ -427,8 +436,10 @@ export function BoardPageClient({
           assignableUsers={assignableUsers}
           currentBoardId={boardId}
           onApply={handleBulkApply}
+          onDuplicate={handleBulkDuplicate}
           onCancel={clearSelection}
           isPending={bulkUpdate.isPending}
+          isDuplicating={bulkDuplicate.isPending}
         />
       )}
 

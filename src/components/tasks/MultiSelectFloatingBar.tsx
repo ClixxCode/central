@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
-import { Building2, CalendarIcon, CircleDot, User, FolderOpen, X } from 'lucide-react';
+import { Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useClients } from '@/lib/hooks/useClients';
@@ -29,8 +29,10 @@ interface MultiSelectFloatingBarProps {
   assignableUsers: AssigneeUser[];
   currentBoardId: string;
   onApply: (updates: BulkEditPayload) => void;
+  onDuplicate: () => void;
   onCancel: () => void;
   isPending: boolean;
+  isDuplicating: boolean;
 }
 
 export function MultiSelectFloatingBar({
@@ -40,8 +42,10 @@ export function MultiSelectFloatingBar({
   assignableUsers,
   currentBoardId,
   onApply,
+  onDuplicate,
   onCancel,
   isPending,
+  isDuplicating,
 }: MultiSelectFloatingBarProps) {
   // Pending edits
   const [pendingStatus, setPendingStatus] = React.useState<string | undefined>();
@@ -419,6 +423,22 @@ export function MultiSelectFloatingBar({
             </div>
           )}
         </div>
+
+        {/* Divider */}
+        <div className="mx-1 h-6 w-px bg-border" />
+
+        {/* Duplicate */}
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          onClick={onDuplicate}
+          disabled={isDuplicating}
+          className="gap-1 text-xs h-8 px-2"
+        >
+          <Copy className="h-3.5 w-3.5" />
+          {isDuplicating ? 'Duplicating...' : 'Duplicate'}
+        </Button>
 
         {/* Divider */}
         <div className="mx-1 h-6 w-px bg-border" />
