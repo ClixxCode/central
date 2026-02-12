@@ -1,8 +1,8 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { clients, boards, boardAccess, teamMembers, teams } from '@/lib/db/schema';
-import { eq, and, inArray, or, isNotNull } from 'drizzle-orm';
+import { clients, boards, boardAccess, teamMembers, teams, statuses, sections } from '@/lib/db/schema';
+import { eq, and, inArray, or, isNotNull, asc } from 'drizzle-orm';
 import { getCurrentUser, requireAdmin, isAdmin } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createClientSchema, updateClientSchema, type CreateClientInput, type UpdateClientInput } from '@/lib/validations/client';
@@ -403,6 +403,39 @@ export async function createClient(input: CreateClientInput): Promise<ActionResu
       })
       .returning();
 
+    // Create a default board with the same name as the client
+    const globalStatuses = await db.query.statuses.findMany({
+      orderBy: [asc(statuses.position)],
+    });
+    const boardStatusOptions = globalStatuses.length > 0
+      ? globalStatuses.map((s) => ({ id: s.id, label: s.label, color: s.color, position: s.position }))
+      : undefined;
+
+    const globalSections = await db.query.sections.findMany({
+      orderBy: [asc(sections.position)],
+    });
+    const boardSectionOptions = globalSections.length > 0
+      ? globalSections.map((s) => ({ id: s.id, label: s.label, color: s.color, position: s.position }))
+      : [];
+
+    const [defaultBoard] = await db
+      .insert(boards)
+      .values({
+        clientId: newClient.id,
+        name,
+        type: 'standard',
+        statusOptions: boardStatusOptions,
+        sectionOptions: boardSectionOptions,
+        createdBy: user.id,
+      })
+      .returning();
+
+    // Set it as the client's default board
+    await db
+      .update(clients)
+      .set({ defaultBoardId: defaultBoard.id })
+      .where(eq(clients.id, newClient.id));
+
     revalidatePath('/clients');
     revalidatePath('/', 'layout');
 
@@ -415,11 +448,11 @@ export async function createClient(input: CreateClientInput): Promise<ActionResu
         color: newClient.color,
         icon: newClient.icon,
         leadUserId: newClient.leadUserId,
-        defaultBoardId: newClient.defaultBoardId,
+        defaultBoardId: defaultBoard.id,
         metadata: newClient.metadata,
         createdBy: newClient.createdBy,
         createdAt: newClient.createdAt,
-        boards: [],
+        boards: [{ id: defaultBoard.id, name: defaultBoard.name, type: defaultBoard.type as 'standard' }],
       },
     };
   } catch (error) {
