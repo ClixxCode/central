@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, LayoutTemplate } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,8 @@ import { SectionOptionsEditor } from '@/components/boards/BoardSettings/SectionO
 import { AccessManagement } from '@/components/boards/BoardSettings/AccessManagement';
 import { ActivityLog } from '@/components/boards/BoardSettings/ActivityLog';
 import { ArchivedTasksTab } from '@/components/boards/BoardSettings/ArchivedTasksTab';
-import { useBoard, useUpdateBoard } from '@/lib/hooks';
+import { SaveBoardAsTemplateDialog } from '@/components/templates/SaveBoardAsTemplateDialog';
+import { useBoard, useUpdateBoard, useTasks } from '@/lib/hooks';
 import type { BoardWithAccess } from '@/lib/actions/boards';
 
 interface BoardSettingsPageProps {
@@ -30,11 +31,13 @@ export function BoardSettingsPage({
 }: BoardSettingsPageProps) {
   const { data: board } = useBoard(boardId);
   const updateBoard = useUpdateBoard();
+  const { data: tasks } = useTasks(boardId);
 
   const displayBoard = board ?? initialData;
 
   const [name, setName] = useState(displayBoard.name);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
 
   const handleSaveName = async () => {
     setNameError(null);
@@ -161,6 +164,29 @@ export function BoardSettingsPage({
               />
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Save as Template</CardTitle>
+              <CardDescription>
+                Create a reusable template from this board&apos;s configuration and tasks.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" onClick={() => setSaveAsTemplateOpen(true)}>
+                <LayoutTemplate className="mr-2 size-4" />
+                Save as Template
+              </Button>
+            </CardContent>
+          </Card>
+
+          <SaveBoardAsTemplateDialog
+            open={saveAsTemplateOpen}
+            onOpenChange={setSaveAsTemplateOpen}
+            boardId={boardId}
+            boardName={displayBoard.name}
+            taskCount={tasks?.length}
+          />
         </TabsContent>
 
         {/* Activity Log Tab */}
