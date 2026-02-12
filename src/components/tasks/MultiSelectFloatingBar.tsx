@@ -5,6 +5,17 @@ import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useClients } from '@/lib/hooks/useClients';
 import { getDateSuggestions } from '@/lib/utils/parse-natural-date';
@@ -428,17 +439,32 @@ export function MultiSelectFloatingBar({
         <div className="mx-1 h-6 w-px bg-border" />
 
         {/* Duplicate */}
-        <Button
-          variant="outline"
-          size="sm"
-          type="button"
-          onClick={onDuplicate}
-          disabled={isDuplicating}
-          className="gap-1 text-xs h-8 px-2"
-        >
-          <Copy className="h-3.5 w-3.5" />
-          {isDuplicating ? 'Duplicating...' : 'Duplicate'}
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={isDuplicating}
+              className="gap-1 text-xs h-8 px-2"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {isDuplicating ? 'Duplicating...' : 'Duplicate'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Duplicate {selectedCount} task{selectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will create {selectedCount === 1 ? 'a copy' : `${selectedCount} copies`} of the selected task{selectedCount === 1 ? '' : 's'} with the same details.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={onDuplicate}>Duplicate</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Divider */}
         <div className="mx-1 h-6 w-px bg-border" />

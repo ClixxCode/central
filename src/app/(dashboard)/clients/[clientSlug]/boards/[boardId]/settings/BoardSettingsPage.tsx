@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, LayoutTemplate } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,8 @@ import { AccessManagement } from '@/components/boards/BoardSettings/AccessManage
 import { ActivityLog } from '@/components/boards/BoardSettings/ActivityLog';
 import { ArchivedTasksTab } from '@/components/boards/BoardSettings/ArchivedTasksTab';
 import { SaveBoardAsTemplateDialog } from '@/components/templates/SaveBoardAsTemplateDialog';
-import { useBoard, useUpdateBoard, useTasks } from '@/lib/hooks';
+import { DeleteBoardDialog } from '@/components/boards/DeleteBoardDialog';
+import { useBoard, useUpdateBoard, useDeleteBoard, useTasks } from '@/lib/hooks';
 import type { BoardWithAccess } from '@/lib/actions/boards';
 
 interface BoardSettingsPageProps {
@@ -29,8 +31,10 @@ export function BoardSettingsPage({
   initialData,
   isAdmin,
 }: BoardSettingsPageProps) {
+  const router = useRouter();
   const { data: board } = useBoard(boardId);
   const updateBoard = useUpdateBoard();
+  const deleteBoard = useDeleteBoard();
   const { data: tasks } = useTasks(boardId);
 
   const displayBoard = board ?? initialData;
@@ -38,6 +42,7 @@ export function BoardSettingsPage({
   const [name, setName] = useState(displayBoard.name);
   const [nameError, setNameError] = useState<string | null>(null);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleSaveName = async () => {
     setNameError(null);
@@ -71,6 +76,11 @@ export function BoardSettingsPage({
     });
   };
 
+  const handleDeleteBoard = async () => {
+    await deleteBoard.mutateAsync(boardId);
+    router.push(`/clients/${clientSlug}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -94,16 +104,16 @@ export function BoardSettingsPage({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="general">
+      <Tabs defaultValue={isAdmin ? 'general' : 'activity'}>
         <TabsList>
-          <TabsTrigger value="general">General</TabsTrigger>
+          {isAdmin && <TabsTrigger value="general">General</TabsTrigger>}
           {isAdmin && <TabsTrigger value="access">Access</TabsTrigger>}
           <TabsTrigger value="activity">Activity Log</TabsTrigger>
           {isAdmin && <TabsTrigger value="archived">Archived Tasks</TabsTrigger>}
         </TabsList>
 
-        {/* General Tab */}
-        <TabsContent value="general" className="mt-6 space-y-6">
+        {/* General Tab (Admin only) */}
+        {isAdmin && <TabsContent value="general" className="mt-6 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Board Name</CardTitle>
@@ -187,7 +197,29 @@ export function BoardSettingsPage({
             boardName={displayBoard.name}
             taskCount={tasks?.length}
           />
-        </TabsContent>
+
+          <Card className="border-destructive bg-destructive/10">
+            <CardHeader>
+              <CardTitle>Delete Board</CardTitle>
+              <CardDescription>
+                Permanently delete this board and all of its tasks, comments, and attachments.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                Delete Board
+              </Button>
+            </CardContent>
+          </Card>
+
+          <DeleteBoardDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            board={displayBoard}
+            onConfirm={handleDeleteBoard}
+            isPending={deleteBoard.isPending}
+          />
+        </TabsContent>}
 
         {/* Activity Log Tab */}
         <TabsContent value="activity" className="mt-6">

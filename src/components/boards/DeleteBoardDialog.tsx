@@ -1,8 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -10,6 +10,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface DeleteBoardDialogProps {
   open: boolean;
@@ -26,27 +28,60 @@ export function DeleteBoardDialog({
   onConfirm,
   isPending,
 }: DeleteBoardDialogProps) {
+  const [confirmText, setConfirmText] = useState('');
+
   if (!board) return null;
 
+  const isMatch = confirmText === board.name;
+
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setConfirmText('');
+        onOpenChange(next);
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Board</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to delete <strong>{board.name}</strong>? This will
-            delete all tasks and comments in this board. This action cannot be undone.
+          <AlertDialogDescription asChild>
+            <div className="space-y-3">
+              <p>
+                This will permanently delete <strong>{board.name}</strong> and
+                all of its tasks, comments, and attachments. This action cannot
+                be undone.
+              </p>
+              <p>
+                Type{' '}
+                <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono text-sm select-all">
+                  {board.name}
+                </code>{' '}
+                to confirm.
+              </p>
+              <Input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder={board.name}
+                autoFocus
+              />
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onConfirm}
-            disabled={isPending}
-            className="bg-destructive hover:bg-destructive/90 focus:ring-destructive"
+        <AlertDialogFooter className="flex-row sm:flex-row">
+          <Button
+            variant="destructive"
+            onClick={() => {
+              onConfirm();
+              setConfirmText('');
+            }}
+            disabled={!isMatch || isPending}
           >
             {isPending ? 'Deleting...' : 'Delete'}
-          </AlertDialogAction>
+          </Button>
+          <AlertDialogCancel disabled={isPending} onClick={() => setConfirmText('')}>
+            Cancel
+          </AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
