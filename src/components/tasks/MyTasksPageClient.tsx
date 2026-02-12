@@ -658,7 +658,7 @@ export function MyTasksPageClient() {
     staleTime: 5 * 60 * 1000,
   });
   const hidePersonalList = userPrefs?.hidePersonalList ?? false;
-  const showCalendarEvents = userPrefs?.calendar?.showEventsInMyWork ?? true;
+  const showCalendarEvents = userPrefs?.calendar?.showEventsInMyWork === true;
 
   // Derive active tab from URL param (reactive) or stored preference
   const urlTab = searchParams.get('tab');
