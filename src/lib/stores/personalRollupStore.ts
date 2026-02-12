@@ -28,6 +28,9 @@ interface PersonalRollupState {
   activeTab: 'tasks' | 'notifications' | 'personal';
   // Personal list view mode
   personalListViewMode: 'kanban' | 'table';
+  // Priority selection
+  prioritySelectionMode: boolean;
+  priorityFilterActive: boolean;
 
   // Actions
   toggleClient: (clientId: string) => void;
@@ -40,6 +43,9 @@ interface PersonalRollupState {
   setTableSort: (sort: TableSortConfig) => void;
   setActiveTab: (tab: 'tasks' | 'notifications' | 'personal') => void;
   setPersonalListViewMode: (mode: 'kanban' | 'table') => void;
+  setPrioritySelectionMode: (mode: boolean) => void;
+  setPriorityFilterActive: (active: boolean) => void;
+  togglePriorityFilter: () => void;
 }
 
 export const usePersonalRollupStore = create<PersonalRollupState>()(
@@ -61,6 +67,8 @@ export const usePersonalRollupStore = create<PersonalRollupState>()(
       },
       activeTab: 'tasks' as const,
       personalListViewMode: 'kanban' as const,
+      prioritySelectionMode: false,
+      priorityFilterActive: false,
 
       toggleClient: (clientId) =>
         set((state) => ({
@@ -97,6 +105,9 @@ export const usePersonalRollupStore = create<PersonalRollupState>()(
 
       setActiveTab: (tab) => set({ activeTab: tab }),
       setPersonalListViewMode: (mode) => set({ personalListViewMode: mode }),
+      setPrioritySelectionMode: (mode) => set({ prioritySelectionMode: mode }),
+      setPriorityFilterActive: (active) => set({ priorityFilterActive: active }),
+      togglePriorityFilter: () => set((state) => ({ priorityFilterActive: !state.priorityFilterActive })),
     }),
     {
       name: 'clix-pm-personal-rollup',

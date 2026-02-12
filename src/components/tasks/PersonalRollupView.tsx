@@ -37,9 +37,13 @@ interface BoardGroup {
 interface PersonalRollupViewProps {
   tasksByClient: MyTasksByClient[];
   viewMode?: 'swimlane' | 'table';
+  prioritySelectionMode?: boolean;
+  priorityFilterActive?: boolean;
+  priorityTaskIds?: Set<string>;
+  onTogglePriority?: (taskId: string) => void;
 }
 
-export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: PersonalRollupViewProps) {
+export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prioritySelectionMode, priorityFilterActive, priorityTaskIds, onTogglePriority }: PersonalRollupViewProps) {
   const router = useRouter();
   const {
     isClientCollapsed,
@@ -280,7 +284,13 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
           tasks={tableTasks}
           statusOptions={allStatusOptions}
           sectionOptions={allSectionOptions}
-          onTaskClick={setSelectedTaskId}
+          onTaskClick={(taskId) => {
+            if (prioritySelectionMode && onTogglePriority) {
+              onTogglePriority(taskId);
+            } else {
+              setSelectedTaskId(taskId);
+            }
+          }}
           onNavigateToSource={(task) => {
             if (task.clientSlug && task.boardId) {
               router.push(`/clients/${task.clientSlug}/boards/${task.boardId}`);
@@ -291,6 +301,9 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
           columns={tableColumns}
           showSource
           emptyMessage="No tasks assigned to you"
+          prioritySelectionMode={prioritySelectionMode}
+          priorityFilterActive={priorityFilterActive}
+          priorityTaskIds={priorityTaskIds}
         />
       ) : (
         // Swimlane view - grouped by Client + Board with status columns
@@ -304,7 +317,13 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
                   group={group}
                   isCollapsed={isCollapsed}
                   onToggleCollapse={() => toggleClient(group.boardId)}
-                  onTaskClick={(task) => setSelectedTaskId(task.id)}
+                  onTaskClick={(task) => {
+                    if (prioritySelectionMode && onTogglePriority) {
+                      onTogglePriority(task.id);
+                    } else {
+                      setSelectedTaskId(task.id);
+                    }
+                  }}
                   onSubtaskClick={setSelectedTaskId}
                   onNavigateToBoard={() => {
                     router.push(`/clients/${group.clientSlug}/boards/${group.boardId}`);
@@ -313,6 +332,9 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane' }: Per
                     updateTask.mutate({ id: taskId, status: newStatus });
                   }}
                   hiddenCardItems={swimlaneHiddenItems}
+                  prioritySelectionMode={prioritySelectionMode}
+                  priorityFilterActive={priorityFilterActive}
+                  priorityTaskIds={priorityTaskIds}
                 />
               );
             })}
@@ -357,6 +379,9 @@ interface MyWorkBoardSwimlaneProps {
   onNavigateToBoard: () => void;
   onTaskStatusChange: (taskId: string, newStatus: string) => void;
   hiddenCardItems?: Set<string>;
+  prioritySelectionMode?: boolean;
+  priorityFilterActive?: boolean;
+  priorityTaskIds?: Set<string>;
 }
 
 function hexToSubtleBg(hex: string, opacity = 0.06): string {
@@ -375,6 +400,9 @@ function MyWorkBoardSwimlane({
   onNavigateToBoard,
   onTaskStatusChange,
   hiddenCardItems,
+  prioritySelectionMode,
+  priorityFilterActive,
+  priorityTaskIds,
 }: MyWorkBoardSwimlaneProps) {
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
 
@@ -577,6 +605,9 @@ function MyWorkBoardSwimlane({
                                 onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                                 isExpanded={expandedParents.has(task.id)}
                                 hiddenItems={hiddenCardItems}
+                                isPriority={priorityTaskIds?.has(task.id)}
+                                prioritySelectionMode={prioritySelectionMode}
+                                priorityFilterActive={priorityFilterActive}
                               />
                             </SortableTask>
                             {expandedParents.has(task.id) && (

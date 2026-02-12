@@ -35,6 +35,8 @@ interface TaskFilterBarProps {
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
   hideAssigneeFilter?: boolean;
+  additionalFilterCount?: number;
+  onClearAll?: () => void;
 }
 
 export function TaskFilterBar({
@@ -44,11 +46,15 @@ export function TaskFilterBar({
   sectionOptions,
   assignableUsers,
   hideAssigneeFilter,
+  additionalFilterCount = 0,
+  onClearAll,
 }: TaskFilterBarProps) {
-  const activeFilterCount = countActiveFilters(filters);
+  const baseFilterCount = countActiveFilters(filters);
+  const activeFilterCount = baseFilterCount + additionalFilterCount;
 
   const clearFilters = () => {
     onFiltersChange({});
+    onClearAll?.();
   };
 
   const toggleStatusFilter = (statusId: string) => {

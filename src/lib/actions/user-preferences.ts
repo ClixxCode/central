@@ -398,6 +398,7 @@ export async function updateMyWorkPreferences(input: {
   myWorkFilters?: SavedTaskFilters;
   personalTaskFilters?: SavedTaskFilters;
   todaysEvents?: { collapsed?: boolean; minimized?: boolean };
+  priorityTaskIds?: string[];
 }): Promise<{
   success: boolean;
   error?: string;
@@ -423,6 +424,7 @@ export async function updateMyWorkPreferences(input: {
     ...(input.todaysEvents !== undefined && {
       todaysEvents: { ...currentPrefs.todaysEvents, ...input.todaysEvents },
     }),
+    ...(input.priorityTaskIds !== undefined && { priorityTaskIds: input.priorityTaskIds }),
   };
 
   await db
@@ -446,6 +448,7 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
     hiddenColumns: prefs.hiddenColumns ?? DEFAULT_PREFERENCES.hiddenColumns,
     defaultView: prefs.defaultView ?? DEFAULT_PREFERENCES.defaultView,
     hidePersonalList: prefs.hidePersonalList ?? false,
+    priorityTaskIds: prefs.priorityTaskIds ?? [],
     myWorkFilters: prefs.myWorkFilters,
     personalTaskFilters: prefs.personalTaskFilters,
     todaysEvents: prefs.todaysEvents,

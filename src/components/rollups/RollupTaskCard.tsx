@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { GripVertical, Calendar, ExternalLink } from 'lucide-react';
+import { GripVertical, Calendar, ExternalLink, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AssigneeAvatars, type AssigneeUser } from '@/components/tasks/AssigneePicker';
 import { DateDisplay } from '@/components/tasks/DatePicker';
@@ -23,6 +23,9 @@ interface RollupTaskCardProps {
   onToggleSubtasks?: () => void;
   isExpanded?: boolean;
   hiddenItems?: Set<string>;
+  isPriority?: boolean;
+  prioritySelectionMode?: boolean;
+  priorityFilterActive?: boolean;
 }
 
 export function RollupTaskCard({
@@ -36,6 +39,9 @@ export function RollupTaskCard({
   onToggleSubtasks,
   isExpanded,
   hiddenItems,
+  isPriority,
+  prioritySelectionMode,
+  priorityFilterActive,
 }: RollupTaskCardProps) {
   const section = sectionOptions.find((s) => s.id === task.section);
   const showSection = !hiddenItems?.has('section');
@@ -51,12 +57,18 @@ export function RollupTaskCard({
     return (
       <div
         className={cn(
-          'rounded-lg border bg-background p-3 shadow-sm transition-all',
+          'relative rounded-lg border bg-background p-3 shadow-sm transition-all',
           'hover:border-primary/50 hover:shadow-md',
-          onClick && 'cursor-pointer'
+          onClick && 'cursor-pointer',
+          prioritySelectionMode && 'cursor-pointer ring-1 ring-inset ring-muted-foreground/20'
         )}
         onClick={onClick}
       >
+        {(prioritySelectionMode || (priorityFilterActive && isPriority)) && (
+          <div className="absolute right-2 top-2 z-10">
+            <Star className={cn('size-4 text-amber-400', isPriority ? 'fill-current' : 'fill-none text-muted-foreground')} />
+          </div>
+        )}
         {/* Client Badge */}
         {showClientBadge && task.clientName && (
           <div className="mb-2 flex items-center justify-between">
@@ -154,10 +166,17 @@ export function RollupTaskCard({
       className={cn(
         'group relative rounded-lg border bg-background p-3 transition-all',
         'hover:border-primary/50 hover:shadow-sm',
-        onClick && 'cursor-pointer'
+        onClick && 'cursor-pointer',
+        prioritySelectionMode && 'cursor-pointer ring-1 ring-inset ring-muted-foreground/20',
+        !prioritySelectionMode && isPriority && 'border-l-2 border-l-amber-400'
       )}
       onClick={onClick}
     >
+      {(prioritySelectionMode || (priorityFilterActive && isPriority)) && (
+        <div className="absolute right-2 top-2 z-10">
+          <Star className={cn('size-4 text-amber-400', isPriority ? 'fill-current' : 'fill-none text-muted-foreground')} />
+        </div>
+      )}
       {/* Drag Handle placeholder for visual consistency */}
       <div className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
         <GripVertical className="size-4 text-muted-foreground" />

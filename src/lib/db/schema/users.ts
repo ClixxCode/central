@@ -33,6 +33,7 @@ export interface UserPreferences {
     collapsed?: boolean;
     minimized?: boolean;
   };
+  priorityTaskIds?: string[];
   calendar?: {
     showScheduleInSidebar?: boolean;
     showEventsInMyWork?: boolean;

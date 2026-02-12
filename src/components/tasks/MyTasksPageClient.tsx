@@ -20,6 +20,7 @@ import {
   useMarkNotificationsByTypeAsRead,
 } from '@/lib/hooks';
 import { TaskFilterBar } from './TaskFilterBar';
+import { PriorityButton } from './PriorityButton';
 import { PersonalRollupSkeleton } from '@/components/shared';
 import {
   AlertCircle,
@@ -646,8 +647,8 @@ export function MyTasksPageClient() {
   });
   const { data: mentions = [] } = useMentions();
   const { data: replies = [] } = useReplies();
-  const { viewMode, setViewMode, activeTab: storedTab, setActiveTab, areAllClientsCollapsed, setAllClientsCollapsed } = usePersonalRollupStore();
-  const { isBoardHidden, myWorkFilters: filters, setMyWorkFilters: setFilters } = useMyWorkPreferences();
+  const { viewMode, setViewMode, activeTab: storedTab, setActiveTab, areAllClientsCollapsed, setAllClientsCollapsed, prioritySelectionMode, setPrioritySelectionMode, priorityFilterActive, setPriorityFilterActive, togglePriorityFilter } = usePersonalRollupStore();
+  const { isBoardHidden, hiddenBoards, hiddenColumns, setHiddenBoards, setHiddenColumns, myWorkFilters: filters, setMyWorkFilters: setFilters, priorityTaskIds, isPriority, togglePriority, clearPriorities } = useMyWorkPreferences();
 
   // Fetch user preferences for hidePersonalList
   const { data: userPrefs } = useQuery({
@@ -673,9 +674,25 @@ export function MyTasksPageClient() {
   const { statusOptions, sectionOptions, assignableUsers } = useMyTasksFilterOptions(tasksByClient);
 
   // Apply filters client-side
-  const filteredTasksByClient = React.useMemo(
-    () => applyMyTasksFilters(tasksByClient ?? [], filters),
-    [tasksByClient, filters]
+  const filteredTasksByClient = React.useMemo(() => {
+    let result = applyMyTasksFilters(tasksByClient ?? [], filters);
+    // Apply priority filter
+    if (priorityFilterActive && priorityTaskIds.length > 0) {
+      const prioritySet = new Set(priorityTaskIds);
+      result = result
+        .map((cg) => ({
+          ...cg,
+          tasks: cg.tasks.filter((t) => prioritySet.has(t.id)),
+        }))
+        .filter((cg) => cg.tasks.length > 0);
+    }
+    return result;
+  }, [tasksByClient, filters, priorityFilterActive, priorityTaskIds]);
+
+  // Memoize priority IDs as a Set for efficient lookups
+  const priorityTaskIdsSet = React.useMemo(
+    () => new Set(priorityTaskIds),
+    [priorityTaskIds]
   );
 
   // Collect visible board IDs for collapse/expand all
@@ -773,6 +790,23 @@ export function MyTasksPageClient() {
                       Table
                     </button>
                   </div>
+                  <PriorityButton
+                    priorityCount={priorityTaskIds.length}
+                    isSelectionMode={prioritySelectionMode}
+                    isFilterActive={priorityFilterActive}
+                    onEnterSelectionMode={() => setPrioritySelectionMode(true)}
+                    onExitSelectionMode={() => {
+                      setPrioritySelectionMode(false);
+                      if (priorityTaskIds.length > 0) {
+                        setPriorityFilterActive(true);
+                      }
+                    }}
+                    onToggleFilter={togglePriorityFilter}
+                    onClear={() => {
+                      clearPriorities();
+                      setPriorityFilterActive(false);
+                    }}
+                  />
                   {tasksByClient && <PersonalRollupToolbar tasksByClient={tasksByClient} viewMode={viewMode} />}
                   <TaskFilterBar
                     filters={filters}
@@ -781,6 +815,19 @@ export function MyTasksPageClient() {
                     sectionOptions={sectionOptions}
                     assignableUsers={assignableUsers}
                     hideAssigneeFilter
+                    additionalFilterCount={
+                      (priorityFilterActive ? 1 : 0) +
+                      hiddenBoards.length +
+                      hiddenColumns.length
+                    }
+                    onClearAll={() => {
+                      if (priorityFilterActive) {
+                        clearPriorities();
+                        setPriorityFilterActive(false);
+                      }
+                      if (hiddenBoards.length > 0) setHiddenBoards([]);
+                      if (hiddenColumns.length > 0) setHiddenColumns([]);
+                    }}
                   />
                 </div>
                 {viewMode === 'swimlane' && visibleBoardIds.length > 0 && (
@@ -797,7 +844,14 @@ export function MyTasksPageClient() {
                   </button>
                 )}
               </div>
-              <PersonalRollupView tasksByClient={filteredTasksByClient} viewMode={viewMode} />
+              <PersonalRollupView
+                tasksByClient={filteredTasksByClient}
+                viewMode={viewMode}
+                prioritySelectionMode={prioritySelectionMode}
+                priorityFilterActive={priorityFilterActive}
+                priorityTaskIds={priorityTaskIdsSet}
+                onTogglePriority={togglePriority}
+              />
             </>
           )}
         </TabsContent>

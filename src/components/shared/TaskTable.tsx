@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -110,6 +110,9 @@ interface TaskTableProps {
   columns?: TableColumnConfig;
   emptyMessage?: string;
   showSource?: boolean; // Enable source column for rollups
+  prioritySelectionMode?: boolean;
+  priorityFilterActive?: boolean;
+  priorityTaskIds?: Set<string>;
 }
 
 export function TaskTable({
@@ -124,6 +127,9 @@ export function TaskTable({
   columns: columnsProp,
   emptyMessage = 'No tasks found',
   showSource = false,
+  prioritySelectionMode = false,
+  priorityFilterActive = false,
+  priorityTaskIds,
 }: TaskTableProps) {
   // Merge default columns with showSource (showSource enables source column by default,
   // but explicit columnsProp.source can override it)
@@ -330,7 +336,17 @@ export function TaskTable({
                     {/* Title */}
                     {columns.title && (
                       <td className="px-3 py-3">
-                        <span className="font-medium text-sm">{task.title}</span>
+                        <div className="flex items-center gap-1.5">
+                          {(prioritySelectionMode || (priorityFilterActive && priorityTaskIds?.has(task.id))) && (
+                            <Star
+                              className={cn(
+                                'size-3.5 shrink-0 text-amber-400',
+                                priorityTaskIds?.has(task.id) ? 'fill-current' : 'fill-none text-muted-foreground'
+                              )}
+                            />
+                          )}
+                          <span className="font-medium text-sm">{task.title}</span>
+                        </div>
                       </td>
                     )}
 

@@ -62,6 +62,7 @@ export function useMyWorkPreferences() {
           ...(input.todaysEvents !== undefined && {
             todaysEvents: { ...old.todaysEvents, ...input.todaysEvents },
           }),
+          ...(input.priorityTaskIds !== undefined && { priorityTaskIds: input.priorityTaskIds }),
         };
       });
 
@@ -120,6 +121,11 @@ export function useMyWorkPreferences() {
     [hiddenColumns, save]
   );
 
+  const setHiddenColumns = useCallback(
+    (columns: string[]) => save({ hiddenColumns: columns }),
+    [save]
+  );
+
   // --- My Work filters (Assigned Tasks tab) ---
   const myWorkFilters: TaskFilters = fromSavedFilters(userPrefs?.myWorkFilters);
 
@@ -150,6 +156,29 @@ export function useMyWorkPreferences() {
     [save]
   );
 
+  // --- Priority task IDs ---
+  const priorityTaskIds = userPrefs?.priorityTaskIds ?? [];
+
+  const isPriority = useCallback(
+    (taskId: string) => priorityTaskIds.includes(taskId),
+    [priorityTaskIds]
+  );
+
+  const togglePriority = useCallback(
+    (taskId: string) => {
+      const newIds = priorityTaskIds.includes(taskId)
+        ? priorityTaskIds.filter((id) => id !== taskId)
+        : [...priorityTaskIds, taskId];
+      save({ priorityTaskIds: newIds });
+    },
+    [priorityTaskIds, save]
+  );
+
+  const clearPriorities = useCallback(
+    () => save({ priorityTaskIds: [] }),
+    [save]
+  );
+
   return {
     // Boards
     hiddenBoards,
@@ -160,6 +189,7 @@ export function useMyWorkPreferences() {
     hiddenColumns,
     isColumnHidden,
     toggleColumn,
+    setHiddenColumns,
     // My Work filters
     myWorkFilters,
     setMyWorkFilters,
@@ -171,5 +201,10 @@ export function useMyWorkPreferences() {
     todaysEventsMinimized,
     setTodaysEventsCollapsed,
     setTodaysEventsMinimized,
+    // Priority tasks
+    priorityTaskIds,
+    isPriority,
+    togglePriority,
+    clearPriorities,
   };
 }
