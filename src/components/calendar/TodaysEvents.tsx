@@ -12,10 +12,19 @@ import {
   Users,
   Video,
 } from 'lucide-react';
-import { useTodaysEvents } from '@/lib/hooks';
+import { useTodaysEvents, useAllUsers, useCurrentUser } from '@/lib/hooks';
 import { getMeetingLink } from '@/lib/google-calendar/api';
+import type { CalendarEvent } from '@/lib/google-calendar/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarImage, AvatarFallback, AvatarGroup } from '@/components/ui/avatar';
+
+function getInitials(nameOrEmail: string): string {
+  if (nameOrEmail.includes('@')) return nameOrEmail.charAt(0).toUpperCase();
+  const words = nameOrEmail.split(' ').filter(Boolean);
+  if (words.length === 1) return words[0].charAt(0).toUpperCase();
+  return (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase();
+}
 
 const COLLAPSE_KEY = 'central-todays-events-collapsed';
 const MINIMIZE_KEY = 'central-todays-events-minimized';
@@ -45,9 +54,98 @@ function isCurrentEvent(start: { dateTime?: string; date?: string }, end: { date
   return now >= startMs && now < endMs;
 }
 
+type OrgUser = { id: string; name: string | null; email: string; avatarUrl: string | null };
+
+const INTERNAL_GROUP_EMAIL = 'internal@clix.co';
+
+function EventAttendees({
+  attendees,
+  usersByEmail,
+  allUsers,
+  currentUserEmail,
+}: {
+  attendees: NonNullable<CalendarEvent['attendees']>;
+  usersByEmail: Map<string, OrgUser>;
+  allUsers: OrgUser[];
+  currentUserEmail?: string;
+}) {
+  const MAX_AVATARS = 3;
+
+  const hasInternalGroup = attendees.some(
+    (a) => a.email.toLowerCase() === INTERNAL_GROUP_EMAIL
+  );
+
+  const { orgAttendees, totalOthers } = useMemo(() => {
+    if (hasInternalGroup) {
+      // Expand internal group to all org users, merged with individual attendees, deduplicated
+      const allOthers = allUsers.filter(
+        (u) => u.email.toLowerCase() !== currentUserEmail?.toLowerCase()
+      );
+      // Also include any individual attendees not in the org (external guests listed separately)
+      const orgEmails = new Set(allUsers.map((u) => u.email.toLowerCase()));
+      const externalCount = attendees.filter(
+        (a) =>
+          a.email.toLowerCase() !== INTERNAL_GROUP_EMAIL &&
+          a.email.toLowerCase() !== currentUserEmail?.toLowerCase() &&
+          !orgEmails.has(a.email.toLowerCase())
+      ).length;
+      // Shuffle for variety
+      const shuffled = [...allOthers].sort(() => Math.random() - 0.5);
+      return { orgAttendees: shuffled, totalOthers: allOthers.length + externalCount };
+    }
+
+    const matched = attendees
+      .map((a) => usersByEmail.get(a.email.toLowerCase()))
+      .filter((u): u is OrgUser => u != null && u.email.toLowerCase() !== currentUserEmail?.toLowerCase());
+
+    const total = currentUserEmail
+      ? attendees.filter((a) => a.email.toLowerCase() !== currentUserEmail.toLowerCase()).length
+      : attendees.length;
+
+    return { orgAttendees: matched, totalOthers: total };
+  }, [attendees, usersByEmail, allUsers, currentUserEmail, hasInternalGroup]);
+
+  if (orgAttendees.length === 0) {
+    if (totalOthers === 0) return null;
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+        <Users className="h-3 w-3" />
+        {totalOthers}
+      </span>
+    );
+  }
+
+  const shown = orgAttendees.slice(0, MAX_AVATARS);
+  const remaining = totalOthers - shown.length;
+
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <AvatarGroup>
+        {shown.map((user) => (
+          <Avatar key={user.id} size="sm" className="!size-5">
+            <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name ?? user.email} />
+            <AvatarFallback className="text-[9px]">
+              {getInitials(user.name ?? user.email)}
+            </AvatarFallback>
+          </Avatar>
+        ))}
+      </AvatarGroup>
+      {remaining > 0 && (
+        <span className="text-xs text-muted-foreground">+{remaining}</span>
+      )}
+    </div>
+  );
+}
+
 export function TodaysEvents() {
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const { data, isLoading } = useTodaysEvents(timeZone);
+  const { user: currentUser } = useCurrentUser();
+  const { data: allUsers = [] } = useAllUsers();
+  const usersByEmail = useMemo(
+    () => new Map(allUsers.map((u) => [u.email.toLowerCase(), u])),
+    [allUsers]
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
@@ -185,16 +283,13 @@ export function TodaysEvents() {
                   <div className="text-muted-foreground text-xs" style={{ width: 135, flexShrink: 0 }}>
                     {formatTimeRange(event.start, event.end)}
                   </div>
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                     <span className="truncate font-medium">{event.summary}</span>
                     {event.attendees && event.attendees.length > 1 && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                        <Users className="h-3 w-3" />
-                        {event.attendees.length}
-                      </span>
+                      <EventAttendees attendees={event.attendees} usersByEmail={usersByEmail} allUsers={allUsers} currentUserEmail={currentUser?.email} />
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <div className="flex items-center gap-2 ml-4" style={{ flexShrink: 0 }}>
                     {meetingLink && (
                       <a
                         href={meetingLink}
