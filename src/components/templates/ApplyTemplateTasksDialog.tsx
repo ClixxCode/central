@@ -92,9 +92,26 @@ export function ApplyTemplateTasksDialog({
     setSectionMapping(secMapping);
   }, [board, isBoardTemplate, template.statusOptions, template.sectionOptions]);
 
+  // Check if all statuses and sections already match by label — skip mapping if so
+  const allMappingsMatch = React.useMemo(() => {
+    if (!board || !isBoardTemplate) return true;
+    const bs = (board.statusOptions ?? []) as StatusOption[];
+    const bsec = (board.sectionOptions ?? []) as SectionOption[];
+
+    const statusesMatch = template.statusOptions.every((ts) =>
+      bs.some((s) => s.label.toLowerCase() === ts.label.toLowerCase())
+    );
+    const sectionsMatch = template.sectionOptions.every((ts) =>
+      bsec.some((s) => s.label.toLowerCase() === ts.label.toLowerCase())
+    );
+    return statusesMatch && sectionsMatch;
+  }, [board, isBoardTemplate, template.statusOptions, template.sectionOptions]);
+
+  const needsMapping = isBoardTemplate && template.statusOptions.length > 0 && !allMappingsMatch;
+
   const handleNext = () => {
     if (step === 'select_board') {
-      if (isBoardTemplate && template.statusOptions.length > 0) {
+      if (needsMapping) {
         setStep('map_statuses');
       } else {
         setStep('confirm');
@@ -106,7 +123,7 @@ export function ApplyTemplateTasksDialog({
 
   const handleBack = () => {
     if (step === 'confirm') {
-      if (isBoardTemplate && template.statusOptions.length > 0) {
+      if (needsMapping) {
         setStep('map_statuses');
       } else {
         setStep('select_board');
