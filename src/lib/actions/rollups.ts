@@ -29,6 +29,8 @@ import {
   type UpdateRollupBoardInput,
 } from '@/lib/validations/rollup';
 import type { TaskFilters, TaskSortOptions } from './tasks';
+import { getSiteSettings } from './site-settings';
+import { getOrgToday } from '@/lib/utils/timezone';
 
 // Types
 export interface RollupBoardSummary {
@@ -872,12 +874,12 @@ export async function getRollupTasks(
 
     // Apply overdue filter
     if (filters?.overdue) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const { data: siteSettingsData } = await getSiteSettings();
+      const todayStr = getOrgToday(siteSettingsData?.timezone);
       conditions.push(
         and(
           isNotNull(tasks.dueDate),
-          lt(tasks.dueDate, today.toISOString().split('T')[0])
+          lt(tasks.dueDate, todayStr)
         )!
       );
     }

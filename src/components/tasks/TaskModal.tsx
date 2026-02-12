@@ -44,7 +44,7 @@ import {
 } from '@/lib/actions/attachments';
 import { recordTaskView } from '@/lib/actions/task-views';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   Archive,
   ArchiveRestore,
@@ -117,7 +117,7 @@ export interface TaskData {
   description: TiptapContent | null;
   status: string;
   section: string | null;
-  dueDate: Date | null;
+  dueDate: string | null;
   dateFlexibility: DateFlexibility;
   assigneeIds: string[];
   attachments: Attachment[];
@@ -185,7 +185,7 @@ export function TaskModal({
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [status, setStatus] = useState('');
   const [section, setSection] = useState<string | null>(null);
-  const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [dueDate, setDueDate] = useState<string | null>(null);
   const [dateFlexibility, setDateFlexibility] = useState<DateFlexibility>('not_set');
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [recurringConfig, setRecurringConfig] = useState<RecurringConfig | null>(null);
@@ -316,7 +316,7 @@ export function TaskModal({
         setDescription(task.description as TiptapContent | null);
         setStatus(task.status);
         setSection(task.section);
-        setDueDate(task.dueDate ? new Date(task.dueDate) : null);
+        setDueDate(task.dueDate ?? null);
         setDateFlexibility(task.dateFlexibility);
         setRecurringConfig(task.recurringConfig);
         setAssigneeIds(task.assignees.map((a) => a.id));
@@ -358,7 +358,7 @@ export function TaskModal({
         descriptionJson: description ? JSON.stringify(description) : undefined,
         status,
         section: section ?? undefined,
-        dueDate: dueDate?.toISOString().split('T')[0] ?? undefined,
+        dueDate: dueDate ?? undefined,
         dateFlexibility,
         recurringConfig: recurringConfig ?? undefined,
         assigneeIds,
@@ -644,18 +644,19 @@ export function TaskModal({
                             )}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {dueDate ? format(dueDate, 'MMM d, yyyy') : 'Set date'}
+                            {dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : 'Set date'}
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={dueDate ?? undefined}
+                            selected={dueDate ? parseISO(dueDate) : undefined}
                             onSelect={(date) => {
-                              setDueDate(date ?? null);
+                              const dateStr = date ? format(date, 'yyyy-MM-dd') : null;
+                              setDueDate(dateStr);
                               setIsDatePickerOpen(false);
                               if (isAutoSaveEnabled) {
-                                autoSave({ dueDate: date?.toISOString().split('T')[0] ?? null });
+                                autoSave({ dueDate: dateStr });
                               }
                             }}
                             initialFocus
@@ -899,7 +900,7 @@ export function TaskModal({
                             autoSave({ recurringConfig: config });
                           }
                         }}
-                        baseDueDate={dueDate?.toISOString().split('T')[0]}
+                        baseDueDate={dueDate ?? undefined}
                         disabled={!dueDate}
                       />
                     </div>

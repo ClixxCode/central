@@ -1,9 +1,11 @@
 import { inngest } from '../client';
 import { db } from '@/lib/db';
-import { tasks, taskAssignees, users, boards, clients } from '@/lib/db/schema';
+import { tasks, taskAssignees, users, boards, clients, siteSettings } from '@/lib/db/schema';
 import { eq, and, inArray, lt, lte, isNull } from 'drizzle-orm';
 import type { UserPreferences } from '@/lib/db/schema/users';
+import type { SiteSettings } from '@/lib/db/schema/site-settings';
 import { createDueNotification } from '@/lib/actions/notifications';
+import { getOrgToday, getOrgTomorrow } from '@/lib/utils/timezone';
 
 /**
  * Inngest cron function to check for tasks that are due soon or overdue
@@ -16,13 +18,15 @@ export const checkDueDates = inngest.createFunction(
   },
   { cron: '0 8 * * *' }, // Every day at 8 AM
   async ({ step }) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    // Load org timezone from site settings
+    const orgTimezone = await step.run('get-timezone', async () => {
+      const rows = await db.select().from(siteSettings).limit(1);
+      if (rows.length === 0) return null;
+      return (rows[0].settings as SiteSettings).timezone ?? null;
+    });
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const todayStr = getOrgToday(orgTimezone);
+    const tomorrowStr = getOrgTomorrow(orgTimezone);
 
     // Get tasks that are due today, tomorrow, or overdue
     const dueTasks = await step.run('get-due-tasks', async () => {

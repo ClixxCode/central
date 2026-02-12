@@ -4,6 +4,7 @@ import { tasks, boards, siteSettings } from '@/lib/db/schema';
 import { eq, and, inArray, isNull, lte } from 'drizzle-orm';
 import { getCompleteStatusIds } from '@/lib/utils/status';
 import type { SiteSettings } from '@/lib/db/schema/site-settings';
+import { getOrgCutoffDate } from '@/lib/utils/timezone';
 
 /**
  * Inngest cron function to auto-archive completed tasks
@@ -28,8 +29,7 @@ export const autoArchiveTasks = inngest.createFunction(
     }
 
     const days = settings.autoArchiveDays;
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffDate = getOrgCutoffDate(settings.timezone, days);
 
     // Step 2: Get all boards with their status options
     const allBoards = await step.run('get-boards', async () => {

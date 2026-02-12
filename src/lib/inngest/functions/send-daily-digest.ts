@@ -16,9 +16,12 @@ import {
   taskAssignees,
   boardAccess,
   teamMembers,
+  siteSettings,
 } from '@/lib/db/schema';
 import { eq, and, isNull, lt, lte, gte, inArray, or } from 'drizzle-orm';
 import type { UserPreferences } from '@/lib/db/schema/users';
+import type { SiteSettings } from '@/lib/db/schema/site-settings';
+import { getOrgToday, getOrgTomorrow } from '@/lib/utils/timezone';
 
 /**
  * Inngest function to send daily digest emails
@@ -54,20 +57,17 @@ export const sendDailyDigest = inngest.createFunction(
       return { skipped: true, reason: 'User preferences' };
     }
 
+    // Load org timezone
+    const orgTimezone = await step.run('get-timezone', async () => {
+      const rows = await db.select().from(siteSettings).limit(1);
+      if (rows.length === 0) return null;
+      return (rows[0].settings as SiteSettings).timezone ?? null;
+    });
+
     // Gather digest data
     const digestData = await step.run('gather-digest-data', async () => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const dayAfterTomorrow = new Date(tomorrow);
-      dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
-
-      // Format dates for SQL comparison
-      const todayStr = today.toISOString().split('T')[0];
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const todayStr = getOrgToday(orgTimezone);
+      const tomorrowStr = getOrgTomorrow(orgTimezone);
 
       // Get boards user has access to
       const accessibleBoardIds = await getAccessibleBoardIds(data.userId);

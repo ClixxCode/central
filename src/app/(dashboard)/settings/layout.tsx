@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Archive, Bell, Users, Tags, User, ShieldCheck, Plug } from 'lucide-react';
+import { Archive, Bell, Globe, Users, Tags, User, ShieldCheck, Plug } from 'lucide-react';
 import { isAdmin } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
 
@@ -30,6 +30,11 @@ const settingsNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
+  {
+    name: 'General',
+    href: '/settings/admin/general',
+    icon: Globe,
+  },
   {
     name: 'Users',
     href: '/settings/admin/users',
