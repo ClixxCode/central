@@ -726,8 +726,8 @@ export function TaskModal({
                       </Select>
                     </div>
 
-                    {/* Assignees - always editable */}
-                    <div className="space-y-1.5 col-span-2 md:col-span-1">
+                    {/* Assignees - hidden when no assignable users (e.g. personal board) */}
+                    {assignableUsers.length > 0 && <div className="space-y-1.5 col-span-2 md:col-span-1">
                       <label className="text-xs font-medium text-muted-foreground">
                         <Users className="mr-1 inline h-3 w-3" />
                         Assignees
@@ -883,7 +883,7 @@ export function TaskModal({
                           })()}
                         </PopoverContent>
                       </Popover>
-                    </div>
+                    </div>}
 
                     {/* Recurring - always visible, disabled without due date */}
                     <div className="space-y-1.5">

@@ -13,8 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useClients } from '@/lib/hooks/useClients';
-import { useBoard } from '@/lib/hooks/useBoards';
+import { useBoard, usePersonalBoard } from '@/lib/hooks/useBoards';
 import { useQuickAddCreateTask, useQuickAddUsers } from '@/lib/hooks/useQuickAdd';
+import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 import { useQuickActionsStore } from '@/lib/stores';
 import { SmartTaskInput, type InputPill } from './SmartTaskInput';
 import { MultiLinePasteDialog } from './MultiLinePasteDialog';
@@ -61,8 +62,11 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
 
   const queryClient = useQueryClient();
   const { data: clients } = useClients();
+  const { data: personalBoard } = usePersonalBoard();
+  const { user: currentUser } = useCurrentUser();
   const { data: boardData } = useBoard(selectedBoard?.boardId ?? '');
-  const { data: assignableUsers } = useQuickAddUsers(selectedBoard?.boardId);
+  const isPersonalBoard = selectedBoard?.boardId === personalBoard?.id;
+  const { data: assignableUsers } = useQuickAddUsers(isPersonalBoard ? undefined : selectedBoard?.boardId);
   const createTask = useQuickAddCreateTask();
   const quickAddContext = useQuickActionsStore((s) => s.quickAddContext);
 
@@ -163,14 +167,18 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
   const handleBoardSelect = useCallback((board: BoardSelection) => {
     setSelectedBoard(board);
     setStatus(null); // Reset status to pick default from new board
-    setPills((prev) => {
-      const filtered = prev.filter((p) => p.type !== 'board');
-      return [
-        ...filtered,
-        { type: 'board', id: board.boardId, label: `${board.clientName} / ${board.boardName}`, data: board },
-      ];
-    });
-  }, []);
+    // Clear assignees when switching to personal board
+    if (board.boardId === personalBoard?.id) {
+      setAssignees([]);
+      setPills((prev) => prev.filter((p) => p.type !== 'board' && p.type !== 'assignee'));
+    } else {
+      setPills((prev) => prev.filter((p) => p.type !== 'board'));
+    }
+    setPills((prev) => [
+      ...prev,
+      { type: 'board', id: board.boardId, label: `${board.clientName} / ${board.boardName}`, data: board },
+    ]);
+  }, [personalBoard?.id]);
 
   const handleUserSelect = useCallback((user: UserSelection) => {
     setAssignees((prev) => {
@@ -236,12 +244,17 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
 
     const statusToUse = status ?? boardData?.statusOptions?.[0]?.id ?? 'todo';
 
+    // Auto-assign current user for personal board
+    const assigneeIds = isPersonalBoard && currentUser
+      ? [currentUser.id]
+      : assignees.map((a) => a.id);
+
     createTask.mutate(
       {
         boardId: selectedBoard.boardId,
         title: title.trim(),
         status: statusToUse,
-        assigneeIds: assignees.map((a) => a.id),
+        assigneeIds,
         dueDate: dueDate ? format(dueDate.date, 'yyyy-MM-dd') : undefined,
         descriptionJson: description.trim()
           ? JSON.stringify({
@@ -257,7 +270,7 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
         },
       }
     );
-  }, [selectedBoard, title, status, boardData, assignees, dueDate, description, createTask, resetForm, onOpenChange]);
+  }, [selectedBoard, title, status, boardData, assignees, dueDate, description, createTask, resetForm, onOpenChange, isPersonalBoard, currentUser]);
 
   const handleBatchCreate = useCallback(async () => {
     if (!pasteLines || !selectedBoard) return;
@@ -265,7 +278,9 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
     const MAX_LINES = 50;
     const lines = pasteLines.slice(0, MAX_LINES);
     const statusToUse = status ?? boardData?.statusOptions?.[0]?.id ?? 'todo';
-    const assigneeIdList = assignees.map((a) => a.id);
+    const assigneeIdList = isPersonalBoard && currentUser
+      ? [currentUser.id]
+      : assignees.map((a) => a.id);
     const dueDateStr = dueDate ? format(dueDate.date, 'yyyy-MM-dd') : undefined;
 
     setIsBatchCreating(true);
@@ -302,14 +317,14 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
 
     resetForm();
     onOpenChange(false);
-  }, [pasteLines, selectedBoard, status, boardData, assignees, dueDate, queryClient, resetForm, onOpenChange]);
+  }, [pasteLines, selectedBoard, status, boardData, assignees, dueDate, queryClient, resetForm, onOpenChange, isPersonalBoard, currentUser]);
 
   const canSubmit = !!selectedBoard && !!title.trim() && !createTask.isPending;
 
   return (
     <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="gap-3 overflow-hidden" style={{ maxWidth: '48vw', minWidth: '360px' }} showCloseButton={false}>
+      <DialogContent className="gap-3 overflow-visible" style={{ maxWidth: '48vw', minWidth: '360px' }} showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-base">Quick Add Task</DialogTitle>
         </DialogHeader>
@@ -378,12 +393,37 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
               </Button>
 
               {boardDropdownOpen && clients && (
-                <div className="absolute bottom-full left-0 z-50 mb-1 max-h-[240px] w-[240px] overflow-y-auto rounded-md border bg-popover shadow-lg py-1">
+                <div className="absolute top-full left-0 z-50 mt-1 max-h-[240px] w-[240px] overflow-y-auto rounded-md border bg-popover shadow-lg py-1">
+                  {/* Personal board */}
+                  {personalBoard && (
+                    <>
+                      <div className="px-3 py-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider truncate">
+                        Personal
+                      </div>
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex w-full items-center gap-2 px-4 py-1.5 text-sm hover:bg-accent truncate',
+                          selectedBoard?.boardId === personalBoard.id && 'bg-accent/50 font-medium'
+                        )}
+                        onClick={() =>
+                          handleBoardFromDropdown({
+                            boardId: personalBoard.id,
+                            boardName: personalBoard.name,
+                            clientId: '',
+                            clientName: 'Personal',
+                          })
+                        }
+                      >
+                        <span className="truncate">{personalBoard.name}</span>
+                      </button>
+                    </>
+                  )}
                   {clients.map((client) => (
                     <React.Fragment key={client.id}>
                       {client.boards.filter((b) => b.type === 'standard').length > 0 && (
                         <>
-                          <div className="px-3 py-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+                          <div className="px-3 py-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider truncate">
                             {client.name}
                           </div>
                           {client.boards
@@ -405,7 +445,7 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
                                   })
                                 }
                               >
-                                {board.name}
+                                <span className="truncate">{board.name}</span>
                               </button>
                             ))}
                         </>
@@ -416,8 +456,8 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
               )}
             </div>
 
-            {/* Assignee selector */}
-            <div ref={assigneeDropdownRef} className="relative">
+            {/* Assignee selector - hidden for personal board */}
+            {!isPersonalBoard && <div ref={assigneeDropdownRef} className="relative">
               <Button
                 variant="outline"
                 size="sm"
@@ -487,7 +527,7 @@ export function QuickAddDialog({ open, onOpenChange }: QuickAddDialogProps) {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Date selector */}
             <div ref={dateDropdownRef} className="relative">

@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Calendar } from '@/components/ui/calendar';
 import { useClients } from '@/lib/hooks/useClients';
+import { usePersonalBoard } from '@/lib/hooks/useBoards';
 import { useQuickAddUsers } from '@/lib/hooks/useQuickAdd';
 import { parseNaturalDate, getDateSuggestions } from '@/lib/utils/parse-natural-date';
 import { cn } from '@/lib/utils';
@@ -174,11 +175,24 @@ function BoardList({
   onClose: () => void;
 }) {
   const { data: clients } = useClients();
+  const { data: personalBoard } = usePersonalBoard();
   const lowerQuery = query.toLowerCase();
 
   const items: BoardSelection[] = React.useMemo(() => {
-    if (!clients) return [];
     const result: BoardSelection[] = [];
+    // Include personal board
+    if (personalBoard) {
+      const searchStr = `personal ${personalBoard.name}`.toLowerCase();
+      if (!lowerQuery || searchStr.includes(lowerQuery)) {
+        result.push({
+          boardId: personalBoard.id,
+          boardName: personalBoard.name,
+          clientId: '',
+          clientName: 'Personal',
+        });
+      }
+    }
+    if (!clients) return result;
     for (const client of clients) {
       for (const board of client.boards) {
         if (board.type === 'rollup') continue;
@@ -194,7 +208,7 @@ function BoardList({
       }
     }
     return result;
-  }, [clients, lowerQuery]);
+  }, [clients, personalBoard, lowerQuery]);
 
   const handleSelect = useCallback(
     (index: number) => {
