@@ -513,12 +513,15 @@ import type { UserPreferences } from '@/lib/db/schema/users';
 export function useNotificationPreferences() {
   return useQuery({
     queryKey: [...notificationKeys.all, 'preferences'],
-    queryFn: async (): Promise<UserPreferences['notifications'] | null> => {
+    queryFn: async (): Promise<{ notifications: UserPreferences['notifications']; isContractor: boolean } | null> => {
       const result = await getUserPreferences();
       if (!result.success || !result.preferences) {
         return null;
       }
-      return result.preferences.notifications;
+      return {
+        notifications: result.preferences.notifications,
+        isContractor: result.isContractor ?? false,
+      };
     },
   });
 }

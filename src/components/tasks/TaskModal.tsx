@@ -167,7 +167,7 @@ export function TaskModal({
   const { data: clientData } = useClient(clientSlug);
   const slackChannelUrl = clientData?.metadata?.slackChannelUrl;
   const { data: notifPrefs } = useNotificationPreferences();
-  const slackLinkType = notifPrefs?.slack?.slackLinkType ?? 'web';
+  const slackLinkType = notifPrefs?.notifications?.slack?.slackLinkType ?? 'web';
   const slackTeamId = process.env.NEXT_PUBLIC_SLACK_WORKSPACE_ID;
 
   // Realtime: live comment updates when modal is open

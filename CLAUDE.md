@@ -386,3 +386,351 @@ Subtasks Feature - Implementation Plan
  10. Verify assignment notifications fire for cloned subtask assignees
  11. Verify auto-completed subtasks do NOT generate individual notifications
  12. Delete a recurring parent → cascade deletes subtasks (existing behavior, just verify)
+
+ ---
+
+ Front Integration - Implementation Plan
+
+ Overview
+
+ Add Front inbox integration to Central. Two core features:
+ 1. Link Front conversations to tasks — attach conversations to tasks, view messages inline, keep status synced via webhooks
+ 2. Reply to Front from Central — when commenting on a task with linked conversations, optionally send the comment as a Front reply
+
+ Front connection uses an API token (admin pastes it in Settings > Integrations). Conversations appear in a new
+ "Conversations" tab in TaskModal. Webhook endpoint keeps linked conversations in sync (new messages, status changes).
+
+ Design Decisions:
+ - API token auth (not OAuth) — admin configures once, org-wide token
+ - Org-level connection — single front_connections row, not per-user
+ - New "Conversations" tab in TaskModal (alongside Details/Subtasks/Attachments)
+ - Webhook sync in v1 — Front POSTs events to /api/webhooks/front, processed via Inngest
+ - Conversation linking by URL — user pastes a Front conversation URL, we parse the conversation ID
+ - Reply opt-in — toggle in comment composer, default off, explicit per-comment
+ - Author mapping — use author_id: "alt:email:user@domain.com" so replies appear from the correct Front teammate
+ - Tiptap to HTML — use @tiptap/html generateHTML() to convert comment content for Front's message body
+ - HMAC webhook validation — verify x-front-signature header against a signing secret
+
+ ---
+ New Files (8)
+
+ 1. src/lib/db/schema/front.ts
+
+ Two tables:
+
+ front_connections (org-level, single row):
+ - id: uuid PK
+ - apiToken: text NOT NULL
+ - webhookSecret: text (for HMAC validation of incoming webhooks)
+ - connectedAt: timestamp
+ - updatedAt: timestamp
+
+ front_conversations (links conversations to tasks):
+ - id: uuid PK
+ - taskId: uuid FK → tasks.id (cascade delete)
+ - conversationId: varchar NOT NULL (Front's "cnv_xxx" ID)
+ - subject: varchar (cached from Front)
+ - status: varchar (open/archived/etc)
+ - lastMessageAt: timestamp (for freshness display)
+ - messageCount: integer (cached count)
+ - linkedBy: uuid FK → users.id (set null on delete)
+ - createdAt: timestamp
+ Unique constraint on (taskId, conversationId) to prevent duplicate links.
+
+ 2. src/lib/front/client.ts
+
+ Front API client. Functions:
+ - getFrontConnection(): query front_connections table, return token or null
+ - frontApi(path, options): wrapper around fetch with Authorization: Bearer {token},
+   base URL https://api2.frontapp.com
+ - getConversation(conversationId): GET /conversations/{id}, returns subject, status,
+   assignee, tags, last_message timestamp
+ - getConversationMessages(conversationId, limit?): GET /conversations/{id}/messages,
+   returns message list (sender, body, timestamp)
+ - sendReply(conversationId, body, authorEmail?): POST /conversations/{id}/messages,
+   sends HTML body, optional author_id via alt:email:{email}
+ - parseConversationUrl(url): extract conversation ID from Front URL
+   (format: https://app.frontapp.com/open/cnv_xxx or just cnv_xxx)
+ - validateWebhookSignature(payload, signature, timestamp, secret): HMAC-SHA256 verification
+
+ 3. src/lib/actions/front.ts
+
+ Server actions:
+ - getFrontConnectionStatus(): returns { connected: boolean }
+ - saveFrontConnection(input: { apiToken: string }): upsert front_connections row,
+   test token with GET /me endpoint, return success/error
+ - disconnectFront(): delete front_connections row + all front_conversations rows
+ - linkConversation(taskId, conversationUrl): parse URL → call getConversation() to validate +
+   fetch metadata → insert front_conversations row → return conversation data
+ - unlinkConversation(frontConversationId): delete from front_conversations
+ - getTaskConversations(taskId): query front_conversations WHERE taskId,
+   ordered by lastMessageAt desc
+ - getConversationMessages(frontConversationId): look up conversationId →
+   call Front API → return formatted messages
+ - sendFrontReply(taskId, htmlBody, authorEmail): query all linked conversations for task →
+   send reply to each → return results
+
+ 4. src/lib/hooks/useFront.ts
+
+ React Query hooks:
+ frontKeys = {
+   all: ['front'],
+   connection: () => ['front', 'connection'],
+   conversations: (taskId) => ['front', 'conversations', taskId],
+   messages: (conversationId) => ['front', 'messages', conversationId],
+ }
+ - useFrontConnection(): query connection status
+ - useTaskConversations(taskId, options?): query linked conversations for a task
+ - useConversationMessages(conversationId, options?): query messages for expanded conversation
+ - useLinkConversation(): mutation, invalidates conversations cache
+ - useUnlinkConversation(): mutation, invalidates conversations cache
+ - useSendFrontReply(): mutation for manual reply (from Conversations tab)
+ - useSaveFrontConnection(): mutation for settings page
+ - useDisconnectFront(): mutation for settings page
+
+ 5. src/components/front/FrontConnectionCard.tsx
+
+ Settings page component (follows CalendarConnectionCard pattern):
+ - Shows connection status (connected/not connected)
+ - Not connected: input field for API token + "Connect" button
+   - On submit: calls saveFrontConnection(), tests token validity
+   - Shows error if token is invalid
+ - Connected: green badge, "Disconnect" button with confirmation dialog
+ - Webhook URL display: shows the URL to configure in Front
+   ({APP_URL}/api/webhooks/front) with copy button
+
+ 6. src/components/tasks/ConversationsTab.tsx
+
+ New TaskModal tab component.
+ Props: taskId, currentUser
+
+ Sections:
+ - Linked conversations list: each row shows:
+   - Mail icon + subject line (bold)
+   - Status badge (open/archived)
+   - "Last message: 2h ago" timestamp
+   - Expand/collapse chevron → shows recent messages inline
+   - "Open in Front" external link button
+   - Unlink (X) button on hover
+ - Expanded messages view: when a conversation is expanded:
+   - List of recent messages (most recent first, capped at ~10)
+   - Each message: sender name, timestamp, body (rendered HTML)
+   - "View all in Front" link at bottom
+ - Reply form (at bottom of expanded conversation):
+   - Simple textarea + "Send reply" button
+   - Sends via sendFrontReply() action
+   - Success toast, refreshes messages
+ - Link conversation form at bottom:
+   - Text input: "Paste a Front conversation URL..."
+   - "Link" button
+   - Validates URL format, calls linkConversation()
+ - Empty state: MessageSquare icon + "No linked conversations" + link form
+
+ 7. src/app/api/webhooks/front/route.ts
+
+ Webhook endpoint for Front events:
+ - POST handler
+ - Validate x-front-signature HMAC header against stored webhook secret
+ - Parse event payload: { type, conversation, ... }
+ - For relevant event types (inbound, out_reply, archive, reopen, trash, restore):
+   - Look up conversation ID in front_conversations table
+   - If found: send Inngest event front/conversation.updated
+ - Return 200 immediately (processing happens async in Inngest)
+
+ 8. src/lib/inngest/functions/sync-front-conversation.ts
+
+ Inngest function triggered by front/conversation.updated:
+ - Step 1 "fetch-conversation": Call Front API to get updated conversation data
+   (subject, status, last_message_at)
+ - Step 2 "update-record": Update front_conversations row with new data
+ - Step 3 "notify-if-needed": If event is inbound (new message received),
+   create in-app notification for task assignees:
+   "New message on '{subject}' (linked to '{taskTitle}')"
+
+ ---
+ Modified Files (12)
+
+ 1. src/lib/db/schema/index.ts
+
+ - Add: export * from './front'
+
+ 2. drizzle/ — Migration file
+
+ - Generated by drizzle-kit generate. Creates front_connections and front_conversations tables.
+
+ 3. src/lib/inngest/events.ts
+
+ - Add FrontConversationUpdatedEvent interface:
+   name: 'front/conversation.updated'
+   data: { conversationId, eventType, frontConversationDbId }
+ - Add to NotificationEvent union type
+
+ 4. src/lib/inngest/functions/index.ts
+
+ - Add: export { syncFrontConversation } from './sync-front-conversation'
+
+ 5. src/app/api/inngest/route.ts
+
+ - Import and register syncFrontConversation in the functions array
+
+ 6. src/lib/hooks/index.ts
+
+ - Export all hooks from ./useFront
+
+ 7. src/components/tasks/TaskModal.tsx
+
+ - Import ConversationsTab and MessageSquare icon
+ - Add "Conversations" tab trigger after Subtasks (conditional: !isNew && task):
+   TabsTrigger with MessageSquare icon, badge showing conversation count
+ - Add TabsContent rendering <ConversationsTab taskId={task.id} currentUser={currentUser} />
+ - Add useTaskConversations(task?.id) hook call to get conversation count for badge
+ - Add useFrontConnection() to conditionally show the tab only when Front is connected
+
+ 8. src/app/(dashboard)/settings/integrations/page.tsx
+
+ - Import and render <FrontConnectionCard /> below <CalendarConnectionCard />
+
+ 9. src/lib/actions/comments.ts — createComment()
+
+ - Accept new optional field: sendToFront?: boolean
+ - After comment is created and notifications fire:
+   - If sendToFront is true, query front_conversations for the task
+   - Convert TiptapContent to HTML using generateHTML() from @tiptap/html
+   - For each linked conversation, call sendReply() from the Front client
+   - Fire-and-forget pattern (same as notification sends)
+
+ 10. src/components/comments/CommentsSection.tsx
+
+ - Accept new prop: hasFrontConversations?: boolean
+ - Pass to <CommentEditor hasFrontConversations={hasFrontConversations} />
+ - Update handleSubmit to pass sendToFront flag to createComment
+
+ 11. src/components/comments/CommentEditor.tsx
+
+ - Accept new prop: hasFrontConversations?: boolean
+ - Add state: sendToFront (boolean, default false)
+ - In footer bar (next to "Attach file" button), when hasFrontConversations:
+   "Reply in Front" toggle button (ghost variant, bg-muted when active)
+ - Update onSubmit signature to pass sendToFront boolean
+ - Reset sendToFront to false after submission
+
+ 12. src/lib/hooks/useComments.ts — useCreateComment()
+
+ - Update CreateCommentInput usage to include sendToFront?: boolean
+ - Pass through to server action
+
+ ---
+ Implementation Order
+
+ 1. src/lib/db/schema/front.ts — New schema: front_connections + front_conversations tables
+ 2. src/lib/db/schema/index.ts — Export new schema
+ 3. drizzle/ — Generate + run migration
+ 4. src/lib/front/client.ts — Front API client (fetch wrapper, conversation endpoints, URL parser, webhook validation)
+ 5. src/lib/actions/front.ts — Server actions (connect, disconnect, link, unlink, get conversations, get messages, send reply)
+ 6. src/lib/hooks/useFront.ts — React Query hooks for Front data
+ 7. src/lib/hooks/index.ts — Export new hooks
+ 8. src/components/front/FrontConnectionCard.tsx — Settings page connection card
+ 9. src/app/(dashboard)/settings/integrations/page.tsx — Add FrontConnectionCard to integrations page
+ 10. src/components/tasks/ConversationsTab.tsx — New TaskModal tab with conversation list, messages, link form, reply form
+ 11. src/components/tasks/TaskModal.tsx — Add Conversations tab trigger + content
+ 12. src/lib/inngest/events.ts — Add FrontConversationUpdatedEvent type
+ 13. src/lib/inngest/functions/sync-front-conversation.ts — Inngest function for webhook-triggered sync
+ 14. src/lib/inngest/functions/index.ts — Export new function
+ 15. src/app/api/inngest/route.ts — Register new function
+ 16. src/app/api/webhooks/front/route.ts — Webhook endpoint for Front events
+ 17. src/lib/actions/comments.ts — Add sendToFront support to createComment
+ 18. src/lib/hooks/useComments.ts — Pass sendToFront through mutation
+ 19. src/components/comments/CommentEditor.tsx — "Reply in Front" toggle button
+ 20. src/components/comments/CommentsSection.tsx — Pass hasFrontConversations prop, wire sendToFront
+
+ ---
+ Key Reusable Existing Code
+ What: CalendarConnectionCard pattern
+ Where: src/components/calendar/CalendarConnectionCard.tsx
+ How: Template for FrontConnectionCard (connection status, disconnect dialog, toast on connect)
+ ────────────────────────────────────────
+ What: Google Calendar token storage
+ Where: src/lib/db/schema/google-calendar.ts
+ How: Schema pattern for front_connections table
+ ────────────────────────────────────────
+ What: Inngest event + function pattern
+ Where: src/lib/inngest/events.ts + functions/send-*-slack-notification.ts
+ How: Template for FrontConversationUpdatedEvent + sync function
+ ────────────────────────────────────────
+ What: Inngest function registration
+ Where: src/app/api/inngest/route.ts
+ How: Add new function to serve()
+ ────────────────────────────────────────
+ What: CommentEditor footer toggle
+ Where: src/components/comments/CommentEditor.tsx:209-219
+ How: "Attach file" button pattern for "Reply in Front" toggle
+ ────────────────────────────────────────
+ What: CommentsSection submit flow
+ Where: src/components/comments/CommentsSection.tsx:53-67
+ How: Where to wire sendToFront into createComment
+ ────────────────────────────────────────
+ What: TaskModal tab pattern
+ Where: src/components/tasks/TaskModal.tsx:477-498
+ How: How tabs are structured (TabsList/TabsTrigger/TabsContent)
+ ────────────────────────────────────────
+ What: SubtasksTab conditional rendering
+ Where: src/components/tasks/TaskModal.tsx:488-498
+ How: Pattern for conditionally showing tab based on task state
+ ────────────────────────────────────────
+ What: Schema index barrel exports
+ Where: src/lib/db/schema/index.ts
+ How: Add front schema export
+ ────────────────────────────────────────
+ What: Hooks index barrel exports
+ Where: src/lib/hooks/index.ts
+ How: Add front hooks export
+ ────────────────────────────────────────
+ What: React Query key factory
+ Where: src/lib/hooks/useGoogleCalendar.ts (calendarKeys)
+ How: Pattern for frontKeys
+ ────────────────────────────────────────
+ What: Server action auth pattern
+ Where: src/lib/actions/google-calendar.ts
+ How: requireAuth() + connection check pattern
+ ────────────────────────────────────────
+ What: Fire-and-forget notification pattern
+ Where: src/lib/actions/comments.ts (createComment)
+ How: Pattern for async Front reply sends
+ ────────────────────────────────────────
+ What: Integrations settings page
+ Where: src/app/(dashboard)/settings/integrations/page.tsx
+ How: Where to add FrontConnectionCard
+
+ ---
+ Dependencies
+
+ - @tiptap/html: for generateHTML() to convert TiptapContent to HTML for Front replies.
+   Check if already installed; if not, npm install @tiptap/html.
+
+ ---
+ Environment Variables
+
+ FRONT_WEBHOOK_SECRET — secret for validating Front webhook signatures (env-based, set once)
+
+ Note: The API token is stored in the DB (front_connections table) via the settings UI, not as an env var.
+
+ ---
+ Verification
+
+ 1. Settings: Go to Settings > Integrations, paste a Front API token, verify it connects (tests with GET /me)
+ 2. Link conversation: Open a task, go to Conversations tab, paste a Front conversation URL,
+    verify it links and shows subject/status/last message time
+ 3. View messages: Expand a linked conversation, verify recent messages display with sender, timestamp, body
+ 4. Reply from Conversations tab: Type a reply in the expanded conversation's reply form,
+    verify it appears in Front
+ 5. Reply from comment: Post a comment with "Reply in Front" toggled on, verify the comment content
+    appears as a reply in the linked Front conversation(s)
+ 6. Webhook sync: Send a message to a linked conversation in Front, verify Central updates
+    lastMessageAt and shows the new message
+ 7. Webhook signature validation: Send a request with invalid signature to /api/webhooks/front,
+    verify 401 rejection
+ 8. Unlink: Unlink a conversation from a task, verify it's removed from the Conversations tab
+ 9. Cascade delete: Delete a task with linked conversations, verify front_conversations rows are deleted
+ 10. Disconnect: Disconnect Front in settings, verify all front_conversations are cleaned up
+ 11. Tab visibility: Verify Conversations tab only appears when Front is connected
+ 12. Empty state: Open Conversations tab on a task with no linked conversations, verify link form is shown

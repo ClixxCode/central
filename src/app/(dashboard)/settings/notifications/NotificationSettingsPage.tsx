@@ -47,7 +47,8 @@ export function NotificationSettingsPage() {
       </div>
 
       <NotificationSettingsMatrix
-        preferences={preferences}
+        preferences={preferences.notifications}
+        isContractor={preferences.isContractor}
         onUpdateEmail={async (settings) => {
           const result = await updateEmail.mutateAsync(settings);
           return result;

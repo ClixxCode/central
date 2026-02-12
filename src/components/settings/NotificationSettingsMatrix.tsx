@@ -81,8 +81,8 @@ const CHANNELS = [
     key: 'slack' as const,
     label: 'Slack',
     icon: MessageSquare,
-    color: 'text-purple-600 dark:text-purple-400',
-    bgColor: 'bg-purple-100 dark:bg-purple-500/20',
+    colorStyle: '#E11E5A',
+    bgColor: 'bg-red-100 dark:bg-red-500/20',
   },
 ];
 
@@ -91,6 +91,7 @@ type ChannelKey = (typeof CHANNELS)[number]['key'];
 
 interface NotificationSettingsMatrixProps {
   preferences: UserPreferences['notifications'];
+  isContractor?: boolean;
   onUpdateEmail: (settings: Partial<UserPreferences['notifications']['email']>) => Promise<{ success: boolean; error?: string }>;
   onUpdateSlack: (settings: Partial<UserPreferences['notifications']['slack']>) => Promise<{ success: boolean; error?: string }>;
   onUpdateInApp: (settings: Partial<UserPreferences['notifications']['inApp'] & { mentions?: boolean; assignments?: boolean; dueDates?: boolean; newComments?: boolean; replies?: boolean }>) => Promise<{ success: boolean; error?: string }>;
@@ -98,6 +99,7 @@ interface NotificationSettingsMatrixProps {
 
 export function NotificationSettingsMatrix({
   preferences,
+  isContractor = false,
   onUpdateEmail,
   onUpdateSlack,
   onUpdateInApp,
@@ -248,6 +250,18 @@ export function NotificationSettingsMatrix({
 
   const isPending = (key: string) => pendingChanges.has(key);
 
+  // Contractors don't get Slack notifications
+  const visibleChannels = isContractor
+    ? CHANNELS.filter((c) => c.key !== 'slack')
+    : CHANNELS;
+
+  // Check if a specific cell should be hidden
+  const isCellHidden = (channelKey: ChannelKey, typeKey: NotificationType): boolean => {
+    // Non-contractors can't get email due date notifications
+    if (!isContractor && channelKey === 'email' && typeKey === 'dueDates') return true;
+    return false;
+  };
+
   return (
     <div className="space-y-6">
       {/* Channel Master Toggles */}
@@ -259,8 +273,8 @@ export function NotificationSettingsMatrix({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {CHANNELS.map((channel) => {
+          <div className={cn('grid gap-4', visibleChannels.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+            {visibleChannels.map((channel) => {
               const Icon = channel.icon;
               const enabled = isChannelEnabled(channel.key);
               const pending = isPending(`${channel.key}-enabled`);
@@ -275,7 +289,7 @@ export function NotificationSettingsMatrix({
                 >
                   <div className="flex items-center gap-3">
                     <div className={cn('rounded-lg p-2', channel.bgColor)}>
-                      <Icon className={cn('h-5 w-5', channel.color)} />
+                      <Icon className={cn('h-5 w-5', 'color' in channel && channel.color)} style={'colorStyle' in channel ? { color: channel.colorStyle } : undefined} />
                     </div>
                     <Label className="font-medium">{channel.label}</Label>
                   </div>
@@ -308,12 +322,12 @@ export function NotificationSettingsMatrix({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[250px]">Notification</TableHead>
-                  {CHANNELS.map((channel) => {
+                  {visibleChannels.map((channel) => {
                     const Icon = channel.icon;
                     return (
                       <TableHead key={channel.key} className="text-center w-[100px]">
                         <div className="flex items-center justify-center gap-2">
-                          <Icon className={cn('h-4 w-4', channel.color)} />
+                          <Icon className={cn('h-4 w-4', 'color' in channel && channel.color)} style={'colorStyle' in channel ? { color: channel.colorStyle } : undefined} />
                           <span className="hidden sm:inline">{channel.label}</span>
                         </div>
                       </TableHead>
@@ -339,7 +353,12 @@ export function NotificationSettingsMatrix({
                         </TooltipContent>
                       </Tooltip>
                     </TableCell>
-                    {CHANNELS.map((channel) => {
+                    {visibleChannels.map((channel) => {
+                      const hidden = isCellHidden(channel.key, notif.key);
+                      if (hidden) {
+                        return <TableCell key={channel.key} className="text-center" />;
+                      }
+
                       const channelEnabled = isChannelEnabled(channel.key);
                       const typeEnabled = isTypeEnabled(channel.key, notif.key);
                       const pending = isPending(`${channel.key}-${notif.key}`);
@@ -417,11 +436,11 @@ export function NotificationSettingsMatrix({
         )}
 
         {/* Slack Settings */}
-        {localPrefs.slack.enabled && (
+        {!isContractor && localPrefs.slack.enabled && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <MessageSquare className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <MessageSquare className="h-4 w-4" style={{ color: '#E11E5A' }} />
                 Slack Settings
               </CardTitle>
             </CardHeader>

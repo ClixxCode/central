@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
+import { users, teamMembers } from '@/lib/db/schema';
 import type { UserPreferences } from '@/lib/db/schema/users';
 import { eq } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
@@ -47,6 +47,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 export async function getUserPreferences(): Promise<{
   success: boolean;
   preferences?: UserPreferences;
+  isContractor?: boolean;
   error?: string;
 }> {
   const user = await requireAuth();
@@ -60,10 +61,17 @@ export async function getUserPreferences(): Promise<{
     return { success: false, error: 'User not found' };
   }
 
+  // Check if user is in a contractor team (excludeFromPublic = true)
+  const userTeams = await db.query.teamMembers.findMany({
+    where: eq(teamMembers.userId, user.id),
+    with: { team: { columns: { excludeFromPublic: true } } },
+  });
+  const isContractor = userTeams.some((tm) => tm.team.excludeFromPublic);
+
   // Merge with defaults to ensure all fields exist
   const preferences = mergeWithDefaults(dbUser.preferences as UserPreferences | null);
 
-  return { success: true, preferences };
+  return { success: true, preferences, isContractor };
 }
 
 /**
