@@ -480,11 +480,6 @@ export async function checkRollupAccess(rollupBoardId: string): Promise<ActionRe
       return { success: true, data: false };
     }
 
-    // Admins always have access
-    if (currentUser.role === 'admin') {
-      return { success: true, data: true };
-    }
-
     // Check if user is owner
     const isOwner = await isRollupOwner(rollupBoardId, currentUser.id);
     if (isOwner) {

@@ -5,6 +5,7 @@ import {
   boards,
   rollupSources,
   rollupOwners,
+  rollupInvitations,
   boardAccess,
   teamMembers,
   teams,
@@ -199,6 +200,47 @@ async function getBoardAccessLevel(
 }
 
 /**
+ * Get rollup IDs a non-contractor user has access to via ownership or invitations.
+ * Rollups are private by default — users must be an owner or have an accepted invitation.
+ */
+async function getAccessibleRollupIds(userId: string): Promise<Set<string>> {
+  // Get rollups user owns
+  const ownedRollups = await db.query.rollupOwners.findMany({
+    where: eq(rollupOwners.userId, userId),
+    columns: { rollupBoardId: true },
+  });
+
+  // Get user's team IDs
+  const userTeams = await db.query.teamMembers.findMany({
+    where: eq(teamMembers.userId, userId),
+    columns: { teamId: true },
+  });
+  const teamIds = userTeams.map((t) => t.teamId);
+
+  // Build invitation conditions: direct user invite, team invite, or allUsers invite
+  const inviteConditions = [
+    eq(rollupInvitations.userId, userId),
+    eq(rollupInvitations.allUsers, true),
+  ];
+  if (teamIds.length > 0) {
+    inviteConditions.push(inArray(rollupInvitations.teamId, teamIds));
+  }
+
+  const acceptedInvitations = await db.query.rollupInvitations.findMany({
+    where: and(
+      eq(rollupInvitations.status, 'accepted'),
+      or(...inviteConditions)
+    ),
+    columns: { rollupBoardId: true },
+  });
+
+  const ids = new Set<string>();
+  for (const o of ownedRollups) ids.add(o.rollupBoardId);
+  for (const i of acceptedInvitations) ids.add(i.rollupBoardId);
+  return ids;
+}
+
+/**
  * List rollup boards the user has access to
  */
 export async function listRollupBoards(): Promise<ActionResult<RollupBoardSummary[]>> {
@@ -208,8 +250,6 @@ export async function listRollupBoards(): Promise<ActionResult<RollupBoardSummar
       return { success: false, error: 'Not authenticated' };
     }
 
-    const userIsAdmin = user.role === 'admin';
-
     // Get all rollup boards
     const allRollups = await db.query.boards.findMany({
       where: eq(boards.type, 'rollup'),
@@ -218,33 +258,19 @@ export async function listRollupBoards(): Promise<ActionResult<RollupBoardSummar
       },
     });
 
-    if (!userIsAdmin) {
-      // Check if user is in a contractor team
-      const isContractor = await isUserInContractorTeam(user.id);
+    // Check if user is in a contractor team
+    const isContractor = await isUserInContractorTeam(user.id);
 
-      if (!isContractor) {
-        // Non-contractors can see all rollups (public by default)
-        return {
-          success: true,
-          data: allRollups.map((rollup) => ({
-            id: rollup.id,
-            name: rollup.name,
-            type: 'rollup' as const,
-            sourceCount: rollup.rollupSources.length,
-          })),
-        };
-      }
-
+    if (isContractor) {
       // Contractors: filter to only rollups where they have explicit access to ALL source boards
       const accessibleBoardIds = await getExplicitAccessBoardIds(user.id);
       const accessibleSet = new Set(accessibleBoardIds);
 
-      const accessibleRollups = allRollups.filter((rollup) => {
-        // User can access rollup if they have access to all source boards
-        return rollup.rollupSources.every((source) =>
+      const accessibleRollups = allRollups.filter((rollup) =>
+        rollup.rollupSources.every((source) =>
           accessibleSet.has(source.sourceBoardId)
-        );
-      });
+        )
+      );
 
       return {
         success: true,
@@ -257,9 +283,14 @@ export async function listRollupBoards(): Promise<ActionResult<RollupBoardSummar
       };
     }
 
+    // All non-contractor users (including admins): rollups are private by default,
+    // only visible via ownership or accepted invitations
+    const accessibleIds = await getAccessibleRollupIds(user.id);
+    const accessibleRollups = allRollups.filter((rollup) => accessibleIds.has(rollup.id));
+
     return {
       success: true,
-      data: allRollups.map((rollup) => ({
+      data: accessibleRollups.map((rollup) => ({
         id: rollup.id,
         name: rollup.name,
         type: 'rollup' as const,
@@ -284,8 +315,6 @@ export async function getRollupBoard(
       return { success: false, error: 'Not authenticated' };
     }
 
-    const userIsAdmin = user.role === 'admin';
-
     // Get the rollup board
     const rollup = await db.query.boards.findFirst({
       where: and(eq(boards.id, rollupBoardId), eq(boards.type, 'rollup')),
@@ -308,24 +337,27 @@ export async function getRollupBoard(
       return { success: true, data: null };
     }
 
-    // Check user has access to all source boards
-    if (!userIsAdmin) {
-      const isContractor = await isUserInContractorTeam(user.id);
+    // Check user has access to this rollup
+    const isContractor = await isUserInContractorTeam(user.id);
 
-      if (isContractor) {
-        // Contractors need explicit access to all source boards
-        const accessibleBoardIds = await getExplicitAccessBoardIds(user.id);
-        const accessibleSet = new Set(accessibleBoardIds);
+    if (isContractor) {
+      // Contractors need explicit access to all source boards
+      const accessibleBoardIds = await getExplicitAccessBoardIds(user.id);
+      const accessibleSet = new Set(accessibleBoardIds);
 
-        const hasAccessToAll = rollup.rollupSources.every((source) =>
-          accessibleSet.has(source.sourceBoardId)
-        );
+      const hasAccessToAll = rollup.rollupSources.every((source) =>
+        accessibleSet.has(source.sourceBoardId)
+      );
 
-        if (!hasAccessToAll) {
-          return { success: true, data: null };
-        }
+      if (!hasAccessToAll) {
+        return { success: true, data: null };
       }
-      // Non-contractors have access to all boards (public by default)
+    } else {
+      // All non-contractor users (including admins): check ownership + invitations
+      const accessibleIds = await getAccessibleRollupIds(user.id);
+      if (!accessibleIds.has(rollup.id)) {
+        return { success: true, data: null };
+      }
     }
 
     return {
@@ -739,6 +771,15 @@ export async function getRollupTasks(
 
     if (!rollup) {
       return { success: false, error: 'Rollup board not found' };
+    }
+
+    // Verify user has access to this rollup (private by default)
+    const isContractor = await isUserInContractorTeam(user.id);
+    if (!isContractor) {
+      const accessibleIds = await getAccessibleRollupIds(user.id);
+      if (!accessibleIds.has(rollup.id)) {
+        return { success: false, error: 'You do not have access to this rollup' };
+      }
     }
 
     // Verify access to all source boards
