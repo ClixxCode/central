@@ -163,7 +163,7 @@ export function ApplyTemplateTasksDialog({
           <DialogDescription>
             {step === 'select_board' && 'Select the board to add tasks to.'}
             {step === 'map_statuses' && 'Map template statuses and sections to the board.'}
-            {step === 'confirm' && `${taskCount} tasks will be added to the board.`}
+            {step === 'confirm' && '\u00A0'}
           </DialogDescription>
         </DialogHeader>
 
@@ -287,15 +287,8 @@ export function ApplyTemplateTasksDialog({
           {step === 'confirm' && (
             <div className="rounded-lg bg-muted/50 p-4 text-sm">
               <p>
-                <strong>{taskCount}</strong> {taskCount === 1 ? 'task' : 'tasks'} will be added
-                to the selected board
-                {!isBoardTemplate && ' with the board\'s default status'}.
+                <strong>{taskCount}</strong> {taskCount === 1 ? 'task' : 'tasks'} will be added to the board.
               </p>
-              {!isBoardTemplate && (
-                <p className="mt-1 text-muted-foreground">
-                  All tasks will use the board&apos;s first status. No mapping needed.
-                </p>
-              )}
             </div>
           )}
         </div>
