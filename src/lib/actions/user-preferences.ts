@@ -34,7 +34,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
       enabled: true,
       mentions: true,
       assignments: true,
-      dueDates: true,
+      dueDates: false,
       newComments: true,
       replies: true,
     },
