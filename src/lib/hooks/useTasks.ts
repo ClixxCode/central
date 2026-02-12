@@ -200,6 +200,13 @@ export function useUpdateTask() {
         queryKey: taskKeys.lists(),
       });
 
+      // Normalize descriptionJson to description for optimistic cache updates
+      const { descriptionJson, ...rest } = updatedTask;
+      const optimisticUpdate: Record<string, unknown> = { ...rest };
+      if (descriptionJson !== undefined) {
+        optimisticUpdate.description = descriptionJson ? JSON.parse(descriptionJson) : null;
+      }
+
       // Optimistically update the single task
       if (previousTask) {
         queryClient.setQueryData<TaskWithAssignees>(
@@ -208,7 +215,7 @@ export function useUpdateTask() {
             if (!old) return old;
             return {
               ...old,
-              ...updatedTask,
+              ...optimisticUpdate,
               updatedAt: new Date(),
             };
           }
@@ -222,7 +229,7 @@ export function useUpdateTask() {
           if (!old) return old;
           return old.map((task) =>
             task.id === updatedTask.id
-              ? { ...task, ...updatedTask, updatedAt: new Date() }
+              ? { ...task, ...optimisticUpdate, updatedAt: new Date() }
               : task
           );
         }

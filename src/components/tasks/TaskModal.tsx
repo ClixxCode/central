@@ -418,7 +418,13 @@ export function TaskModal({
   }, []);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          debouncedSaveTitle.flush();
+          debouncedSaveDescription.flush();
+        }
+        onOpenChange(isOpen);
+      }}>
       <SheetContent side="right" className="!w-full sm:!w-[80vw] lg:!w-[66vw] !max-w-none p-0 flex flex-col gap-0">
         <SheetHeader className="border-b px-6 py-4 shrink-0">
           {/* Parent task breadcrumb for subtasks */}
