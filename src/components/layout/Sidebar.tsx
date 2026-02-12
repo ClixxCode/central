@@ -130,7 +130,7 @@ function SortableFavoriteItem({ favorite, isActive, href, hintKey }: SortableFav
   );
 }
 
-const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Schedule', 'Templates'];
+const DEFAULT_NAV_ORDER = ['My Work', 'Rollups', 'Schedule', 'Templates'];
 
 interface SortableNavEditItemProps {
   id: string;
@@ -305,7 +305,6 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
     'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
     'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
     'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
-    'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
   };
 
   // Build available items based on settings, then sort by saved order
@@ -432,6 +431,24 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                     </div>
                   </SortableContext>
                 </DndContext>
+
+                {/* Clients section toggle */}
+                <div className="mt-4 pt-4 border-t">
+                  <label className="flex items-center gap-3 py-1.5 cursor-pointer">
+                    <Checkbox
+                      checked={!draftHiddenNav.includes('Clients')}
+                      onCheckedChange={(checked) => {
+                        setDraftHiddenNav((prev) =>
+                          checked
+                            ? prev.filter((n) => n !== 'Clients')
+                            : [...prev, 'Clients']
+                        );
+                      }}
+                    />
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">Clients</span>
+                  </label>
+                </div>
               </div>
 
               {/* Footer */}
@@ -449,9 +466,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
           {/* Main Navigation */}
           <nav className="space-y-1">
             {navItems.map((item) => {
-              const isActive = item.href === '/clients'
-                ? pathname.startsWith('/clients')
-                : pathname === item.href;
+              const isActive = pathname === item.href;
               const Icon = item.icon;
 
               if (isCollapsed) {
