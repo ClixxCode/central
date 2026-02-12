@@ -1,0 +1,698 @@
+/* Central extension panel injected into Front */
+
+/* ── Theme variables ──────────────────────────────────────────────────────── */
+
+[data-central-theme="light"] {
+  --c-bg: oklch(1 0 0);
+  --c-fg: oklch(0.145 0 0);
+  --c-card: oklch(1 0 0);
+  --c-popover: oklch(1 0 0);
+  --c-border: oklch(0.922 0 0);
+  --c-input: oklch(0.922 0 0);
+  --c-ring: oklch(0.708 0 0 / 50%);
+  --c-muted: oklch(0.97 0 0);
+  --c-muted-fg: oklch(0.556 0 0);
+  --c-accent: oklch(0.97 0 0);
+  --c-accent-fg: oklch(0.205 0 0);
+  --c-primary: oklch(0.205 0 0);
+  --c-primary-fg: oklch(0.985 0 0);
+  --c-destructive: oklch(0.577 0.245 27.325);
+
+  /* Chip active colors (light) */
+  --c-chip-board-bg: #eff6ff;
+  --c-chip-board-border: #93c5fd;
+  --c-chip-board-fg: #1d4ed8;
+  --c-chip-assignee-bg: #f5f3ff;
+  --c-chip-assignee-border: #c4b5fd;
+  --c-chip-assignee-fg: #6d28d9;
+  --c-chip-date-bg: #fffbeb;
+  --c-chip-date-border: #fcd34d;
+  --c-chip-date-fg: #b45309;
+  --c-chip-status-bg: #f0fdf4;
+  --c-chip-status-border: #86efac;
+  --c-chip-status-fg: #15803d;
+}
+
+[data-central-theme="dark"] {
+  --c-bg: oklch(0.274 0.006 286.033);
+  --c-fg: oklch(0.968 0 0);
+  --c-card: oklch(0.372 0.011 285.786);
+  --c-popover: oklch(0.334 0.009 286);
+  --c-border: oklch(1 0 0 / 12%);
+  --c-input: oklch(1 0 0 / 15%);
+  --c-ring: oklch(0.556 0.016 286 / 50%);
+  --c-muted: oklch(0.372 0.011 285.786);
+  --c-muted-fg: oklch(0.705 0.015 286.067);
+  --c-accent: oklch(0.372 0.011 285.786);
+  --c-accent-fg: oklch(0.968 0 0);
+  --c-primary: oklch(0.968 0 0);
+  --c-primary-fg: oklch(0.21 0.006 285.885);
+  --c-destructive: oklch(0.704 0.191 22.216);
+
+  /* Chip active colors (dark) */
+  --c-chip-board-bg: rgba(59, 130, 246, 0.2);
+  --c-chip-board-border: rgba(59, 130, 246, 0.3);
+  --c-chip-board-fg: #93c5fd;
+  --c-chip-assignee-bg: rgba(168, 85, 247, 0.2);
+  --c-chip-assignee-border: rgba(168, 85, 247, 0.3);
+  --c-chip-assignee-fg: #d8b4fe;
+  --c-chip-date-bg: rgba(245, 158, 11, 0.2);
+  --c-chip-date-border: rgba(245, 158, 11, 0.3);
+  --c-chip-date-fg: #fcd34d;
+  --c-chip-status-bg: rgba(34, 197, 94, 0.2);
+  --c-chip-status-border: rgba(34, 197, 94, 0.3);
+  --c-chip-status-fg: #86efac;
+}
+
+/* ── Link button (injected into Front toolbar) ────────────────────────────── */
+
+.central-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  color: #6b7280;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.central-link-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.central-link-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.central-link-btn.linked {
+  color: #3b82f6;
+}
+
+/* ── Panel overlay ────────────────────────────────────────────────────────── */
+
+.central-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99998;
+}
+
+.central-panel {
+  position: fixed;
+  z-index: 99999;
+  width: 360px;
+  max-height: 520px;
+  background: var(--c-card);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--c-fg);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Panel header ─────────────────────────────────────────────────────────── */
+
+.central-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.central-panel-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.central-panel-close {
+  background: none;
+  border: none;
+  color: var(--c-muted-fg);
+  cursor: pointer;
+  padding: 2px;
+  line-height: 1;
+  font-size: 18px;
+}
+
+.central-panel-close:hover {
+  color: var(--c-fg);
+}
+
+/* ── Create form (shown by default) ──────────────────────────────────────── */
+
+.central-panel-create {
+  padding: 10px 14px;
+}
+
+.central-panel-create-form {
+  /* no margin-top — it's the primary content now */
+}
+
+.central-panel-create-form input[type="text"],
+.central-panel-create-form textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--c-input);
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  outline: none;
+  background: var(--c-bg);
+  color: var(--c-fg);
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.central-panel-create-form textarea {
+  resize: vertical;
+  min-height: 48px;
+  max-height: 100px;
+}
+
+.central-panel-create-form input[type="text"]:focus,
+.central-panel-create-form textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px var(--c-ring);
+}
+
+.central-panel-create-form input[type="text"]::placeholder,
+.central-panel-create-form textarea::placeholder {
+  color: var(--c-muted-fg);
+}
+
+/* ── Chip row (Board, Assignee, Date, Status buttons) ─────────────────────── */
+
+.central-chip-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+/* Base chip button */
+.central-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--c-input);
+  border-radius: 6px;
+  background: var(--c-bg);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--c-muted-fg);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  line-height: 1.3;
+}
+
+.central-chip:hover {
+  background: var(--c-accent);
+  border-color: var(--c-muted-fg);
+}
+
+/* Active chip states by type */
+.central-chip.active-board {
+  background: var(--c-chip-board-bg);
+  border-color: var(--c-chip-board-border);
+  color: var(--c-chip-board-fg);
+}
+
+.central-chip.active-assignee {
+  background: var(--c-chip-assignee-bg);
+  border-color: var(--c-chip-assignee-border);
+  color: var(--c-chip-assignee-fg);
+}
+
+.central-chip.active-date {
+  background: var(--c-chip-date-bg);
+  border-color: var(--c-chip-date-border);
+  color: var(--c-chip-date-fg);
+}
+
+.central-chip.active-status {
+  background: var(--c-chip-status-bg);
+  border-color: var(--c-chip-status-border);
+  color: var(--c-chip-status-fg);
+}
+
+/* ── Dropdown menu (opens upward) ─────────────────────────────────────────── */
+
+.central-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  width: 260px;
+  max-height: 240px;
+  background: var(--c-popover);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.central-dropdown-search {
+  padding: 8px;
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+
+.central-dropdown-search input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--c-input);
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+  background: var(--c-bg);
+  color: var(--c-fg);
+}
+
+.central-dropdown-search input::placeholder {
+  color: var(--c-muted-fg);
+}
+
+.central-dropdown-search input:focus {
+  border-color: #3b82f6;
+}
+
+.central-dropdown-list {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Group header (client name in board dropdown) */
+.central-dropdown-group {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--c-muted-fg);
+}
+
+/* Dropdown item */
+.central-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--c-fg);
+  transition: background 0.1s;
+}
+
+.central-dropdown-item:hover {
+  background: var(--c-accent);
+}
+
+.central-dropdown-item.selected {
+  background: var(--c-chip-board-bg);
+}
+
+/* Check mark for multi-select */
+.central-dropdown-check {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--c-input);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: transparent;
+}
+
+.central-dropdown-item.selected .central-dropdown-check {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+/* Avatar initials circle */
+.central-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--c-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--c-muted-fg);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.central-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Status color dot */
+.central-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Date suggestions */
+.central-dropdown-item.date-option {
+  justify-content: space-between;
+}
+
+.central-dropdown-item .date-label {
+  color: var(--c-muted-fg);
+  font-size: 11px;
+}
+
+/* Native date input in dropdown */
+.central-dropdown-date-input {
+  padding: 6px 10px;
+  border-top: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+
+.central-dropdown-date-input input[type="date"] {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--c-input);
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  background: var(--c-bg);
+  color: var(--c-fg);
+}
+
+.central-dropdown-date-input input[type="date"]:focus {
+  border-color: #3b82f6;
+}
+
+/* ── Form footer with buttons ─────────────────────────────────────────────── */
+
+.central-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.central-form-footer button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.central-btn-cancel {
+  background: var(--c-muted);
+  color: var(--c-fg);
+}
+
+.central-btn-cancel:hover {
+  background: var(--c-accent);
+}
+
+.central-btn-primary {
+  background: var(--c-primary);
+  color: var(--c-primary-fg);
+}
+
+.central-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.central-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Small chip avatars in assignee chip ───────────────────────────────────── */
+
+.central-chip-avatars {
+  display: flex;
+  margin-left: 2px;
+}
+
+.central-chip-avatars .central-avatar {
+  width: 16px;
+  height: 16px;
+  font-size: 8px;
+  margin-left: -4px;
+  border: 1.5px solid var(--c-card);
+}
+
+.central-chip-avatars .central-avatar:first-child {
+  margin-left: 0;
+}
+
+/* ── Dropdown empty state ─────────────────────────────────────────────────── */
+
+.central-dropdown-empty {
+  padding: 12px 10px;
+  text-align: center;
+  color: var(--c-muted-fg);
+  font-size: 11px;
+}
+
+/* ── Search section (hidden by default, shown via toggle) ─────────────────── */
+
+.central-panel-search-section {
+  border-top: 1px solid var(--c-border);
+  padding: 10px 14px 0;
+}
+
+.central-panel-search-toggle {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.central-panel-search-toggle:hover {
+  text-decoration: underline;
+}
+
+.central-panel-search-toggle .toggle-icon {
+  font-size: 14px;
+  transition: transform 0.15s;
+}
+
+.central-panel-search-section.expanded .toggle-icon {
+  transform: rotate(90deg);
+}
+
+.central-panel-search-hint {
+  font-size: 11px;
+  color: var(--c-muted-fg);
+  margin-top: 2px;
+  margin-bottom: 6px;
+}
+
+.central-panel-search {
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+
+.central-panel-search input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--c-input);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+  background: var(--c-bg);
+  color: var(--c-fg);
+}
+
+.central-panel-search input::placeholder {
+  color: var(--c-muted-fg);
+}
+
+.central-panel-search input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px var(--c-ring);
+}
+
+/* ── Search results ───────────────────────────────────────────────────────── */
+
+.central-panel-results {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.central-panel-result {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--c-border);
+  transition: background 0.1s;
+}
+
+.central-panel-result:hover {
+  background: var(--c-accent);
+}
+
+.central-panel-result-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.central-panel-result-meta {
+  font-size: 11px;
+  color: var(--c-muted-fg);
+  margin-top: 1px;
+}
+
+/* ── Panel states ─────────────────────────────────────────────────────────── */
+
+.central-panel-empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--c-muted-fg);
+  font-size: 12px;
+}
+
+.central-panel-loading {
+  padding: 16px 14px;
+  text-align: center;
+  color: var(--c-muted-fg);
+  font-size: 12px;
+}
+
+.central-panel-success {
+  padding: 20px 14px;
+  text-align: center;
+  color: #22c55e;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.central-panel-error {
+  padding: 8px 14px;
+  color: var(--c-destructive);
+  font-size: 12px;
+}
+
+/* ── Toast notification ───────────────────────────────────────────────────── */
+
+.central-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 99999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  animation: central-toast-in 0.2s ease-out;
+}
+
+@keyframes central-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.central-toast-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--c-card);
+  color: var(--c-fg);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.central-toast-check {
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.central-toast-text {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.central-toast-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.central-toast-btn {
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--c-border);
+  background: var(--c-muted);
+  color: var(--c-fg);
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+.central-toast-btn:hover {
+  background: var(--c-accent);
+}
+
+.central-toast-dismiss {
+  background: none;
+  border: none;
+  color: var(--c-muted-fg);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 16px;
+  line-height: 1;
+  margin-left: 4px;
+}
+
+.central-toast-dismiss:hover {
+  color: var(--c-fg);
+}

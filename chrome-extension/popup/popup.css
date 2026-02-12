@@ -1,0 +1,231 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Theme variables ────────────────────────────────────────────────────── */
+
+[data-central-theme="light"] {
+  --c-bg: oklch(1 0 0);
+  --c-fg: oklch(0.145 0 0);
+  --c-card: oklch(1 0 0);
+  --c-border: oklch(0.922 0 0);
+  --c-input: oklch(0.922 0 0);
+  --c-ring: oklch(0.708 0 0 / 50%);
+  --c-muted: oklch(0.97 0 0);
+  --c-muted-fg: oklch(0.556 0 0);
+  --c-accent: oklch(0.97 0 0);
+  --c-primary: oklch(0.205 0 0);
+  --c-primary-fg: oklch(0.985 0 0);
+  --c-destructive: oklch(0.577 0.245 27.325);
+  --c-success-bg: #f0fdf4;
+  --c-success: #22c55e;
+}
+
+[data-central-theme="dark"] {
+  --c-bg: oklch(0.274 0.006 286.033);
+  --c-fg: oklch(0.968 0 0);
+  --c-card: oklch(0.372 0.011 285.786);
+  --c-border: oklch(1 0 0 / 12%);
+  --c-input: oklch(1 0 0 / 15%);
+  --c-ring: oklch(0.556 0.016 286 / 50%);
+  --c-muted: oklch(0.372 0.011 285.786);
+  --c-muted-fg: oklch(0.705 0.015 286.067);
+  --c-accent: oklch(0.372 0.011 285.786);
+  --c-primary: oklch(0.968 0 0);
+  --c-primary-fg: oklch(0.21 0.006 285.885);
+  --c-destructive: oklch(0.704 0.191 22.216);
+  --c-success-bg: rgba(34, 197, 94, 0.15);
+  --c-success: #4ade80;
+}
+
+/* ── Base styles ────────────────────────────────────────────────────────── */
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--c-fg);
+  background: var(--c-bg);
+  width: 300px;
+}
+
+.container {
+  padding: 16px;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--c-muted-fg);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.hint a {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.hint a:hover {
+  text-decoration: underline;
+}
+
+.field {
+  margin-bottom: 12px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-muted-fg);
+  margin-bottom: 4px;
+}
+
+.field input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--c-input);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  background: var(--c-bg);
+  color: var(--c-fg);
+}
+
+.field input::placeholder {
+  color: var(--c-muted-fg);
+}
+
+.field input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px var(--c-ring);
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--c-primary);
+  color: var(--c-primary-fg);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--c-muted);
+  color: var(--c-fg);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-secondary:hover {
+  background: var(--c-accent);
+}
+
+.error {
+  color: var(--c-destructive);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: var(--c-success-bg);
+  border-radius: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c-success);
+  flex-shrink: 0;
+}
+
+#user-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ── Theme selector ─────────────────────────────────────────────────────── */
+
+.theme-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-border);
+}
+
+.theme-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-muted-fg);
+  margin-bottom: 6px;
+}
+
+.theme-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.theme-btn {
+  flex: 1;
+  padding: 6px 0;
+  background: var(--c-bg);
+  color: var(--c-muted-fg);
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-right: 1px solid var(--c-border);
+}
+
+.theme-btn:last-child {
+  border-right: none;
+}
+
+.theme-btn:hover {
+  background: var(--c-accent);
+}
+
+.theme-btn.active {
+  background: var(--c-primary);
+  color: var(--c-primary-fg);
+}
