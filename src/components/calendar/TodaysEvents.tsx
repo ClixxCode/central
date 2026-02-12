@@ -13,7 +13,7 @@ import {
   Video,
 } from 'lucide-react';
 import { useTodaysEvents } from '@/lib/hooks';
-import type { CalendarEvent } from '@/lib/google-calendar/api';
+import { getMeetingLink } from '@/lib/google-calendar/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
@@ -174,32 +174,33 @@ export function TodaysEvents() {
           ) : (
             visibleEvents.map((event) => {
               const current = isCurrentEvent(event.start, event.end);
+              const meetingLink = getMeetingLink(event);
               return (
                 <div
                   key={event.id}
-                  className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm ${
+                  className={`flex items-center rounded-md px-3 py-2 text-sm ${
                     current ? 'bg-primary/5 border border-primary/10' : 'hover:bg-muted/50'
                   }`}
                 >
-                  <div className="text-muted-foreground min-w-[120px] shrink-0">
-                    <span className="text-xs">
-                      {formatTimeRange(event.start, event.end)}
-                    </span>
+                  <div className="text-muted-foreground text-xs" style={{ width: 135, flexShrink: 0 }}>
+                    {formatTimeRange(event.start, event.end)}
                   </div>
-                  <span className="truncate font-medium">{event.summary}</span>
-                  <div className="flex items-center gap-2 ml-auto shrink-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="truncate font-medium">{event.summary}</span>
                     {event.attendees && event.attendees.length > 1 && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                         <Users className="h-3 w-3" />
                         {event.attendees.length}
                       </span>
                     )}
-                    {event.hangoutLink && (
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    {meetingLink && (
                       <a
-                        href={event.hangoutLink}
+                        href={meetingLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary hover:text-primary/80"
+                        className="text-muted-foreground hover:text-foreground"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Video className="h-3.5 w-3.5" />

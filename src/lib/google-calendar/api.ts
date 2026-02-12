@@ -10,6 +10,50 @@ export interface CalendarEvent {
   attendees?: { email: string; responseStatus: string }[];
   status: string;
   eventType?: string;
+  conferenceData?: {
+    entryPoints?: { entryPointType: string; uri: string; label?: string }[];
+    conferenceSolution?: { name: string; iconUri?: string };
+  };
+  location?: string;
+  description?: string;
+}
+
+const MEETING_URL_PATTERNS = [
+  /https?:\/\/[\w.-]*zoom\.us\/[^\s<"')]+/i,
+  /https?:\/\/meet\.google\.com\/[^\s<"')]+/i,
+  /https?:\/\/teams\.microsoft\.com\/[^\s<"')]+/i,
+  /https?:\/\/[\w.-]*webex\.com\/[^\s<"')]+/i,
+];
+
+export function getMeetingLink(event: CalendarEvent): string | null {
+  // 1. Native Google Meet link
+  if (event.hangoutLink) return event.hangoutLink;
+
+  // 2. Conference data entry points (Zoom/Teams/etc. added via calendar integration)
+  if (event.conferenceData?.entryPoints) {
+    const videoEntry = event.conferenceData.entryPoints.find(
+      (ep) => ep.entryPointType === 'video'
+    );
+    if (videoEntry?.uri) return videoEntry.uri;
+  }
+
+  // 3. Meeting URL in location field
+  if (event.location) {
+    for (const pattern of MEETING_URL_PATTERNS) {
+      const match = event.location.match(pattern);
+      if (match) return match[0];
+    }
+  }
+
+  // 4. Meeting URL in description (fallback)
+  if (event.description) {
+    for (const pattern of MEETING_URL_PATTERNS) {
+      const match = event.description.match(pattern);
+      if (match) return match[0];
+    }
+  }
+
+  return null;
 }
 
 export interface BusyBlock {
@@ -50,6 +94,7 @@ export async function fetchTodaysEvents(
     singleEvents: 'true',
     orderBy: 'startTime',
     maxResults: '50',
+    conferenceDataVersion: '1',
   });
 
   const response = await fetch(
