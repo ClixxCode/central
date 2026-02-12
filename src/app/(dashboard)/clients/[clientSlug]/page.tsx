@@ -27,7 +27,7 @@ export default async function ClientPage({ params }: Props) {
 
   // Fetch team members for lead display and selection
   let teamMembers: { id: string; name: string | null; email: string; avatarUrl: string | null }[] = [];
-  const usersResult = await listAssignableUsers();
+  const usersResult = await listAssignableUsers(undefined, { includeContractors: true });
   if (usersResult.success && usersResult.users) {
     teamMembers = usersResult.users;
   }

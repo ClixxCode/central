@@ -37,7 +37,7 @@ export async function getCurrentUserAction(): Promise<{
  * Without boardId: returns all non-contractor users (safe for any authenticated user).
  * With boardId: delegates to existing getBoardAssignableUsers(boardId).
  */
-export async function listAssignableUsers(boardId?: string): Promise<{
+export async function listAssignableUsers(boardId?: string, options?: { includeContractors?: boolean }): Promise<{
   success: boolean;
   users?: { id: string; email: string; name: string | null; avatarUrl: string | null }[];
   error?: string;
@@ -48,7 +48,7 @@ export async function listAssignableUsers(boardId?: string): Promise<{
     return getBoardAssignableUsers(boardId);
   }
 
-  // Without boardId: return all active non-contractor users
+  // Without boardId: return all active users
   const allUsers = await db
     .select({
       id: users.id,
@@ -58,6 +58,10 @@ export async function listAssignableUsers(boardId?: string): Promise<{
     })
     .from(users)
     .where(isNull(users.deactivatedAt));
+
+  if (options?.includeContractors) {
+    return { success: true, users: allUsers };
+  }
 
   // Get contractor team IDs
   const contractorTeams = await db.query.teams.findMany({
