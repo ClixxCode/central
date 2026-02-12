@@ -43,6 +43,9 @@ interface BoardTableProps {
   onSortChange?: (sort: TaskSortOptions) => void;
   columns?: ColumnConfig;
   emptyMessage?: string;
+  selectedTaskIds?: Set<string>;
+  onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
+  isMultiSelectMode?: boolean;
 }
 
 export function BoardTable({
@@ -59,6 +62,9 @@ export function BoardTable({
   onSortChange,
   columns = defaultColumns,
   emptyMessage = 'No tasks found',
+  selectedTaskIds,
+  onTaskMultiSelect,
+  isMultiSelectMode,
 }: BoardTableProps) {
   const handleSort = (field: SortField) => {
     if (!onSortChange) return;
@@ -223,6 +229,9 @@ export function BoardTable({
                   columns={columns}
                   onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                   isExpanded={expandedParents.has(task.id)}
+                  isSelected={selectedTaskIds?.has(task.id)}
+                  isMultiSelectMode={isMultiSelectMode}
+                  onMultiSelectClick={(e) => onTaskMultiSelect?.(task.id, e.shiftKey, tasks.map((t) => t.id))}
                 />
                 {expandedParents.has(task.id) && (
                   <SubtaskRows

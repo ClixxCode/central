@@ -39,6 +39,9 @@ interface TaskRowProps {
   onToggleSubtasks?: () => void;
   isExpanded?: boolean;
   isSubtask?: boolean;
+  isSelected?: boolean;
+  isMultiSelectMode?: boolean;
+  onMultiSelectClick?: (e: React.MouseEvent) => void;
   columns: {
     title: boolean;
     status: boolean;
@@ -60,6 +63,9 @@ export function TaskRow({
   onToggleSubtasks,
   isExpanded,
   isSubtask,
+  isSelected,
+  isMultiSelectMode,
+  onMultiSelectClick,
   columns,
 }: TaskRowProps) {
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
@@ -159,12 +165,22 @@ export function TaskRow({
       className={cn(
         'group border-b transition-colors',
         'hover:bg-muted/50',
-        isUpdating && 'opacity-50'
+        isUpdating && 'opacity-50',
+        isSelected && 'bg-primary/10 hover:bg-primary/15'
       )}
+      onClick={(e) => {
+        if (isMultiSelectMode || e.shiftKey) {
+          // Only handle selection from title cell clicks, not from interactive controls
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-task-title-cell]')) {
+            onMultiSelectClick?.(e);
+          }
+        }
+      }}
     >
       {/* Title Column */}
       {columns.title && (
-        <td className="px-3 py-2">
+        <td className="px-3 py-2" data-task-title-cell>
           <div className={cn('flex items-center gap-1.5', isSubtask && 'pl-6')}>
             {task.subtaskCount > 0 && onToggleSubtasks && (
               <button
@@ -202,7 +218,9 @@ export function TaskRow({
             ) : (
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  // In multi-select mode, let the row onClick handle it
+                  if (isMultiSelectMode || e.shiftKey) return;
                   // Cancel any existing timeout first
                   if (clickTimeoutRef.current) {
                     clearTimeout(clickTimeoutRef.current);

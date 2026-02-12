@@ -15,12 +15,13 @@ interface SwimlaneTaskCardProps {
   task: TaskWithAssignees;
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
   isDragging?: boolean;
   isOverlay?: boolean;
   onToggleSubtasks?: () => void;
   isExpanded?: boolean;
   hiddenItems?: Set<string>;
+  isSelected?: boolean;
 }
 
 export function SwimlaneTaskCard({
@@ -33,6 +34,7 @@ export function SwimlaneTaskCard({
   onToggleSubtasks,
   isExpanded,
   hiddenItems,
+  isSelected,
 }: SwimlaneTaskCardProps) {
   const section = sectionOptions.find((s) => s.id === task.section);
   const showSection = !hiddenItems?.has('section');
@@ -49,13 +51,14 @@ export function SwimlaneTaskCard({
         'hover:border-primary/50 hover:shadow-sm',
         isDragging && 'opacity-50 border-primary shadow-lg',
         isOverlay && 'border-primary shadow-lg cursor-grabbing',
-        onClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+        onClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        isSelected && 'ring-2 ring-primary border-primary bg-primary/5'
       )}
-      onClick={onClick}
+      onClick={(e) => onClick?.(e)}
       onKeyDown={(e) => {
         if (onClick && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault();
-          onClick();
+          onClick(e as unknown as React.MouseEvent);
         }
       }}
     >

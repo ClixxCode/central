@@ -2594,3 +2594,138 @@ export async function listArchivedTasks(
 
   return { success: true, tasks: result };
 }
+
+// ──────────────────────────────────────
+// Bulk Update Tasks
+// ──────────────────────────────────────
+
+export interface BulkUpdateTasksInput {
+  taskIds: string[];
+  status?: string;
+  section?: string | null;
+  dueDate?: string | null;
+  addAssigneeIds?: string[];
+  boardId?: string; // move to a different board
+}
+
+export async function bulkUpdateTasks(input: BulkUpdateTasksInput): Promise<{
+  success: boolean;
+  updatedCount?: number;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  if (!input.taskIds.length) {
+    return { success: false, error: 'No tasks specified' };
+  }
+
+  // Verify access to all tasks in one query
+  const taskList = await db
+    .select({ id: tasks.id, boardId: tasks.boardId })
+    .from(tasks)
+    .where(inArray(tasks.id, input.taskIds));
+
+  if (taskList.length !== input.taskIds.length) {
+    return { success: false, error: 'Some tasks not found' };
+  }
+
+  // Verify board access for all unique source boards
+  const uniqueBoardIds = [...new Set(taskList.map((t) => t.boardId))];
+  for (const boardId of uniqueBoardIds) {
+    const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+    if (accessLevel !== 'full') {
+      return { success: false, error: 'Access denied to one or more boards' };
+    }
+  }
+
+  // Build update data
+  const updateData: Partial<typeof tasks.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+
+  if (input.boardId) {
+    // Moving to a different board — verify access to target board
+    const targetAccess = await getBoardAccessLevel(user.id, input.boardId, isAdmin);
+    if (targetAccess !== 'full') {
+      return { success: false, error: 'Access denied to target board' };
+    }
+
+    // Get target board's first status as default
+    const targetBoard = await db.query.boards.findFirst({
+      where: eq(boards.id, input.boardId),
+      columns: { statusOptions: true },
+    });
+    const targetStatuses = (targetBoard?.statusOptions ?? []).sort(
+      (a, b) => a.position - b.position
+    );
+    const defaultStatus = targetStatuses[0]?.id ?? 'todo';
+
+    updateData.boardId = input.boardId;
+    updateData.status = defaultStatus;
+    updateData.section = null;
+  }
+
+  if (input.status !== undefined && !input.boardId) updateData.status = input.status;
+  if (input.section !== undefined) updateData.section = input.section;
+  if (input.dueDate !== undefined) updateData.dueDate = input.dueDate;
+
+  // Apply update
+  await db
+    .update(tasks)
+    .set(updateData)
+    .where(inArray(tasks.id, input.taskIds));
+
+  // Add assignees (additive, not replacement)
+  if (input.addAssigneeIds && input.addAssigneeIds.length > 0) {
+    // Get existing assignees for all tasks
+    const existingAssignees = await db
+      .select({ taskId: taskAssignees.taskId, userId: taskAssignees.userId })
+      .from(taskAssignees)
+      .where(inArray(taskAssignees.taskId, input.taskIds));
+
+    const existingSet = new Set(
+      existingAssignees.map((a) => `${a.taskId}:${a.userId}`)
+    );
+
+    // Build new assignments (skip duplicates)
+    const newAssignments: { taskId: string; userId: string }[] = [];
+    for (const taskId of input.taskIds) {
+      for (const userId of input.addAssigneeIds) {
+        if (!existingSet.has(`${taskId}:${userId}`)) {
+          newAssignments.push({ taskId, userId });
+        }
+      }
+    }
+
+    if (newAssignments.length > 0) {
+      await db.insert(taskAssignees).values(newAssignments);
+
+      // Send assignment notifications (fire-and-forget)
+      for (const assignment of newAssignments) {
+        createAssignmentNotification({
+          assigneeUserId: assignment.userId,
+          assignerUserId: user.id,
+          taskId: assignment.taskId,
+        }).catch((err) =>
+          console.error('Failed to create assignment notification:', err)
+        );
+      }
+    }
+  }
+
+  // Log activity for each task (fire-and-forget)
+  for (const taskId of input.taskIds) {
+    logBoardActivity({
+      boardId: input.boardId ?? taskList.find((t) => t.id === taskId)!.boardId,
+      taskId,
+      taskTitle: '',
+      userId: user.id,
+      action: 'task_updated',
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
+
+  revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
+
+  return { success: true, updatedCount: input.taskIds.length };
+}

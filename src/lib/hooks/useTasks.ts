@@ -15,6 +15,7 @@ import {
   unarchiveTask,
   bulkArchiveDone,
   listArchivedTasks,
+  bulkUpdateTasks,
   TaskWithAssignees,
   CreateTaskInput,
   UpdateTaskInput,
@@ -22,6 +23,7 @@ import {
   TaskSortOptions,
   MyTasksByClient,
   ArchivedTaskSummary,
+  BulkUpdateTasksInput,
 } from '@/lib/actions/tasks';
 
 // Query key factory
@@ -563,6 +565,31 @@ export function useUnarchiveTask() {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.details() });
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+    },
+  });
+}
+
+/**
+ * Hook to bulk update multiple tasks at once
+ */
+export function useBulkUpdateTasks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: BulkUpdateTasksInput) => {
+      const result = await bulkUpdateTasks(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to update tasks');
+      }
+      return result.updatedCount!;
+    },
+    onSuccess: (count) => {
+      toast.success(`Updated ${count} task${count === 1 ? '' : 's'}`);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.details() });
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
     },
   });

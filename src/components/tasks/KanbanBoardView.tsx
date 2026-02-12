@@ -32,6 +32,10 @@ interface KanbanBoardViewProps {
   onTaskModalClose?: () => void;
   /** Set of card item IDs to hide (e.g. 'section', 'dueDate', 'assignees') */
   hiddenItems?: Set<string>;
+  /** Multi-select state */
+  selectedTaskIds?: Set<string>;
+  onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
+  isMultiSelectMode?: boolean;
 }
 
 export function KanbanBoardView({
@@ -46,6 +50,9 @@ export function KanbanBoardView({
   highlightedCommentId,
   onTaskModalClose,
   hiddenItems,
+  selectedTaskIds,
+  onTaskMultiSelect,
+  isMultiSelectMode,
 }: KanbanBoardViewProps) {
   const updateTaskPositions = useUpdateTaskPositions();
   const updateTask = useUpdateTask();
@@ -290,10 +297,18 @@ export function KanbanBoardView({
                       task={task}
                       sectionOptions={sectionOptions}
                       assignableUsers={assignableUsers}
-                      onClick={() => setSelectedTaskId(task.id)}
+                      onClick={(e) => {
+                        if (isMultiSelectMode || e.shiftKey) {
+                          const columnTaskIds = columnTasks.map((t) => t.id);
+                          onTaskMultiSelect?.(task.id, e.shiftKey, columnTaskIds);
+                        } else {
+                          setSelectedTaskId(task.id);
+                        }
+                      }}
                       onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                       isExpanded={expandedParents.has(task.id)}
                       hiddenItems={hiddenItems}
+                      isSelected={selectedTaskIds?.has(task.id)}
                     />
                     {expandedParents.has(task.id) && (
                       <ExpandedSubtasks

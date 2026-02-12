@@ -11,6 +11,8 @@ import { KanbanBoardView } from './KanbanBoardView';
 import { ViewToggleButtons } from './ViewToggle';
 import { TaskFilterBar } from './TaskFilterBar';
 import { TaskModal } from './TaskModal';
+import { MultiSelectFloatingBar, type BulkEditPayload } from './MultiSelectFloatingBar';
+import { MoveTasksDialog } from './MoveTasksDialog';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
 import {
@@ -20,6 +22,7 @@ import {
   useDeleteTask,
   useAssignableUsers,
   useTask,
+  useBulkUpdateTasks,
   taskKeys,
 } from '@/lib/hooks/useTasks';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
@@ -73,7 +76,7 @@ export function BoardPageClient({
   const createTaskTrigger = useQuickActionsStore((state) => state.createTaskTrigger);
   const resetCreateTaskTrigger = useQuickActionsStore((state) => state.resetCreateTaskTrigger);
   const lastHandledTriggerRef = React.useRef(0);
-  
+
   React.useEffect(() => {
     if (createTaskTrigger > 0 && createTaskTrigger !== lastHandledTriggerRef.current) {
       lastHandledTriggerRef.current = createTaskTrigger;
@@ -91,6 +94,7 @@ export function BoardPageClient({
   const createTask = useCreateTask(boardId);
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const bulkUpdate = useBulkUpdateTasks();
 
   // Realtime: invalidate board tasks when any task in this board changes
   useRealtimeInvalidation({
@@ -99,6 +103,115 @@ export function BoardPageClient({
     filter: `board_id=eq.${boardId}`,
     queryKeys: [taskKeys.lists(), taskKeys.details()],
   });
+
+  // ─── Multi-select state ───────────────────────────────────
+  const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<string>>(new Set());
+  const lastSelectedIdRef = React.useRef<string | null>(null);
+  const isMultiSelectMode = selectedTaskIds.size > 0;
+
+  // Move tasks dialog state
+  const [moveDialog, setMoveDialog] = React.useState<{
+    open: boolean;
+    payload: BulkEditPayload | null;
+  }>({ open: false, payload: null });
+
+  const clearSelection = React.useCallback(() => {
+    setSelectedTaskIds(new Set());
+    lastSelectedIdRef.current = null;
+  }, []);
+
+  // Clear selection when boardId changes
+  const prevBoardIdRef = React.useRef(boardId);
+  React.useEffect(() => {
+    if (prevBoardIdRef.current !== boardId) {
+      clearSelection();
+      prevBoardIdRef.current = boardId;
+    }
+  }, [boardId, clearSelection]);
+
+  // Escape key listener
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMultiSelectMode) {
+        clearSelection();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isMultiSelectMode, clearSelection]);
+
+  // Multi-select click handler
+  const handleTaskMultiSelect = React.useCallback(
+    (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => {
+      setSelectedTaskIds((prev) => {
+        const next = new Set(prev);
+
+        if (shiftKey && lastSelectedIdRef.current && prev.size > 0) {
+          // Range select: select all tasks between lastSelectedId and taskId
+          const lastIdx = orderedTaskIds.indexOf(lastSelectedIdRef.current);
+          const currentIdx = orderedTaskIds.indexOf(taskId);
+          if (lastIdx !== -1 && currentIdx !== -1) {
+            const start = Math.min(lastIdx, currentIdx);
+            const end = Math.max(lastIdx, currentIdx);
+            for (let i = start; i <= end; i++) {
+              next.add(orderedTaskIds[i]);
+            }
+          } else {
+            // Fallback: just toggle
+            next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+          }
+        } else {
+          // Toggle single task
+          next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+        }
+
+        lastSelectedIdRef.current = taskId;
+        return next;
+      });
+    },
+    []
+  );
+
+  // Handle bulk edit apply
+  const handleBulkApply = React.useCallback(
+    (payload: BulkEditPayload) => {
+      // If moving to another board, show confirmation dialog
+      if (payload.boardId) {
+        setMoveDialog({ open: true, payload });
+        return;
+      }
+
+      bulkUpdate.mutate(
+        {
+          taskIds: Array.from(selectedTaskIds),
+          status: payload.status,
+          section: payload.section,
+          dueDate: payload.dueDate,
+          addAssigneeIds: payload.addAssigneeIds,
+        },
+        { onSuccess: () => clearSelection() }
+      );
+    },
+    [selectedTaskIds, bulkUpdate, clearSelection]
+  );
+
+  // Handle confirmed move
+  const handleConfirmMove = React.useCallback(() => {
+    if (!moveDialog.payload) return;
+    bulkUpdate.mutate(
+      {
+        taskIds: Array.from(selectedTaskIds),
+        boardId: moveDialog.payload.boardId,
+        status: moveDialog.payload.status,
+        section: moveDialog.payload.section,
+        dueDate: moveDialog.payload.dueDate,
+        addAssigneeIds: moveDialog.payload.addAssigneeIds,
+      },
+      { onSuccess: () => clearSelection() }
+    );
+  }, [moveDialog.payload, selectedTaskIds, bulkUpdate, clearSelection]);
+
+  // ─── Existing state ───────────────────────────────────────
 
   // Task modal state for table view
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
@@ -235,6 +348,9 @@ export function BoardPageClient({
           sort={sort}
           onSortChange={setSort}
           columns={columns}
+          selectedTaskIds={selectedTaskIds}
+          onTaskMultiSelect={handleTaskMultiSelect}
+          isMultiSelectMode={isMultiSelectMode}
         />
       ) : viewMode === 'swimlane' ? (
         <SwimlaneBoardView
@@ -249,6 +365,9 @@ export function BoardPageClient({
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
           hiddenItems={swimlaneHiddenItems}
+          selectedTaskIds={selectedTaskIds}
+          onTaskMultiSelect={handleTaskMultiSelect}
+          isMultiSelectMode={isMultiSelectMode}
         />
       ) : (
         <KanbanBoardView
@@ -263,6 +382,9 @@ export function BoardPageClient({
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
           hiddenItems={swimlaneHiddenItems}
+          selectedTaskIds={selectedTaskIds}
+          onTaskMultiSelect={handleTaskMultiSelect}
+          isMultiSelectMode={isMultiSelectMode}
         />
       )}
 
@@ -296,6 +418,30 @@ export function BoardPageClient({
         onOpenSubtask={setSelectedTaskId}
       />
 
+      {/* Multi-select floating bar */}
+      {isMultiSelectMode && (
+        <MultiSelectFloatingBar
+          selectedCount={selectedTaskIds.size}
+          statusOptions={statusOptions}
+          sectionOptions={sectionOptions}
+          assignableUsers={assignableUsers}
+          currentBoardId={boardId}
+          onApply={handleBulkApply}
+          onCancel={clearSelection}
+          isPending={bulkUpdate.isPending}
+        />
+      )}
+
+      {/* Move tasks confirmation dialog */}
+      <MoveTasksDialog
+        open={moveDialog.open}
+        onOpenChange={(open) => {
+          if (!open) setMoveDialog({ open: false, payload: null });
+        }}
+        taskCount={selectedTaskIds.size}
+        targetBoardName={moveDialog.payload?.targetBoardName ?? ''}
+        onConfirm={handleConfirmMove}
+      />
     </div>
   );
 }
