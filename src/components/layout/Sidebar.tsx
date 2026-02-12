@@ -449,7 +449,9 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
           {/* Main Navigation */}
           <nav className="space-y-1">
             {navItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = item.href === '/clients'
+                ? pathname.startsWith('/clients')
+                : pathname === item.href;
               const Icon = item.icon;
 
               if (isCollapsed) {
