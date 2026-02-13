@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FavoriteButton } from '@/components/shared/FavoriteButton';
-import type { FavoriteWithDetails } from '@/lib/db/schema';
+import type { FavoriteWithDetails, FavoritesData } from '@/lib/db/schema';
 
 // Mock the hooks
 const mockToggle = vi.fn();
@@ -9,7 +9,7 @@ const mockFavorites: FavoriteWithDetails[] = [];
 
 vi.mock('@/lib/hooks/useFavorites', () => ({
   useFavorites: vi.fn(() => ({
-    data: mockFavorites,
+    data: { folders: [], favorites: mockFavorites } as FavoritesData,
   })),
   useToggleFavorite: vi.fn(() => ({
     toggle: mockToggle,
@@ -31,6 +31,7 @@ function createFavorite(overrides: Partial<FavoriteWithDetails> = {}): FavoriteW
     entityType: 'board',
     entityId: 'board-123',
     position: 0,
+    folderId: null,
     name: 'Test Board',
     clientName: 'Test Client',
     clientSlug: 'test-client',

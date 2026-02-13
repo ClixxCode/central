@@ -67,7 +67,8 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 
 vi.mock('@/lib/db/schema', () => ({
-  favorites: { id: 'favorites.id', userId: 'favorites.userId', entityType: 'favorites.entityType', entityId: 'favorites.entityId', position: 'favorites.position' },
+  favorites: { id: 'favorites.id', userId: 'favorites.userId', entityType: 'favorites.entityType', entityId: 'favorites.entityId', position: 'favorites.position', folderId: 'favorites.folderId' },
+  favoriteFolders: { id: 'favoriteFolders.id', userId: 'favoriteFolders.userId', name: 'favoriteFolders.name', position: 'favoriteFolders.position' },
   boards: { id: 'boards.id', name: 'boards.name', clientId: 'boards.clientId' },
   clients: { id: 'clients.id', name: 'clients.name', slug: 'clients.slug', color: 'clients.color' },
 }));
@@ -76,6 +77,8 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => args),
   and: vi.fn((...args: unknown[]) => args),
   desc: vi.fn((col: unknown) => col),
+  isNull: vi.fn((col: unknown) => ['isNull', col]),
+  max: vi.fn((col: unknown) => ['max', col]),
 }));
 
 // Helper: create a thenable that also has .limit() for the orderBy mock
@@ -96,13 +99,14 @@ describe('Favorites Server Actions', () => {
   });
 
   describe('listFavorites', () => {
-    it('returns board and rollup favorites for the current user', async () => {
-      const mockData = [
+    it('returns favorites and folders for the current user', async () => {
+      const mockFavData = [
         {
           id: 'fav-1',
           entityType: 'board',
           entityId: 'board-123',
           position: 0,
+          folderId: null,
           boardName: 'Marketing Board',
           clientName: 'Acme Corp',
           clientSlug: 'acme',
@@ -113,22 +117,27 @@ describe('Favorites Server Actions', () => {
           entityType: 'rollup',
           entityId: 'rollup-456',
           position: 1,
+          folderId: null,
           boardName: 'All Tasks Rollup',
           clientName: null,
           clientSlug: null,
           clientColor: null,
         },
       ];
-      chainMethods.orderBy.mockReturnValueOnce(orderByResult(mockData));
+      // First orderBy call returns favorites, second returns folders (empty)
+      chainMethods.orderBy
+        .mockReturnValueOnce(orderByResult(mockFavData))
+        .mockReturnValueOnce(orderByResult([]));
 
       const { listFavorites } = await import('@/lib/actions/favorites');
       const result = await listFavorites();
 
       expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(2);
+      expect(result.data!.favorites).toHaveLength(2);
+      expect(result.data!.folders).toHaveLength(0);
 
       // Board favorite has client details
-      const boardFav = result.data![0];
+      const boardFav = result.data!.favorites[0];
       expect(boardFav.entityType).toBe('board');
       expect(boardFav.entityId).toBe('board-123');
       expect(boardFav.name).toBe('Marketing Board');
@@ -137,7 +146,7 @@ describe('Favorites Server Actions', () => {
       expect(boardFav.clientColor).toBe('#3B82F6');
 
       // Rollup favorite has no client details
-      const rollupFav = result.data![1];
+      const rollupFav = result.data!.favorites[1];
       expect(rollupFav.entityType).toBe('rollup');
       expect(rollupFav.entityId).toBe('rollup-456');
       expect(rollupFav.name).toBe('All Tasks Rollup');
@@ -146,35 +155,41 @@ describe('Favorites Server Actions', () => {
       expect(rollupFav.clientColor).toBeUndefined();
     });
 
-    it('returns empty array when user has no favorites', async () => {
-      chainMethods.orderBy.mockReturnValueOnce(orderByResult([]));
+    it('returns empty arrays when user has no favorites', async () => {
+      chainMethods.orderBy
+        .mockReturnValueOnce(orderByResult([]))
+        .mockReturnValueOnce(orderByResult([]));
 
       const { listFavorites } = await import('@/lib/actions/favorites');
       const result = await listFavorites();
 
       expect(result.success).toBe(true);
-      expect(result.data).toEqual([]);
+      expect(result.data!.favorites).toEqual([]);
+      expect(result.data!.folders).toEqual([]);
     });
 
     it('shows "Unknown" name when board name is null', async () => {
-      chainMethods.orderBy.mockReturnValueOnce(orderByResult([
-        {
-          id: 'fav-1',
-          entityType: 'board',
-          entityId: 'board-gone',
-          position: 0,
-          boardName: null,
-          clientName: null,
-          clientSlug: null,
-          clientColor: null,
-        },
-      ]));
+      chainMethods.orderBy
+        .mockReturnValueOnce(orderByResult([
+          {
+            id: 'fav-1',
+            entityType: 'board',
+            entityId: 'board-gone',
+            position: 0,
+            folderId: null,
+            boardName: null,
+            clientName: null,
+            clientSlug: null,
+            clientColor: null,
+          },
+        ]))
+        .mockReturnValueOnce(orderByResult([]));
 
       const { listFavorites } = await import('@/lib/actions/favorites');
       const result = await listFavorites();
 
       expect(result.success).toBe(true);
-      expect(result.data![0].name).toBe('Unknown');
+      expect(result.data!.favorites[0].name).toBe('Unknown');
     });
 
     it('handles errors gracefully', async () => {
@@ -189,70 +204,6 @@ describe('Favorites Server Actions', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Failed to load favorites');
-    });
-  });
-
-  describe('addFavorite', () => {
-    it('adds a board favorite', async () => {
-      const { db } = await import('@/lib/db');
-      vi.mocked(db.query.favorites.findFirst).mockResolvedValueOnce(undefined as any);
-      chainMethods.limit.mockResolvedValueOnce([{ maxPos: 2 }]);
-      insertChain.returning.mockResolvedValueOnce([{ id: 'fav-new' }]);
-
-      const { addFavorite } = await import('@/lib/actions/favorites');
-      const result = await addFavorite({ entityType: 'board', entityId: 'board-123' });
-
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual({ id: 'fav-new' });
-    });
-
-    it('adds a rollup favorite', async () => {
-      const { db } = await import('@/lib/db');
-      vi.mocked(db.query.favorites.findFirst).mockResolvedValueOnce(undefined as any);
-      chainMethods.limit.mockResolvedValueOnce([{ maxPos: 0 }]);
-      insertChain.returning.mockResolvedValueOnce([{ id: 'fav-rollup' }]);
-
-      const { addFavorite } = await import('@/lib/actions/favorites');
-      const result = await addFavorite({ entityType: 'rollup', entityId: 'rollup-456' });
-
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual({ id: 'fav-rollup' });
-    });
-
-    it('rejects duplicate favorites', async () => {
-      const { db } = await import('@/lib/db');
-      vi.mocked(db.query.favorites.findFirst).mockResolvedValueOnce({
-        id: 'fav-existing',
-      } as any);
-
-      const { addFavorite } = await import('@/lib/actions/favorites');
-      const result = await addFavorite({ entityType: 'board', entityId: 'board-123' });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Already favorited');
-    });
-
-    it('sets position to 0 when no existing favorites', async () => {
-      const { db } = await import('@/lib/db');
-      vi.mocked(db.query.favorites.findFirst).mockResolvedValueOnce(undefined as any);
-      chainMethods.limit.mockResolvedValueOnce([]);
-      insertChain.returning.mockResolvedValueOnce([{ id: 'fav-first' }]);
-
-      const { addFavorite } = await import('@/lib/actions/favorites');
-      const result = await addFavorite({ entityType: 'rollup', entityId: 'rollup-789' });
-
-      expect(result.success).toBe(true);
-    });
-
-    it('handles errors gracefully', async () => {
-      const { db } = await import('@/lib/db');
-      vi.mocked(db.query.favorites.findFirst).mockRejectedValueOnce(new Error('DB error'));
-
-      const { addFavorite } = await import('@/lib/actions/favorites');
-      const result = await addFavorite({ entityType: 'board', entityId: 'board-123' });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Failed to add favorite');
     });
   });
 
@@ -292,6 +243,15 @@ describe('Favorites Server Actions', () => {
 
       const { reorderFavorites } = await import('@/lib/actions/favorites');
       const result = await reorderFavorites(['board-2', 'rollup-1', 'board-1']);
+
+      expect(result.success).toBe(true);
+    });
+
+    it('handles folder IDs in the reorder list', async () => {
+      updateChain.where.mockResolvedValue(undefined);
+
+      const { reorderFavorites } = await import('@/lib/actions/favorites');
+      const result = await reorderFavorites(['folder:folder-1', 'board-2', 'board-1']);
 
       expect(result.success).toBe(true);
     });

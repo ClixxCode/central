@@ -60,4 +60,4 @@ export * from './front';
 export type { UserPreferences, NotificationChannelSettings } from './users';
 export type { StatusOption, SectionOption } from './boards';
 export type { RecurringConfig, TiptapContent, TiptapNode, TiptapMark } from './tasks';
-export type { FavoriteWithDetails } from './favorites';
+export type { FavoriteWithDetails, FavoriteFolder, FavoritesData } from './favorites';

@@ -42,7 +42,8 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const { data: favorites = [] } = useFavorites();
+  const { data: favoritesData } = useFavorites();
+  const favorites = favoritesData?.favorites ?? [];
 
   // Build favorite shortcuts (b then 1-9)
   const favoriteShortcuts = React.useMemo(() => {

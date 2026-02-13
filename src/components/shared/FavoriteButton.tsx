@@ -18,10 +18,10 @@ interface FavoriteButtonProps {
 }
 
 export function FavoriteButton({ entityType, entityId, className }: FavoriteButtonProps) {
-  const { data: favorites = [] } = useFavorites();
+  const { data: favoritesData } = useFavorites();
   const { toggle, isPending } = useToggleFavorite();
 
-  const isFavorited = favorites.some((f) => f.entityId === entityId);
+  const isFavorited = favoritesData?.favorites?.some((f) => f.entityId === entityId) ?? false;
 
   return (
     <TooltipProvider>

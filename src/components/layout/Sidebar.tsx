@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -20,6 +20,12 @@ import {
   X,
   Building2,
   GripVertical,
+  FolderOpen,
+  FolderClosed,
+  Pencil,
+  Trash2,
+  ArrowRight,
+  ArrowUp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -28,8 +34,17 @@ import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
 import { useUIStore } from '@/lib/stores';
-import { useFavorites, useReorderFavorites } from '@/lib/hooks/useFavorites';
-import type { FavoriteWithDetails } from '@/lib/db/schema';
+import {
+  useFavorites,
+  useReorderFavorites,
+  useRemoveFavorite,
+  useCreateFavoriteFolder,
+  useRenameFavoriteFolder,
+  useDeleteFavoriteFolder,
+  useMoveFavoriteToFolder,
+  useReorderFolderContents,
+} from '@/lib/hooks/useFavorites';
+import type { FavoriteWithDetails, FavoriteFolder, FavoritesData } from '@/lib/db/schema';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useIsClient } from '@/hooks/useIsClient';
 import { useFavoriteHintKeys } from '@/lib/hooks/useFavoriteHintKeys';
@@ -49,6 +64,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 interface Client {
   id: string;
@@ -60,14 +85,105 @@ interface Client {
   boards: { id: string; name: string }[];
 }
 
+// A top-level item is either a folder or a standalone favorite
+type TopLevelItem =
+  | { type: 'folder'; folder: FavoriteFolder }
+  | { type: 'favorite'; favorite: FavoriteWithDetails };
+
+function buildTopLevelList(data: FavoritesData): TopLevelItem[] {
+  const items: TopLevelItem[] = [];
+
+  for (const folder of data.folders) {
+    items.push({ type: 'folder', folder });
+  }
+
+  for (const fav of data.favorites) {
+    if (!fav.folderId) {
+      items.push({ type: 'favorite', favorite: fav });
+    }
+  }
+
+  items.sort((a, b) => {
+    const posA = a.type === 'folder' ? a.folder.position : a.favorite.position;
+    const posB = b.type === 'folder' ? b.folder.position : b.favorite.position;
+    return posA - posB;
+  });
+
+  return items;
+}
+
+function buildFlatFavoritesList(data: FavoritesData): FavoriteWithDetails[] {
+  const topLevel = buildTopLevelList(data);
+  const result: FavoriteWithDetails[] = [];
+
+  for (const item of topLevel) {
+    if (item.type === 'favorite') {
+      result.push(item.favorite);
+    } else {
+      // Add folder's children sorted by position
+      const children = data.favorites
+        .filter((f) => f.folderId === item.folder.id)
+        .sort((a, b) => a.position - b.position);
+      result.push(...children);
+    }
+  }
+
+  return result;
+}
+
+function getFavoriteHref(favorite: FavoriteWithDetails): string {
+  if (favorite.boardType === 'personal') return '/my-tasks?tab=personal';
+  if (favorite.entityType === 'board' && favorite.clientSlug)
+    return `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`;
+  return `/rollups/${favorite.entityId}`;
+}
+
+function FavoriteIcon({ favorite, size = 'sm' }: { favorite: FavoriteWithDetails; size?: 'sm' | 'xs' }) {
+  if (favorite.entityType === 'rollup') {
+    return <Layers className={cn(size === 'xs' ? 'h-3.5 w-3.5' : 'h-5 w-5', 'shrink-0 text-muted-foreground')} />;
+  }
+  if (favorite.boardType === 'personal') {
+    return (
+      <span
+        className="material-symbols-outlined shrink-0"
+        style={{ fontSize: size === 'xs' ? '14px' : '20px', color: favorite.boardColor ?? '#3B82F6' }}
+      >
+        {favorite.boardIcon ?? 'checklist'}
+      </span>
+    );
+  }
+  if (favorite.clientColor) {
+    return (
+      <ClientIcon
+        icon={favorite.clientIcon ?? null}
+        color={favorite.clientColor}
+        name={favorite.clientName}
+        size={size}
+      />
+    );
+  }
+  return null;
+}
+
 interface SortableFavoriteItemProps {
   favorite: FavoriteWithDetails;
   isActive: boolean;
   href: string;
   hintKey?: number | null;
+  folders: FavoriteFolder[];
+  onMoveToFolder: (entityId: string, folderId: string | null) => void;
+  onRemoveFavorite: (entityId: string) => void;
 }
 
-function SortableFavoriteItem({ favorite, isActive, href, hintKey }: SortableFavoriteItemProps) {
+function SortableFavoriteItem({
+  favorite,
+  isActive,
+  href,
+  hintKey,
+  folders,
+  onMoveToFolder,
+  onRemoveFavorite,
+}: SortableFavoriteItemProps) {
   const router = useRouter();
   const wasDragged = useRef(false);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -84,48 +200,291 @@ function SortableFavoriteItem({ favorite, isActive, href, hintKey }: SortableFav
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors cursor-grab active:cursor-grabbing',
-        isDragging && 'opacity-50',
-        isActive
-          ? 'bg-blue-100 text-blue-700 font-medium'
-          : 'text-muted-foreground hover:bg-accent'
-      )}
-      {...attributes}
-      {...listeners}
-      onClick={() => {
-        if (wasDragged.current) {
-          wasDragged.current = false;
-          return;
-        }
-        router.push(href);
-      }}
-    >
-      {hintKey != null ? (
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
-          {hintKey}
-        </span>
-      ) : favorite.entityType === 'rollup' ? (
-        <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      ) : favorite.boardType === 'personal' ? (
-        <span
-          className="material-symbols-outlined shrink-0"
-          style={{ fontSize: '14px', color: favorite.boardColor ?? '#3B82F6' }}
+    <div className="group relative">
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors cursor-grab active:cursor-grabbing',
+          isDragging && 'opacity-50',
+          isActive
+            ? 'bg-blue-100 text-blue-700 font-medium'
+            : 'text-muted-foreground hover:bg-accent'
+        )}
+        {...attributes}
+        {...listeners}
+        onClick={() => {
+          if (wasDragged.current) {
+            wasDragged.current = false;
+            return;
+          }
+          router.push(href);
+        }}
+      >
+        {hintKey != null ? (
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
+            {hintKey}
+          </span>
+        ) : (
+          <FavoriteIcon favorite={favorite} size="xs" />
+        )}
+        <span className="truncate flex-1">{favorite.name}</span>
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5 text-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" side="right" className="w-48">
+          {folders.length > 0 && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <ArrowRight className="h-4 w-4 mr-2" />
+                Move to folder
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-40">
+                {folders.map((folder) => (
+                  <DropdownMenuItem
+                    key={folder.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveToFolder(favorite.entityId, folder.id);
+                    }}
+                  >
+                    <FolderClosed className="h-4 w-4 mr-2" />
+                    {folder.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+          {favorite.folderId && (
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveToFolder(favorite.entityId, null);
+              }}
+            >
+              <ArrowUp className="h-4 w-4 mr-2" />
+              Remove from folder
+            </DropdownMenuItem>
+          )}
+          {(folders.length > 0 || favorite.folderId) && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemoveFavorite(favorite.entityId);
+            }}
+            className="text-destructive focus:text-destructive"
+          >
+            <X className="h-4 w-4 mr-2" />
+            Remove from favorites
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+interface SortableFolderItemProps {
+  folder: FavoriteFolder;
+  favorites: FavoriteWithDetails[];
+  allFolders: FavoriteFolder[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  onRename: (folderId: string, name: string) => void;
+  onDelete: (folderId: string) => void;
+  onMoveToFolder: (entityId: string, folderId: string | null) => void;
+  onRemoveFavorite: (entityId: string) => void;
+  onReorderContents: (folderId: string, orderedEntityIds: string[]) => void;
+  pathname: string;
+  searchParams: URLSearchParams;
+  fKeyHeld: boolean;
+  hintKeyOffset: number;
+  sensors: ReturnType<typeof useSensors>;
+}
+
+function SortableFolderItem({
+  folder,
+  favorites: folderFavorites,
+  allFolders,
+  isExpanded,
+  onToggle,
+  onRename,
+  onDelete,
+  onMoveToFolder,
+  onRemoveFavorite,
+  onReorderContents,
+  pathname,
+  searchParams,
+  fKeyHeld,
+  hintKeyOffset,
+  sensors,
+}: SortableFolderItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `folder:${folder.id}`,
+  });
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(folder.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isRenaming]);
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const handleRenameSubmit = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== folder.name) {
+      onRename(folder.id, trimmed);
+    }
+    setIsRenaming(false);
+  };
+
+  const handleFolderDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = folderFavorites.findIndex((f) => f.id === active.id);
+      const newIndex = folderFavorites.findIndex((f) => f.id === over.id);
+      const newOrder = [...folderFavorites];
+      const [removed] = newOrder.splice(oldIndex, 1);
+      newOrder.splice(newIndex, 0, removed);
+      onReorderContents(folder.id, newOrder.map((f) => f.entityId));
+    }
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && 'opacity-50')}>
+      <div className="group relative">
+        <div
+          className="flex items-center gap-1 rounded-lg px-2 py-2 text-sm text-muted-foreground hover:bg-accent cursor-grab active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
         >
-          {favorite.boardIcon ?? 'checklist'}
-        </span>
-      ) : favorite.clientColor ? (
-        <ClientIcon
-          icon={favorite.clientIcon ?? null}
-          color={favorite.clientColor}
-          name={favorite.clientName}
-          size="xs"
-        />
-      ) : null}
-      <span className="truncate">{favorite.name}</span>
+          <button
+            className="p-0.5 shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/70" />
+            )}
+          </button>
+          {isExpanded ? (
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <FolderClosed className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          {isRenaming ? (
+            <input
+              ref={inputRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={handleRenameSubmit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRenameSubmit();
+                if (e.key === 'Escape') {
+                  setRenameValue(folder.name);
+                  setIsRenaming(false);
+                }
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 min-w-0 bg-transparent border-b border-primary outline-none text-sm px-1"
+            />
+          ) : (
+            <span className="truncate flex-1 ml-1">{folder.name}</span>
+          )}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5 text-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right" className="w-40">
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenameValue(folder.name);
+                setIsRenaming(true);
+              }}
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(folder.id);
+              }}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete folder
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {isExpanded && folderFavorites.length > 0 && (
+        <div className="ml-4">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleFolderDragEnd}
+          >
+            <SortableContext
+              items={folderFavorites.map((f) => f.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-0.5 py-0.5">
+                {folderFavorites.map((favorite, index) => {
+                  const href = getFavoriteHref(favorite);
+                  const isActive = favorite.boardType === 'personal'
+                    ? pathname === '/my-tasks' && searchParams.get('tab') === 'personal'
+                    : pathname.startsWith(href);
+                  const globalIndex = hintKeyOffset + index;
+
+                  return (
+                    <SortableFavoriteItem
+                      key={favorite.id}
+                      favorite={favorite}
+                      isActive={isActive}
+                      href={href}
+                      hintKey={fKeyHeld && globalIndex < 9 ? globalIndex + 1 : null}
+                      folders={allFolders}
+                      onMoveToFolder={onMoveToFolder}
+                      onRemoveFavorite={onRemoveFavorite}
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
     </div>
   );
 }
@@ -204,8 +563,14 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
   const { data: calPrefs } = useCalendarPreferences();
   const { data: sidebarPrefs } = useSidebarPreferences();
   const updateSidebarPrefs = useUpdateSidebarPreferences();
-  const { data: favorites = [] } = useFavorites();
-  const reorderFavorites = useReorderFavorites();
+  const { data: favoritesData = { folders: [], favorites: [] } } = useFavorites();
+  const reorderFavoritesMut = useReorderFavorites();
+  const removeFavoriteMut = useRemoveFavorite();
+  const createFolderMut = useCreateFavoriteFolder();
+  const renameFolderMut = useRenameFavoriteFolder();
+  const deleteFolderMut = useDeleteFavoriteFolder();
+  const moveToFolderMut = useMoveFavoriteToFolder();
+  const reorderContentsMut = useReorderFolderContents();
   const fKeyHeld = useFavoriteHintKeys();
   const { resolvedTheme } = useTheme();
 
@@ -213,6 +578,17 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
   const [editMode, setEditMode] = useState(false);
   const [draftHiddenNav, setDraftHiddenNav] = useState<string[]>([]);
   const [draftNavOrder, setDraftNavOrder] = useState<string[]>(DEFAULT_NAV_ORDER);
+
+  // Folder creation state
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const folderInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (creatingFolder) {
+      folderInputRef.current?.focus();
+    }
+  }, [creatingFolder]);
 
   const enterEditMode = () => {
     setDraftHiddenNav(sidebarPrefs?.hiddenNavItems ?? []);
@@ -265,17 +641,75 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
 
   const router = useRouter();
 
+  const topLevelList = buildTopLevelList(favoritesData);
+  const flatFavorites = buildFlatFavoritesList(favoritesData);
+
   const handleFavoriteDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = favorites.findIndex((f) => f.id === active.id);
-      const newIndex = favorites.findIndex((f) => f.id === over.id);
-      const newOrder = [...favorites];
+      const currentIds = topLevelList.map((item) =>
+        item.type === 'folder' ? `folder:${item.folder.id}` : item.favorite.id
+      );
+      const oldIndex = currentIds.indexOf(active.id as string);
+      const newIndex = currentIds.indexOf(over.id as string);
+      const newOrder = [...currentIds];
       const [removed] = newOrder.splice(oldIndex, 1);
       newOrder.splice(newIndex, 0, removed);
-      reorderFavorites.mutate(newOrder.map((f) => f.entityId));
+
+      // Convert IDs: folder:{id} stays as-is, favorite.id → entityId
+      const reorderIds = newOrder.map((id) => {
+        if (id.startsWith('folder:')) return id;
+        const fav = favoritesData.favorites.find((f) => f.id === id);
+        return fav?.entityId ?? id;
+      });
+
+      reorderFavoritesMut.mutate(reorderIds);
     }
   };
+
+  const handleCreateFolder = () => {
+    const trimmed = newFolderName.trim();
+    if (trimmed) {
+      createFolderMut.mutate({ name: trimmed });
+    }
+    setNewFolderName('');
+    setCreatingFolder(false);
+  };
+
+  const handleMoveToFolder = useCallback(
+    (entityId: string, folderId: string | null) => {
+      moveToFolderMut.mutate({ entityId, folderId });
+    },
+    [moveToFolderMut]
+  );
+
+  const handleRemoveFavorite = useCallback(
+    (entityId: string) => {
+      removeFavoriteMut.mutate(entityId);
+    },
+    [removeFavoriteMut]
+  );
+
+  const handleRenameFolder = useCallback(
+    (folderId: string, name: string) => {
+      renameFolderMut.mutate({ folderId, name });
+    },
+    [renameFolderMut]
+  );
+
+  const handleDeleteFolder = useCallback(
+    (folderId: string) => {
+      deleteFolderMut.mutate(folderId);
+    },
+    [deleteFolderMut]
+  );
+
+  const handleReorderContents = useCallback(
+    (folderId: string, orderedEntityIds: string[]) => {
+      reorderContentsMut.mutate({ folderId, orderedEntityIds });
+    },
+    [reorderContentsMut]
+  );
 
   const getDefaultBoard = (client: Client) => {
     // 1. Explicit defaultBoardId (if set and exists in accessible boards)
@@ -328,6 +762,8 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
 
   const showClientsSection = !hiddenNavItems.includes('Clients');
 
+  const hasFavorites = favoritesData.favorites.length > 0 || favoritesData.folders.length > 0;
+
   // Prevent hydration mismatch by not rendering until client-side
   // This avoids the sidebar "sliding in" when localStorage state differs from SSR default
   if (!isClient) {
@@ -344,6 +780,24 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
         </div>
       </aside>
     );
+  }
+
+  // Calculate hint key offsets for folder contents
+  function getHintKeyOffset(itemIndex: number): number {
+    let offset = 0;
+    for (let i = 0; i < itemIndex; i++) {
+      const item = topLevelList[i];
+      if (item.type === 'favorite') {
+        offset += 1;
+      } else {
+        const folderExpanded = !isSectionCollapsed(`folder-${item.folder.id}`);
+        if (folderExpanded) {
+          const children = favoritesData.favorites.filter((f) => f.folderId === item.folder.id);
+          offset += children.length;
+        }
+      }
+    }
+    return offset;
   }
 
   return (
@@ -529,34 +983,45 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
           </nav>
 
           {/* Favorites Section */}
-          {favorites.length > 0 && (
+          {hasFavorites && (
             <div className="mt-6">
               {!isCollapsed && (
-                <button
-                  onClick={() => toggleSection('favorites')}
-                  className="group flex items-center gap-2 px-3 py-2 w-full"
-                >
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Favorites
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      'h-3 w-3 text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-all',
-                      isSectionCollapsed('favorites') && '-rotate-90'
-                    )}
-                  />
-                </button>
+                <div className="group flex items-center gap-2 px-3 py-2 w-full">
+                  <button
+                    onClick={() => toggleSection('favorites')}
+                    className="flex items-center gap-2 flex-1"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Favorites
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        'h-3 w-3 text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-all',
+                        isSectionCollapsed('favorites') && '-rotate-90'
+                      )}
+                    />
+                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => {
+                          setNewFolderName('');
+                          setCreatingFolder(true);
+                        }}
+                        className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                      >
+                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>New folder</TooltipContent>
+                  </Tooltip>
+                </div>
               )}
 
               {isCollapsed ? (
                 <div className="space-y-1">
-                  {favorites.map((favorite, index) => {
-                    const href =
-                      favorite.boardType === 'personal'
-                        ? '/my-tasks?tab=personal'
-                        : favorite.entityType === 'board' && favorite.clientSlug
-                        ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
-                        : `/rollups/${favorite.entityId}`;
+                  {flatFavorites.map((favorite, index) => {
+                    const href = getFavoriteHref(favorite);
                     const isActive = favorite.boardType === 'personal'
                       ? pathname === '/my-tasks'
                       : pathname.startsWith(href);
@@ -578,23 +1043,7 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                                 {index + 1}
                               </span>
                             )}
-                            {favorite.entityType === 'rollup' ? (
-                              <Layers className="h-5 w-5" />
-                            ) : favorite.boardType === 'personal' ? (
-                              <span
-                                className="material-symbols-outlined"
-                                style={{ fontSize: '20px', color: favorite.boardColor ?? '#3B82F6' }}
-                              >
-                                {favorite.boardIcon ?? 'checklist'}
-                              </span>
-                            ) : (
-                              <ClientIcon
-                                icon={favorite.clientIcon ?? null}
-                                color={favorite.clientColor ?? undefined}
-                                name={favorite.clientName}
-                                size="sm"
-                              />
-                            )}
+                            <FavoriteIcon favorite={favorite} size="sm" />
                           </Link>
                         </TooltipTrigger>
                         <TooltipContent side="right">{favorite.name}</TooltipContent>
@@ -609,20 +1058,47 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                   onDragEnd={handleFavoriteDragEnd}
                 >
                   <SortableContext
-                    items={favorites.map((f) => f.id)}
+                    items={topLevelList.map((item) =>
+                      item.type === 'folder' ? `folder:${item.folder.id}` : item.favorite.id
+                    )}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="space-y-1">
-                      {favorites.map((favorite, index) => {
-                        const href =
-                          favorite.boardType === 'personal'
-                            ? '/my-tasks?tab=personal'
-                            : favorite.entityType === 'board' && favorite.clientSlug
-                            ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
-                            : `/rollups/${favorite.entityId}`;
+                    <div className="space-y-0.5">
+                      {topLevelList.map((item, itemIndex) => {
+                        if (item.type === 'folder') {
+                          const folderFavs = favoritesData.favorites
+                            .filter((f) => f.folderId === item.folder.id)
+                            .sort((a, b) => a.position - b.position);
+                          const isExpanded = !isSectionCollapsed(`folder-${item.folder.id}`);
+
+                          return (
+                            <SortableFolderItem
+                              key={`folder:${item.folder.id}`}
+                              folder={item.folder}
+                              favorites={folderFavs}
+                              allFolders={favoritesData.folders}
+                              isExpanded={isExpanded}
+                              onToggle={() => toggleSection(`folder-${item.folder.id}`)}
+                              onRename={handleRenameFolder}
+                              onDelete={handleDeleteFolder}
+                              onMoveToFolder={handleMoveToFolder}
+                              onRemoveFavorite={handleRemoveFavorite}
+                              onReorderContents={handleReorderContents}
+                              pathname={pathname}
+                              searchParams={searchParams}
+                              fKeyHeld={fKeyHeld}
+                              hintKeyOffset={getHintKeyOffset(itemIndex)}
+                              sensors={sensors}
+                            />
+                          );
+                        }
+
+                        const favorite = item.favorite;
+                        const href = getFavoriteHref(favorite);
                         const isActive = favorite.boardType === 'personal'
                           ? pathname === '/my-tasks' && searchParams.get('tab') === 'personal'
                           : pathname.startsWith(href);
+                        const hintOffset = getHintKeyOffset(itemIndex);
 
                         return (
                           <SortableFavoriteItem
@@ -630,10 +1106,41 @@ export function Sidebar({ clients, isAdmin = false }: SidebarProps) {
                             favorite={favorite}
                             isActive={isActive}
                             href={href}
-                            hintKey={fKeyHeld && index < 9 ? index + 1 : null}
+                            hintKey={fKeyHeld && hintOffset < 9 ? hintOffset + 1 : null}
+                            folders={favoritesData.folders}
+                            onMoveToFolder={handleMoveToFolder}
+                            onRemoveFavorite={handleRemoveFavorite}
                           />
                         );
                       })}
+
+                      {/* Inline folder creation input */}
+                      {creatingFolder && (
+                        <div className="flex items-center gap-2 rounded-lg px-3 py-2">
+                          <FolderClosed className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <input
+                            ref={folderInputRef}
+                            value={newFolderName}
+                            onChange={(e) => setNewFolderName(e.target.value)}
+                            onBlur={() => {
+                              if (newFolderName.trim()) {
+                                handleCreateFolder();
+                              } else {
+                                setCreatingFolder(false);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleCreateFolder();
+                              if (e.key === 'Escape') {
+                                setNewFolderName('');
+                                setCreatingFolder(false);
+                              }
+                            }}
+                            placeholder="Folder name..."
+                            className="flex-1 min-w-0 bg-transparent border-b border-primary outline-none text-sm"
+                          />
+                        </div>
+                      )}
                     </div>
                   </SortableContext>
                 </DndContext>

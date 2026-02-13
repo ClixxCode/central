@@ -79,6 +79,11 @@ export {
   useRemoveFavorite,
   useReorderFavorites,
   useToggleFavorite,
+  useCreateFavoriteFolder,
+  useRenameFavoriteFolder,
+  useDeleteFavoriteFolder,
+  useMoveFavoriteToFolder,
+  useReorderFolderContents,
   favoriteKeys,
 } from './useFavorites';
 export {

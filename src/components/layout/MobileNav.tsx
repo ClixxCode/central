@@ -34,7 +34,8 @@ export function MobileNav({ clients, isAdmin = false }: MobileNavProps) {
   const searchParams = useSearchParams();
   const isClient = useIsClient();
   const { sidebarOpen, setSidebarOpen } = useUIStore();
-  const { data: favorites = [] } = useFavorites();
+  const { data: favoritesData } = useFavorites();
+  const favorites = favoritesData?.favorites ?? [];
   const { data: calPrefs } = useCalendarPreferences();
   const { data: sidebarPrefs } = useSidebarPreferences();
 

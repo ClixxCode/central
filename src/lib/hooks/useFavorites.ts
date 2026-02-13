@@ -7,8 +7,13 @@ import {
   addFavorite,
   removeFavorite,
   reorderFavorites,
+  createFavoriteFolder,
+  renameFavoriteFolder,
+  deleteFavoriteFolder,
+  moveFavoriteToFolder,
+  reorderFolderContents,
 } from '@/lib/actions/favorites';
-import type { FavoriteWithDetails } from '@/lib/db/schema';
+import type { FavoritesData } from '@/lib/db/schema';
 
 // Query Keys
 export const favoriteKeys = {
@@ -17,7 +22,7 @@ export const favoriteKeys = {
 };
 
 /**
- * Fetch all favorites for the current user
+ * Fetch all favorites for the current user (folders + favorites)
  */
 export function useFavorites() {
   return useQuery({
@@ -27,7 +32,7 @@ export function useFavorites() {
       if (!result.success) {
         throw new Error(result.error ?? 'Failed to fetch favorites');
       }
-      return result.data ?? [];
+      return result.data ?? { folders: [], favorites: [] };
     },
   });
 }
@@ -70,19 +75,22 @@ export function useRemoveFavorite() {
       }
     },
     onMutate: async (entityId) => {
-      // Optimistic update
       await queryClient.cancelQueries({ queryKey: favoriteKeys.list() });
-      const previousFavorites = queryClient.getQueryData<FavoriteWithDetails[]>(favoriteKeys.list());
-      
-      queryClient.setQueryData<FavoriteWithDetails[]>(favoriteKeys.list(), (old) =>
-        old?.filter((f) => f.entityId !== entityId) ?? []
-      );
+      const previous = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
 
-      return { previousFavorites };
+      queryClient.setQueryData<FavoritesData>(favoriteKeys.list(), (old) => {
+        if (!old) return { folders: [], favorites: [] };
+        return {
+          ...old,
+          favorites: old.favorites.filter((f) => f.entityId !== entityId),
+        };
+      });
+
+      return { previous };
     },
     onError: (error, _, context) => {
-      if (context?.previousFavorites) {
-        queryClient.setQueryData(favoriteKeys.list(), context.previousFavorites);
+      if (context?.previous) {
+        queryClient.setQueryData(favoriteKeys.list(), context.previous);
       }
       toast.error(error instanceof Error ? error.message : 'Failed to remove favorite');
     },
@@ -96,7 +104,7 @@ export function useRemoveFavorite() {
 }
 
 /**
- * Reorder favorites (for drag and drop)
+ * Reorder top-level favorites and folders (for drag and drop)
  */
 export function useReorderFavorites() {
   const queryClient = useQueryClient();
@@ -109,24 +117,35 @@ export function useReorderFavorites() {
       }
     },
     onMutate: async (orderedIds) => {
-      // Optimistic update
       await queryClient.cancelQueries({ queryKey: favoriteKeys.list() });
-      const previousFavorites = queryClient.getQueryData<FavoriteWithDetails[]>(favoriteKeys.list());
-      
-      if (previousFavorites) {
-        const reordered = orderedIds
-          .map((id) => previousFavorites.find((f) => f.entityId === id))
-          .filter((f): f is FavoriteWithDetails => f !== undefined)
-          .map((f, index) => ({ ...f, position: index }));
-        
-        queryClient.setQueryData(favoriteKeys.list(), reordered);
+      const previous = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
+
+      if (previous) {
+        const newFolders = [...previous.folders];
+        const newFavorites = [...previous.favorites];
+
+        orderedIds.forEach((id, index) => {
+          if (id.startsWith('folder:')) {
+            const folderId = id.slice(7);
+            const folder = newFolders.find((f) => f.id === folderId);
+            if (folder) folder.position = index;
+          } else {
+            const fav = newFavorites.find((f) => f.entityId === id);
+            if (fav) fav.position = index;
+          }
+        });
+
+        queryClient.setQueryData<FavoritesData>(favoriteKeys.list(), {
+          folders: newFolders,
+          favorites: newFavorites,
+        });
       }
 
-      return { previousFavorites };
+      return { previous };
     },
     onError: (error, _, context) => {
-      if (context?.previousFavorites) {
-        queryClient.setQueryData(favoriteKeys.list(), context.previousFavorites);
+      if (context?.previous) {
+        queryClient.setQueryData(favoriteKeys.list(), context.previous);
       }
       toast.error(error instanceof Error ? error.message : 'Failed to reorder favorites');
     },
@@ -146,19 +165,209 @@ export function useToggleFavorite() {
 
   return {
     toggle: (entityType: 'board' | 'rollup', entityId: string) => {
-      const favorites = queryClient.getQueryData<FavoriteWithDetails[]>(favoriteKeys.list());
-      const isFavorited = favorites?.some((f) => f.entityId === entityId);
+      const data = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
+      const isFav = data?.favorites?.some((f) => f.entityId === entityId);
 
-      if (isFavorited) {
+      if (isFav) {
         removeMutation.mutate(entityId);
       } else {
         addMutation.mutate({ entityType, entityId });
       }
     },
     isFavorited: (entityId: string) => {
-      const favorites = queryClient.getQueryData<FavoriteWithDetails[]>(favoriteKeys.list());
-      return favorites?.some((f) => f.entityId === entityId) ?? false;
+      const data = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
+      return data?.favorites?.some((f) => f.entityId === entityId) ?? false;
     },
     isPending: addMutation.isPending || removeMutation.isPending,
   };
+}
+
+/**
+ * Create a favorite folder
+ */
+export function useCreateFavoriteFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { name: string }) => {
+      const result = await createFavoriteFolder(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to create folder');
+      }
+      return result.data!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to create folder');
+    },
+  });
+}
+
+/**
+ * Rename a favorite folder
+ */
+export function useRenameFavoriteFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { folderId: string; name: string }) => {
+      const result = await renameFavoriteFolder(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to rename folder');
+      }
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: favoriteKeys.list() });
+      const previous = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
+
+      queryClient.setQueryData<FavoritesData>(favoriteKeys.list(), (old) => {
+        if (!old) return { folders: [], favorites: [] };
+        return {
+          ...old,
+          folders: old.folders.map((f) =>
+            f.id === input.folderId ? { ...f, name: input.name } : f
+          ),
+        };
+      });
+
+      return { previous };
+    },
+    onError: (error, _, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(favoriteKeys.list(), context.previous);
+      }
+      toast.error(error instanceof Error ? error.message : 'Failed to rename folder');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
+    },
+  });
+}
+
+/**
+ * Delete a favorite folder (contents become top-level)
+ */
+export function useDeleteFavoriteFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (folderId: string) => {
+      const result = await deleteFavoriteFolder(folderId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to delete folder');
+      }
+    },
+    onMutate: async (folderId) => {
+      await queryClient.cancelQueries({ queryKey: favoriteKeys.list() });
+      const previous = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
+
+      queryClient.setQueryData<FavoritesData>(favoriteKeys.list(), (old) => {
+        if (!old) return { folders: [], favorites: [] };
+        return {
+          folders: old.folders.filter((f) => f.id !== folderId),
+          favorites: old.favorites.map((f) =>
+            f.folderId === folderId ? { ...f, folderId: null } : f
+          ),
+        };
+      });
+
+      return { previous };
+    },
+    onError: (error, _, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(favoriteKeys.list(), context.previous);
+      }
+      toast.error(error instanceof Error ? error.message : 'Failed to delete folder');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
+    },
+  });
+}
+
+/**
+ * Move a favorite into or out of a folder
+ */
+export function useMoveFavoriteToFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { entityId: string; folderId: string | null }) => {
+      const result = await moveFavoriteToFolder(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to move favorite');
+      }
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: favoriteKeys.list() });
+      const previous = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
+
+      queryClient.setQueryData<FavoritesData>(favoriteKeys.list(), (old) => {
+        if (!old) return { folders: [], favorites: [] };
+        return {
+          ...old,
+          favorites: old.favorites.map((f) =>
+            f.entityId === input.entityId ? { ...f, folderId: input.folderId } : f
+          ),
+        };
+      });
+
+      return { previous };
+    },
+    onError: (error, _, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(favoriteKeys.list(), context.previous);
+      }
+      toast.error(error instanceof Error ? error.message : 'Failed to move favorite');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
+    },
+  });
+}
+
+/**
+ * Reorder favorites within a folder
+ */
+export function useReorderFolderContents() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { folderId: string; orderedEntityIds: string[] }) => {
+      const result = await reorderFolderContents(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to reorder folder contents');
+      }
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: favoriteKeys.list() });
+      const previous = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
+
+      if (previous) {
+        const newFavorites = [...previous.favorites];
+        input.orderedEntityIds.forEach((entityId, index) => {
+          const fav = newFavorites.find((f) => f.entityId === entityId);
+          if (fav) fav.position = index;
+        });
+
+        queryClient.setQueryData<FavoritesData>(favoriteKeys.list(), {
+          ...previous,
+          favorites: newFavorites,
+        });
+      }
+
+      return { previous };
+    },
+    onError: (error, _, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(favoriteKeys.list(), context.previous);
+      }
+      toast.error(error instanceof Error ? error.message : 'Failed to reorder folder contents');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
+    },
+  });
 }
