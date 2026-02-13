@@ -82,12 +82,14 @@ import {
 } from '@/lib/actions/invitations';
 import { sendPasswordResetLink } from '@/lib/actions/password-reset';
 import { startImpersonation } from '@/lib/actions/impersonation';
+import { listTeamsWithMembers } from '@/lib/actions/teams';
 
 export function UsersPageClient() {
   const queryClient = useQueryClient();
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'user' | 'admin'>('user');
+  const [inviteTeamId, setInviteTeamId] = useState<string | undefined>(undefined);
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<ManagedUser | null>(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -111,9 +113,18 @@ export function UsersPageClient() {
     queryFn: listInvitations,
   });
 
+  const { data: teamsData } = useQuery({
+    queryKey: ['teams', 'withMembers'],
+    queryFn: async () => {
+      const result = await listTeamsWithMembers();
+      if (!result.success) throw new Error(result.error ?? 'Failed to fetch teams');
+      return result.data ?? [];
+    },
+  });
+
   // Mutations
   const inviteMutation = useMutation({
-    mutationFn: async (data: { email: string; role: 'admin' | 'user' }) => {
+    mutationFn: async (data: { email: string; role: 'admin' | 'user'; teamId?: string }) => {
       const result = await createInvitation(data);
       if (!result.success) throw new Error(result.error);
       return result;
@@ -122,6 +133,7 @@ export function UsersPageClient() {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
       setInviteEmail('');
       setInviteRole('user');
+      setInviteTeamId(undefined);
       setInviteDialogOpen(false);
       toast.success('Invitation sent successfully');
     },
@@ -236,7 +248,7 @@ export function UsersPageClient() {
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
-    await inviteMutation.mutateAsync({ email: inviteEmail.trim(), role: inviteRole });
+    await inviteMutation.mutateAsync({ email: inviteEmail.trim(), role: inviteRole, teamId: inviteTeamId });
   };
 
   const handleDeactivateUser = (user: ManagedUser) => {
@@ -356,6 +368,28 @@ export function UsersPageClient() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   Admins can manage users, clients, teams, and settings.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="team">Team (optional)</Label>
+                <Select
+                  value={inviteTeamId ?? 'none'}
+                  onValueChange={(v) => setInviteTeamId(v === 'none' ? undefined : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {teamsData?.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Assign the user to a team when they accept the invitation.
                 </p>
               </div>
             </div>
@@ -564,6 +598,7 @@ export function UsersPageClient() {
                   <TableRow>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Team</TableHead>
                     <TableHead>Sent</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead className="w-12"></TableHead>
@@ -577,6 +612,9 @@ export function UsersPageClient() {
                         <Badge variant={invitation.role === 'admin' ? 'default' : 'secondary'}>
                           {invitation.role}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {invitation.teamName ?? '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(invitation.createdAt).toLocaleDateString()}

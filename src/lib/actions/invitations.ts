@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { invitations, users } from '@/lib/db/schema';
+import { invitations, users, teams } from '@/lib/db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth/session';
 import { resend, EMAIL_CONFIG, getAppUrl } from '@/lib/email/client';
@@ -181,6 +181,8 @@ export async function listInvitations(): Promise<{
   id: string;
   email: string;
   role: 'admin' | 'user';
+  teamId: string | null;
+  teamName: string | null;
   status: 'pending' | 'accepted' | 'expired';
   createdAt: Date;
   expiresAt: Date;
@@ -188,6 +190,9 @@ export async function listInvitations(): Promise<{
   await requireAdmin();
 
   const allInvitations = await db.query.invitations.findMany({
+    with: {
+      team: true,
+    },
     orderBy: [desc(invitations.createdAt)],
   });
 
@@ -195,6 +200,8 @@ export async function listInvitations(): Promise<{
     id: inv.id,
     email: inv.email,
     role: inv.role,
+    teamId: inv.teamId,
+    teamName: inv.team?.name ?? null,
     status: inv.acceptedAt
       ? 'accepted'
       : inv.expiresAt < new Date()
