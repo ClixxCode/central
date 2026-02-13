@@ -12,9 +12,10 @@ export const proxy = auth((req) => {
   const isAuthApi = pathname.startsWith('/api/auth');
   const isInngestApi = pathname.startsWith('/api/inngest');
   const isExtensionApi = pathname.startsWith('/api/extension');
+  const isCronApi = pathname.startsWith('/api/cron');
 
   // Allow public routes, auth API, and Inngest API (secured by signing key)
-  if (isPublicRoute || isAuthApi || isInngestApi || isExtensionApi) {
+  if (isPublicRoute || isAuthApi || isInngestApi || isExtensionApi || isCronApi) {
     // If user is already logged in and trying to access login/signup, redirect to dashboard
     if (req.auth && (pathname === '/login' || pathname === '/signup')) {
       return NextResponse.redirect(new URL('/my-tasks', req.url));
