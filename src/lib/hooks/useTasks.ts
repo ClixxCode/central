@@ -26,6 +26,7 @@ import {
   ArchivedTaskSummary,
   BulkUpdateTasksInput,
 } from '@/lib/actions/tasks';
+import posthog from 'posthog-js';
 import { trackEvent } from '@/lib/analytics';
 
 // Query key factory
@@ -280,12 +281,14 @@ export function useUpdateTask() {
         }
       }
       // Surface the error so users know the save failed
-      console.error('[useUpdateTask] Failed to save task:', {
+      const errorContext = {
         error: err.message,
         taskId: variables.id,
         fields: Object.keys(variables).filter((k) => k !== 'id'),
         descriptionSize: variables.descriptionJson?.length,
-      });
+      };
+      console.error('[useUpdateTask] Failed to save task:', errorContext);
+      posthog.capture('task_update_failed', errorContext);
       toast.error('Failed to save changes. Please try again.');
     },
     onSettled: (data, error, variables) => {
