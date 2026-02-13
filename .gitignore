@@ -38,6 +38,9 @@ yarn-error.log*
 .env.production.local
 !.env.example
 
+# database backups
+/drizzle/backups
+
 # vercel
 .vercel
 
