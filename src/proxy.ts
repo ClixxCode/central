@@ -1,8 +1,28 @@
 import { auth } from '@/lib/auth/config';
 import { NextResponse } from 'next/server';
+import { get } from '@vercel/edge-config';
 
-export const proxy = auth((req) => {
+export const proxy = auth(async (req) => {
   const { pathname } = req.nextUrl;
+
+  // Routes excluded from maintenance mode
+  const isCronApi = pathname.startsWith('/api/cron');
+  const isInngestApi = pathname.startsWith('/api/inngest');
+  const isMaintenancePage = pathname === '/maintenance';
+
+  // Check maintenance mode (skip for excluded routes)
+  if (!isCronApi && !isInngestApi && !isMaintenancePage) {
+    try {
+      const isInMaintenanceMode = await get<boolean>('maintenance');
+      if (isInMaintenanceMode) {
+        const url = req.nextUrl.clone();
+        url.pathname = '/maintenance';
+        return NextResponse.rewrite(url);
+      }
+    } catch {
+      // If Edge Config read fails, let the request through
+    }
+  }
 
   // Public routes that don't require authentication
   const publicRoutes = ['/login', '/signup', '/invite', '/reset-password'];
@@ -10,9 +30,7 @@ export const proxy = auth((req) => {
 
   // API routes that should be publicly accessible
   const isAuthApi = pathname.startsWith('/api/auth');
-  const isInngestApi = pathname.startsWith('/api/inngest');
   const isExtensionApi = pathname.startsWith('/api/extension');
-  const isCronApi = pathname.startsWith('/api/cron');
 
   // Allow public routes, auth API, and Inngest API (secured by signing key)
   if (isPublicRoute || isAuthApi || isInngestApi || isExtensionApi || isCronApi) {

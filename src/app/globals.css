@@ -121,6 +121,39 @@
   min-width: 0 !important;
 }
 
+@keyframes spin-pause {
+  0% { transform: rotate(0deg); }
+  15% { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes stripe-scroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 15px 0; }
+}
+
+.maintenance-mask {
+  -webkit-mask-image: var(--stripe-mask);
+  mask-image: var(--stripe-mask);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+.maintenance-stripes {
+  background: repeating-linear-gradient(
+    90deg,
+    #facc15,
+    #facc15 5px,
+    black 5px,
+    black 15px
+  );
+  animation: stripe-scroll 0.8s linear infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

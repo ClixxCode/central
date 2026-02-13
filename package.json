@@ -45,6 +45,7 @@
     "@use-gesture/react": "^10.3.1",
     "@vercel/analytics": "^1.6.1",
     "@vercel/blob": "^2.0.1",
+    "@vercel/edge-config": "^1.4.3",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
