@@ -2607,6 +2607,7 @@ export interface BulkUpdateTasksInput {
   section?: string | null;
   dueDate?: string | null;
   addAssigneeIds?: string[];
+  removeAllAssignees?: boolean;
   boardId?: string; // move to a different board
 }
 
@@ -2714,6 +2715,13 @@ export async function bulkUpdateTasks(input: BulkUpdateTasksInput): Promise<{
         );
       }
     }
+  }
+
+  // Remove all assignees
+  if (input.removeAllAssignees) {
+    await db
+      .delete(taskAssignees)
+      .where(inArray(taskAssignees.taskId, input.taskIds));
   }
 
   // Log activity for each task (fire-and-forget)

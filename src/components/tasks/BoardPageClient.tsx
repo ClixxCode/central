@@ -174,6 +174,24 @@ export function BoardPageClient({
     []
   );
 
+  // Check if any selected tasks have assignees
+  const selectedTasksHaveAssignees = React.useMemo(() => {
+    return tasks.some(
+      (t) => selectedTaskIds.has(t.id) && t.assignees.length > 0
+    );
+  }, [tasks, selectedTaskIds]);
+
+  // Handle remove all assignees
+  const handleRemoveAllAssignees = React.useCallback(() => {
+    bulkUpdate.mutate(
+      {
+        taskIds: Array.from(selectedTaskIds),
+        removeAllAssignees: true,
+      },
+      { onSuccess: () => clearSelection() }
+    );
+  }, [selectedTaskIds, bulkUpdate, clearSelection]);
+
   // Handle bulk edit apply
   const handleBulkApply = React.useCallback(
     (payload: BulkEditPayload) => {
@@ -437,9 +455,11 @@ export function BoardPageClient({
           currentBoardId={boardId}
           onApply={handleBulkApply}
           onDuplicate={handleBulkDuplicate}
+          onRemoveAllAssignees={handleRemoveAllAssignees}
           onCancel={clearSelection}
           isPending={bulkUpdate.isPending}
           isDuplicating={bulkDuplicate.isPending}
+          selectedTasksHaveAssignees={selectedTasksHaveAssignees}
         />
       )}
 

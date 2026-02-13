@@ -28,6 +28,7 @@ export interface BulkEditPayload {
   status?: string;
   section?: string | null;
   addAssigneeIds?: string[];
+  removeAllAssignees?: boolean;
   dueDate?: string | null;
   boardId?: string;
   targetBoardName?: string;
@@ -41,9 +42,11 @@ interface MultiSelectFloatingBarProps {
   currentBoardId: string;
   onApply: (updates: BulkEditPayload) => void;
   onDuplicate: () => void;
+  onRemoveAllAssignees: () => void;
   onCancel: () => void;
   isPending: boolean;
   isDuplicating: boolean;
+  selectedTasksHaveAssignees: boolean;
 }
 
 export function MultiSelectFloatingBar({
@@ -54,9 +57,11 @@ export function MultiSelectFloatingBar({
   currentBoardId,
   onApply,
   onDuplicate,
+  onRemoveAllAssignees,
   onCancel,
   isPending,
   isDuplicating,
+  selectedTasksHaveAssignees,
 }: MultiSelectFloatingBarProps) {
   // Pending edits
   const [pendingStatus, setPendingStatus] = React.useState<string | undefined>();
@@ -252,21 +257,50 @@ export function MultiSelectFloatingBar({
 
         {/* Assignee picker */}
         <div ref={assigneeRef} className="relative">
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={() => { closeAll(); setAssigneeOpen(!assigneeOpen); }}
-            className={cn(
-              'gap-1 text-xs h-8 px-2',
-              pendingAssigneeIds.length > 0 && 'border-purple-300 text-purple-700 bg-purple-50 dark:border-purple-500/30 dark:text-purple-300 dark:bg-purple-500/20'
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => { closeAll(); setAssigneeOpen(!assigneeOpen); }}
+              className={cn(
+                'gap-1 text-xs h-8 px-2',
+                pendingAssigneeIds.length > 0 && 'border-purple-300 text-purple-700 bg-purple-50 dark:border-purple-500/30 dark:text-purple-300 dark:bg-purple-500/20',
+                selectedTasksHaveAssignees && 'rounded-r-none'
+              )}
+            >
+              <User className="h-3.5 w-3.5" />
+              {pendingAssigneeIds.length > 0
+                ? `+${pendingAssigneeIds.length} assignee${pendingAssigneeIds.length === 1 ? '' : 's'}`
+                : 'Assignee'}
+            </Button>
+            {selectedTasksHaveAssignees && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    className="rounded-l-none border-l-0 px-1.5 h-8"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove all assignees?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will remove all assignees from {selectedCount} selected task{selectedCount === 1 ? '' : 's'}.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={onRemoveAllAssignees}>Remove All</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
-          >
-            <User className="h-3.5 w-3.5" />
-            {pendingAssigneeIds.length > 0
-              ? `+${pendingAssigneeIds.length} assignee${pendingAssigneeIds.length === 1 ? '' : 's'}`
-              : 'Assignee'}
-          </Button>
+          </div>
 
           {assigneeOpen && (
             <div className="absolute bottom-full left-0 z-50 mb-1 max-h-[240px] w-[220px] overflow-y-auto rounded-md border bg-popover shadow-lg py-1">
