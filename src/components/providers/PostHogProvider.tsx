@@ -19,8 +19,6 @@ function PostHogInit() {
       capture_pageview: true,
       capture_pageleave: true,
       persistence: 'localStorage+cookie',
-      // Respect Do Not Track
-      respect_dnt: true,
     });
   }, []);
 
