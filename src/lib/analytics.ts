@@ -1,4 +1,4 @@
-import { track } from '@vercel/analytics';
+import posthog from 'posthog-js';
 
 type AnalyticsEvents = {
   task_created: { source?: 'board' | 'quick_add'; has_due_date?: boolean; has_assignees?: boolean; is_recurring?: boolean };
@@ -22,5 +22,5 @@ export function trackEvent<T extends keyof AnalyticsEvents>(
   name: T,
   ...args: AnalyticsEvents[T] extends Record<string, never> ? [] : [properties: AnalyticsEvents[T]]
 ) {
-  track(name, args[0] as Record<string, string | number | boolean>);
+  posthog.capture(name, args[0] as Record<string, string | number | boolean>);
 }

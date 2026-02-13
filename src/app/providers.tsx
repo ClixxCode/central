@@ -9,6 +9,7 @@ import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { OfflineIndicator } from '@/components/pwa/OfflineIndicator';
 import { PWAUpdateHandler } from '@/components/pwa/PWAUpdateHandler';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
+import { PostHogProvider } from '@/components/providers/PostHogProvider';
 
 function makeQueryClient() {
   return new QueryClient({
@@ -46,6 +47,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
+        <PostHogProvider>
         <RealtimeProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             {children}
@@ -54,6 +56,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <PWAUpdateHandler />
           </ThemeProvider>
         </RealtimeProvider>
+        </PostHogProvider>
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </SessionProvider>

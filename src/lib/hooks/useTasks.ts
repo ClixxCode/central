@@ -281,6 +281,13 @@ export function useUpdateTask() {
       }
     },
     onSettled: (data, error, variables) => {
+      // Track task completion
+      if (!error && variables.status) {
+        const s = variables.status.toLowerCase();
+        if (s === 'done' || s === 'complete' || s === 'completed') {
+          trackEvent('task_completed');
+        }
+      }
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(variables.id) });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
