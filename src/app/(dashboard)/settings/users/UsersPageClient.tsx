@@ -83,6 +83,7 @@ import {
 import { sendPasswordResetLink } from '@/lib/actions/password-reset';
 import { startImpersonation } from '@/lib/actions/impersonation';
 import { listTeamsWithMembers } from '@/lib/actions/teams';
+import { trackEvent } from '@/lib/analytics';
 
 export function UsersPageClient() {
   const queryClient = useQueryClient();
@@ -136,6 +137,7 @@ export function UsersPageClient() {
       setInviteTeamId(undefined);
       setInviteDialogOpen(false);
       toast.success('Invitation sent successfully');
+      trackEvent('user_invited');
     },
     onError: (error: Error) => {
       toast.error(error.message);

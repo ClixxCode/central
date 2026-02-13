@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { listAssignableUsers, listMentionableUsers } from '@/lib/actions/quick-add';
 import { createTask, type CreateTaskInput } from '@/lib/actions/tasks';
+import { trackEvent } from '@/lib/analytics';
 import { taskKeys } from './useTasks';
 
 // Query key factory
@@ -62,6 +63,12 @@ export function useQuickAddCreateTask() {
     },
     onSuccess: (task) => {
       toast.success(`Task "${task.title}" created`);
+      trackEvent('task_created', {
+        source: 'quick_add',
+        has_due_date: !!task.dueDate,
+        has_assignees: (task.assignees?.length ?? 0) > 0,
+        is_recurring: !!task.recurringConfig,
+      });
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to create task');

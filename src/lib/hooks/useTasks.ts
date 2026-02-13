@@ -26,6 +26,7 @@ import {
   ArchivedTaskSummary,
   BulkUpdateTasksInput,
 } from '@/lib/actions/tasks';
+import { trackEvent } from '@/lib/analytics';
 
 // Query key factory
 export const taskKeys = {
@@ -165,6 +166,14 @@ export function useCreateTask(boardId: string) {
           queryClient.setQueryData(queryKey, data);
         }
       }
+    },
+    onSuccess: (task) => {
+      trackEvent('task_created', {
+        source: 'board',
+        has_due_date: !!task.dueDate,
+        has_assignees: task.assignees.length > 0,
+        is_recurring: !!task.recurringConfig,
+      });
     },
     onSettled: () => {
       // Always refetch after error or success
@@ -368,6 +377,7 @@ export function useDeleteTask() {
     },
     onSuccess: () => {
       toast.success('Task deleted');
+      trackEvent('task_deleted');
     },
     onError: (err, taskId, context) => {
       // Rollback on error
@@ -503,6 +513,9 @@ export function useCreateSubtask(parentTaskId: string, boardId: string) {
       }
       return result.task!;
     },
+    onSuccess: () => {
+      trackEvent('subtask_created');
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.subtasks(parentTaskId) });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
@@ -594,6 +607,7 @@ export function useBulkUpdateTasks() {
     },
     onSuccess: (count) => {
       toast.success(`Updated ${count} task${count === 1 ? '' : 's'}`);
+      trackEvent('bulk_operation', { action: 'update', count });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
@@ -619,6 +633,7 @@ export function useBulkArchiveDone(boardId: string) {
     },
     onSuccess: (count) => {
       toast.success(`Archived ${count} task${count === 1 ? '' : 's'}`);
+      trackEvent('bulk_operation', { action: 'archive', count });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
@@ -644,6 +659,7 @@ export function useBulkDuplicateTasks() {
     },
     onSuccess: (count) => {
       toast.success(`Duplicated ${count} task${count === 1 ? '' : 's'}`);
+      trackEvent('bulk_operation', { action: 'duplicate', count });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });

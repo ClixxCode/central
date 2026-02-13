@@ -14,6 +14,7 @@ import {
   useCalendarPreferences,
   useUpdateCalendarPreferences,
 } from '@/lib/hooks';
+import { trackEvent } from '@/lib/analytics';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,7 @@ export function CalendarConnectionCard() {
   useEffect(() => {
     if (searchParams.get('calendar') === 'connected') {
       toast.success('Google Calendar connected successfully');
+      trackEvent('calendar_connected');
       window.history.replaceState({}, '', '/settings/integrations');
     } else if (searchParams.get('calendar') === 'error') {
       toast.error('Failed to connect Google Calendar');

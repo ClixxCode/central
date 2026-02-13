@@ -10,6 +10,7 @@ import {
   CreateCommentInput,
   UpdateCommentInput,
 } from '@/lib/actions/comments';
+import { trackEvent } from '@/lib/analytics';
 
 // Types
 export interface CommentThread {
@@ -141,6 +142,12 @@ export function useCreateComment() {
           context.previousComments
         );
       }
+    },
+    onSuccess: (_data, variables) => {
+      trackEvent('comment_created', {
+        is_reply: !!variables.parentCommentId,
+        has_attachments: (variables.attachments?.length ?? 0) > 0,
+      });
     },
     onSettled: (data, error, variables) => {
       // Always refetch after error or success

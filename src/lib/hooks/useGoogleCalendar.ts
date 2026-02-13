@@ -15,6 +15,7 @@ import {
   getUserPreferences,
   updateCalendarPreferences,
 } from '@/lib/actions/user-preferences';
+import { trackEvent } from '@/lib/analytics';
 
 export const calendarKeys = {
   all: ['google-calendar'] as const,
@@ -86,6 +87,7 @@ export function useDisconnectCalendar() {
     mutationFn: () => disconnectGoogleCalendar(),
     onSuccess: () => {
       toast.success('Google Calendar disconnected');
+      trackEvent('calendar_disconnected');
       queryClient.invalidateQueries({ queryKey: calendarKeys.connection() });
       queryClient.invalidateQueries({ queryKey: calendarKeys.todaysEvents() });
     },

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { registerUser, canRegister, signInWithGoogle } from '@/lib/actions/auth';
+import { trackEvent } from '@/lib/analytics';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -62,6 +63,8 @@ export default function SignUpPage() {
       setIsLoading(false);
       return;
     }
+
+    trackEvent('user_signed_up', { provider: 'credentials' });
 
     // Redirect to verify-email page
     if (result.requiresVerification) {

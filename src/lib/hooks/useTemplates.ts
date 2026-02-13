@@ -29,6 +29,7 @@ import type {
   ApplyTemplateTasksInput,
   CreateTemplateFromBoardInput,
 } from '@/lib/validations/template';
+import { trackEvent } from '@/lib/analytics';
 
 // Query key factory
 export const templateKeys = {
@@ -252,6 +253,7 @@ export function useCreateBoardFromTemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       toast.success('Board created from template');
+      trackEvent('template_used', { action: 'create_board' });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -294,6 +296,7 @@ export function useApplyTemplateTasksToBoard() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success(`${data.taskCount} tasks added to board`);
+      trackEvent('template_used', { action: 'apply_tasks' });
     },
     onError: (error: Error) => {
       toast.error(error.message);

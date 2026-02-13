@@ -29,6 +29,7 @@ import {
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import type { TaskFilters, TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
+import { trackEvent } from '@/lib/analytics';
 
 interface BoardPageClientProps {
   boardId: string;
@@ -86,6 +87,11 @@ export function BoardPageClient({
       resetCreateTaskTrigger();
     }
   }, [createTaskTrigger, resetCreateTaskTrigger]);
+
+  // Track board view
+  React.useEffect(() => {
+    trackEvent('board_viewed', { view_type: viewMode });
+  }, [viewMode, boardId]);
 
   // Fetch data
   const { data: tasks = [], isLoading: isLoadingTasks } = useTasks(boardId, filters, sort);

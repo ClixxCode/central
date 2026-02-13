@@ -14,6 +14,7 @@ import {
   reorderFolderContents,
 } from '@/lib/actions/favorites';
 import type { FavoritesData } from '@/lib/db/schema';
+import { trackEvent } from '@/lib/analytics';
 
 // Query Keys
 export const favoriteKeys = {
@@ -51,9 +52,10 @@ export function useAddFavorite() {
       }
       return result.data!;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
       toast.success('Added to favorites');
+      trackEvent('favorite_toggled', { action: 'add', entity_type: variables.entityType });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to add favorite');
@@ -99,6 +101,7 @@ export function useRemoveFavorite() {
     },
     onSuccess: () => {
       toast.success('Removed from favorites');
+      trackEvent('favorite_toggled', { action: 'remove', entity_type: 'unknown' });
     },
   });
 }

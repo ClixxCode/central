@@ -20,6 +20,7 @@ import {
   type BoardAccessEntry,
 } from '@/lib/actions/boards';
 import type { CreateBoardInput, UpdateBoardInput, AddBoardAccessInput, UpdateBoardAccessInput } from '@/lib/validations/board';
+import { trackEvent } from '@/lib/analytics';
 import { clientKeys } from './useClients';
 import { favoriteKeys } from './useFavorites';
 
@@ -99,6 +100,7 @@ export function useCreateBoard() {
     },
     onSuccess: (data) => {
       toast.success(`Board "${data.name}" created`);
+      trackEvent('board_created', { from_template: false });
     },
     onSettled: (_data, _error, variables) => {
       // Invalidate board queries

@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSearch, type GlobalSearchResult, type TaskSearchResult, type ClientSearchResult, type BoardSearchResult } from '@/lib/hooks/useSearch';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { trackEvent } from '@/lib/analytics';
 
 interface GlobalSearchProps {
   className?: string;
@@ -42,6 +43,15 @@ export function GlobalSearch({ className, inputRef }: GlobalSearchProps) {
   React.useEffect(() => {
     setSelectedIndex(-1);
   }, [results]);
+
+  // Track search events
+  const prevQueryRef = React.useRef('');
+  React.useEffect(() => {
+    if (shouldShowResults && !isLoading && query.length >= 2 && query !== prevQueryRef.current) {
+      prevQueryRef.current = query;
+      trackEvent('search_performed', { result_count: results.length, has_results: results.length > 0 });
+    }
+  }, [shouldShowResults, isLoading, results.length, query]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
