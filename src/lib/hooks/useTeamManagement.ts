@@ -234,6 +234,7 @@ export function useAddUserToTeam() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: teamKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
     },
   });
 }
@@ -259,6 +260,7 @@ export function useRemoveUserFromTeam() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: teamKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['users', 'all'] });
     },
   });
 }

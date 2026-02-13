@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { teams, teamMembers, users } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, asc, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 
@@ -52,7 +52,7 @@ export async function listTeamsWithMembers(): Promise<ActionResult<TeamWithMembe
           },
         },
       },
-      orderBy: [desc(teams.createdAt)],
+      orderBy: [asc(teams.name)],
     });
 
     return {

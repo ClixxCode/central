@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Users, Trash2, UserPlus, UserMinus } from 'lucide-react';
+import { Plus, Users, Trash2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Dialog,
   DialogContent,
@@ -18,13 +19,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   useTeamsWithMembers,
   useUsersForTeams,
@@ -46,8 +40,6 @@ export function TeamsPageClient() {
 
   const [newTeamName, setNewTeamName] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [selectedTeamForAddMember, setSelectedTeamForAddMember] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState('');
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) return;
@@ -69,19 +61,6 @@ export function TeamsPageClient() {
       return;
     }
     await deleteTeam.mutateAsync(teamId);
-  };
-
-  const handleAddMember = async (teamId: string) => {
-    if (!selectedUserId) return;
-
-    await addUser.mutateAsync({ teamId, userId: selectedUserId });
-    setSelectedUserId('');
-    setSelectedTeamForAddMember(null);
-  };
-
-  const handleRemoveMember = async (teamId: string, userId: string, userName: string) => {
-    if (!confirm(`Remove ${userName} from this team?`)) return;
-    await removeUser.mutateAsync({ teamId, userId });
   };
 
   if (isLoading) {
@@ -191,87 +170,66 @@ export function TeamsPageClient() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>Members</Label>
-                    <Dialog
-                      open={selectedTeamForAddMember === team.id}
-                      onOpenChange={(open) => {
-                        setSelectedTeamForAddMember(open ? team.id : null);
-                        if (!open) setSelectedUserId('');
-                      }}
-                    >
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Add Member
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add Member to {team.name}</DialogTitle>
-                        </DialogHeader>
-                        <div className="py-4">
-                          <Label>Select User</Label>
-                          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Choose a user..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {nonMembers.length === 0 ? (
-                                <SelectItem value="" disabled>
-                                  All users are already members
-                                </SelectItem>
-                              ) : (
-                                nonMembers.map((user) => (
-                                  <SelectItem key={user.id} value={user.id}>
-                                    {user.name || user.email}
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            onClick={() => handleAddMember(team.id)}
-                            disabled={!selectedUserId || addUser.isPending}
-                          >
-                            {addUser.isPending ? 'Adding...' : 'Add Member'}
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-
-                  {team.members.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No members yet</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {team.members.map((member) => (
-                        <div
-                          key={member.id}
-                          className="flex items-center gap-2 bg-muted rounded-full pl-1 pr-2 py-1"
+                  <Label>Members</Label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {team.members.map((member) => (
+                      <Badge
+                        key={member.id}
+                        variant="secondary"
+                        className="gap-1.5 pl-1 pr-1 py-1"
+                      >
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={member.avatarUrl || undefined} />
+                          <AvatarFallback className="text-[10px]">
+                            {member.name?.[0] || member.email[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{member.name || member.email}</span>
+                        <button
+                          type="button"
+                          className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5 text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            removeUser.mutate({ teamId: team.id, userId: member.id })
+                          }
                         >
-                          <Avatar className="h-6 w-6">
-                            <AvatarImage src={member.avatarUrl || undefined} />
-                            <AvatarFallback className="text-xs">
-                              {member.name?.[0] || member.email[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm">{member.name || member.email}</span>
-                          <button
-                            onClick={() =>
-                              handleRemoveMember(team.id, member.id, member.name || member.email)
-                            }
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                            disabled={removeUser.isPending}
-                          >
-                            <UserMinus className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                          <XCircle className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full">
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-1" align="start">
+                        {nonMembers.length === 0 ? (
+                          <p className="text-xs text-muted-foreground px-2 py-1.5">
+                            All users are already members
+                          </p>
+                        ) : (
+                          nonMembers.map((user) => (
+                            <button
+                              key={user.id}
+                              type="button"
+                              className="w-full flex items-center gap-2 text-sm rounded-sm px-2 py-1.5 hover:bg-accent hover:text-accent-foreground"
+                              onClick={() =>
+                                addUser.mutate({ teamId: team.id, userId: user.id })
+                              }
+                            >
+                              <Avatar className="h-5 w-5">
+                                <AvatarImage src={user.avatarUrl || undefined} />
+                                <AvatarFallback className="text-[10px]">
+                                  {user.name?.[0] || user.email[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              {user.name || user.email}
+                            </button>
+                          ))
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </CardContent>
             </Card>
