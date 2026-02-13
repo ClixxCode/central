@@ -207,6 +207,7 @@ export function TaskModal({
   const prevOpenRef = useRef(false);
   const prevTaskIdRef = useRef<string | null>(null);
   const titleFocusedRef = useRef(false);
+  const assigneePickerOpenRef = useRef(false);
 
   // For existing tasks, always in edit mode (click-to-edit with auto-save)
   // For new tasks, we need to collect all data before create
@@ -319,7 +320,9 @@ export function TaskModal({
         setDueDate(task.dueDate ?? null);
         setDateFlexibility(task.dateFlexibility);
         setRecurringConfig(task.recurringConfig);
-        setAssigneeIds(task.assignees.map((a) => a.id));
+        if (!assigneePickerOpenRef.current) {
+          setAssigneeIds(task.assignees.map((a) => a.id));
+        }
       } else {
         // New task - reset to defaults
         setTitle('');
@@ -743,6 +746,7 @@ export function TaskModal({
                         open={isAssigneePickerOpen}
                         onOpenChange={(open) => {
                           setIsAssigneePickerOpen(open);
+                          assigneePickerOpenRef.current = open;
                           if (!open) {
                             setAssigneeSearch('');
                             setAssigneeHighlight(0);
@@ -853,7 +857,8 @@ export function TaskModal({
                                           el?.scrollIntoView({ block: 'nearest' });
                                         }
                                       }}
-                                      onClick={() => {
+                                      onPointerDown={(e) => {
+                                        e.preventDefault();
                                         const newAssigneeIds = assigneeIds.includes(user.id)
                                           ? assigneeIds.filter((id) => id !== user.id)
                                           : [...assigneeIds, user.id];
