@@ -279,6 +279,14 @@ export function useUpdateTask() {
           queryClient.setQueryData(queryKey, data);
         }
       }
+      // Surface the error so users know the save failed
+      console.error('[useUpdateTask] Failed to save task:', {
+        error: err.message,
+        taskId: variables.id,
+        fields: Object.keys(variables).filter((k) => k !== 'id'),
+        descriptionSize: variables.descriptionJson?.length,
+      });
+      toast.error('Failed to save changes. Please try again.');
     },
     onSettled: (data, error, variables) => {
       // Track task completion

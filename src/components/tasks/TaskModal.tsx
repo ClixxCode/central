@@ -300,10 +300,22 @@ export function TaskModal({
   // Debounced auto-save for description (500ms delay)
   const debouncedSaveDescription = useDebouncedCallback(
     (newDescription: TiptapContent | null) => {
-      autoSave({ descriptionJson: newDescription ? JSON.stringify(newDescription) : null });
+      const json = newDescription ? JSON.stringify(newDescription) : null;
+      if (json && json.length > 500_000) {
+        console.warn('[TaskModal] Large description payload:', json.length, 'bytes');
+      }
+      autoSave({ descriptionJson: json });
     },
     500
   );
+
+  // Flush pending saves on unmount (e.g. client-side navigation)
+  useEffect(() => {
+    return () => {
+      debouncedSaveTitle.flush();
+      debouncedSaveDescription.flush();
+    };
+  }, [debouncedSaveTitle, debouncedSaveDescription]);
 
   // Reset form when task changes or modal opens
   useEffect(() => {
@@ -930,6 +942,8 @@ export function TaskModal({
                           if ((e.relatedTarget as HTMLElement)?.closest('[data-radix-popper-content-wrapper]')) {
                             return;
                           }
+                          // Flush any pending debounced save before leaving edit mode
+                          debouncedSaveDescription.flush();
                           setDescriptionFocused(false);
                         }
                       }}

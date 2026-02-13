@@ -930,7 +930,18 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
   if (input.title !== undefined) updateData.title = input.title;
   // Use descriptionJson (string) to preserve nested attrs during Server Action serialization
   if (input.descriptionJson !== undefined) {
-    updateData.description = input.descriptionJson ? JSON.parse(input.descriptionJson) : null;
+    try {
+      updateData.description = input.descriptionJson ? JSON.parse(input.descriptionJson) : null;
+    } catch (parseError) {
+      console.error('[updateTask] Failed to parse descriptionJson:', {
+        taskId: input.id,
+        userId: user.id,
+        payloadSize: input.descriptionJson?.length,
+        preview: input.descriptionJson?.slice(0, 200),
+        error: parseError instanceof Error ? parseError.message : parseError,
+      });
+      return { success: false, error: 'Invalid description format' };
+    }
   } else if (input.description !== undefined) {
     // Fallback for backward compatibility - but attrs may be stripped
     updateData.description = input.description;
