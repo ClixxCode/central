@@ -18,7 +18,6 @@ import { ClientIcon } from '@/components/clients/ClientIcon';
 
 // Define available columns for the personal rollup view
 export const PERSONAL_ROLLUP_COLUMNS = [
-  { id: 'board', label: 'Board' },
   { id: 'section', label: 'Section' },
   { id: 'dueDate', label: 'Due Date' },
   { id: 'assignees', label: 'Assignees' },
@@ -35,7 +34,7 @@ const TABLE_COLUMNS = [
 
 interface PersonalRollupToolbarProps {
   tasksByClient: MyTasksByClient[];
-  viewMode?: 'swimlane' | 'table';
+  viewMode?: 'swimlane' | 'date' | 'table';
 }
 
 export function PersonalRollupToolbar({ tasksByClient, viewMode = 'swimlane' }: PersonalRollupToolbarProps) {

@@ -18,8 +18,8 @@ export interface TableSortConfig {
 interface PersonalRollupState {
   // Collapsed clients in personal view
   collapsedClients: string[];
-  // View mode: swimlane or table
-  viewMode: 'swimlane' | 'table';
+  // View mode: swimlane (by board), date (by date), or table
+  viewMode: 'swimlane' | 'date' | 'table';
   // Table column visibility
   tableColumns: TableColumnConfig;
   // Table sort
@@ -37,7 +37,7 @@ interface PersonalRollupState {
   isClientCollapsed: (clientId: string) => boolean;
   setAllClientsCollapsed: (clientIds: string[], collapsed: boolean) => void;
   areAllClientsCollapsed: (clientIds: string[]) => boolean;
-  setViewMode: (mode: 'swimlane' | 'table') => void;
+  setViewMode: (mode: 'swimlane' | 'date' | 'table') => void;
   setTableColumns: (columns: TableColumnConfig) => void;
   toggleTableColumn: (column: keyof TableColumnConfig) => void;
   setTableSort: (sort: TableSortConfig) => void;

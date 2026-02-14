@@ -32,6 +32,8 @@ const defaultSwimlaneCardItems: SwimlaneCardItems = {
   assignees: true,
 };
 
+type GroupBy = 'status' | 'date';
+
 interface BoardViewState {
   // Per-board view preferences
   boardViews: Record<string, ViewMode>;
@@ -40,10 +42,14 @@ interface BoardViewState {
   boardTableColumns: Record<string, BoardTableColumns>;
   // Per-board swimlane card item visibility
   swimlaneCardItems: Record<string, SwimlaneCardItems>;
+  // Per-board grouping mode (status columns vs date buckets)
+  boardGroupBy: Record<string, GroupBy>;
 
   // Actions
   getBoardView: (boardId: string, defaultView?: ViewMode) => ViewMode;
   setBoardView: (boardId: string, view: ViewMode) => void;
+  getGroupBy: (boardId: string) => GroupBy;
+  setGroupBy: (boardId: string, groupBy: GroupBy) => void;
   toggleSwimlane: (boardId: string, status: string) => void;
   isSwimlaneCollapsed: (boardId: string, status: string) => boolean;
   setAllSwimlanesCollapsed: (boardId: string, swimlaneIds: string[], collapsed: boolean) => void;
@@ -62,12 +68,20 @@ export const useBoardViewStore = create<BoardViewState>()(
       collapsedSwimlanes: {},
       boardTableColumns: {},
       swimlaneCardItems: {},
+      boardGroupBy: {},
 
       getBoardView: (boardId, defaultView = 'swimlane') => get().boardViews[boardId] ?? defaultView,
 
       setBoardView: (boardId, view) =>
         set((state) => ({
           boardViews: { ...state.boardViews, [boardId]: view },
+        })),
+
+      getGroupBy: (boardId) => get().boardGroupBy[boardId] ?? 'status',
+
+      setGroupBy: (boardId, groupBy) =>
+        set((state) => ({
+          boardGroupBy: { ...state.boardGroupBy, [boardId]: groupBy },
         })),
 
       toggleSwimlane: (boardId, status) =>

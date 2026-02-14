@@ -28,6 +28,7 @@ import {
   AtSign,
   MessageSquare,
   CheckSquare,
+  CalendarDays,
   LayoutList,
   ListTodo,
   TableRowsSplit,
@@ -776,7 +777,18 @@ export function MyTasksPageClient() {
                       )}
                     >
                       <TableRowsSplit className="h-4 w-4" />
-                      Swimlane
+                      By Board
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('date')}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded px-3 py-1 text-sm transition-colors',
+                        viewMode === 'date' ? 'bg-background shadow-sm' : 'hover:bg-background/50'
+                      )}
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                      By Date
                     </button>
                     <button
                       type="button"
@@ -830,19 +842,25 @@ export function MyTasksPageClient() {
                     }}
                   />
                 </div>
-                {viewMode === 'swimlane' && visibleBoardIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const allCollapsed = areAllClientsCollapsed(visibleBoardIds);
-                      setAllClientsCollapsed(visibleBoardIds, !allCollapsed);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    <ChevronsUpDown className="size-4" />
-                    {areAllClientsCollapsed(visibleBoardIds) ? 'Expand All' : 'Collapse All'}
-                  </button>
-                )}
+                {(viewMode === 'swimlane' || viewMode === 'date') && (() => {
+                  const collapseIds = viewMode === 'date'
+                    ? ['overdue', 'today', 'tomorrow', 'this-week', 'next-week', 'later', 'no-date']
+                    : visibleBoardIds;
+                  if (collapseIds.length === 0) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allCollapsed = areAllClientsCollapsed(collapseIds);
+                        setAllClientsCollapsed(collapseIds, !allCollapsed);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <ChevronsUpDown className="size-4" />
+                      {areAllClientsCollapsed(collapseIds) ? 'Expand All' : 'Collapse All'}
+                    </button>
+                  );
+                })()}
               </div>
               <PersonalRollupView
                 tasksByClient={filteredTasksByClient}

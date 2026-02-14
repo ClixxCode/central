@@ -16,6 +16,7 @@ import { isCompleteStatus } from '@/lib/utils/status';
 import type { TaskWithAssignees, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from './AssigneePicker';
+import { getDateBucketDefinitions, groupByDateBucket } from '@/lib/utils/date-buckets';
 
 interface SwimlaneBoardViewProps {
   boardId: string;
@@ -37,6 +38,8 @@ interface SwimlaneBoardViewProps {
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
   isMultiSelectMode?: boolean;
+  /** Group by status (default) or date buckets */
+  groupBy?: 'status' | 'date';
 }
 
 export function SwimlaneBoardView({
@@ -54,6 +57,7 @@ export function SwimlaneBoardView({
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
+  groupBy = 'status',
 }: SwimlaneBoardViewProps) {
   const { isSwimlaneCollapsed, toggleSwimlane } = useBoardViewStore();
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
@@ -281,12 +285,39 @@ export function SwimlaneBoardView({
     [statusOptions]
   );
 
+  // Date bucket definitions (for groupBy='date')
+  const dateBucketDefs = React.useMemo(() => getDateBucketDefinitions(), []);
+
+  // Group tasks by date bucket
+  const tasksByDate = React.useMemo(() => {
+    if (groupBy !== 'date') return {};
+    return groupByDateBucket(tasks);
+  }, [tasks, groupBy]);
+
+  // Build synthetic StatusOptions from date buckets
+  const dateBucketStatusOptions: StatusOption[] = React.useMemo(
+    () => dateBucketDefs.map((b, i) => ({ id: b.id, label: b.label, color: b.color, position: i })),
+    [dateBucketDefs]
+  );
+
+  // Choose lanes and grouping based on groupBy mode
+  const lanes = groupBy === 'date' ? dateBucketStatusOptions : sortedStatusOptions;
+  const groupedTasks = groupBy === 'date' ? tasksByDate : tasksByStatus;
+
+  // In date mode, skip empty buckets
+  const visibleLanes = React.useMemo(
+    () => groupBy === 'date'
+      ? lanes.filter((lane) => (groupedTasks[lane.id]?.length ?? 0) > 0)
+      : lanes,
+    [groupBy, lanes, groupedTasks]
+  );
+
   return (
     <>
-      <DndProvider onDragEnd={handleDragEnd} renderOverlay={renderOverlay}>
+      <DndProvider onDragEnd={groupBy === 'status' ? handleDragEnd : () => {}} renderOverlay={groupBy === 'status' ? renderOverlay : () => null}>
         <div className="space-y-4">
-          {sortedStatusOptions.map((status) => {
-            const swimlaneTasks = tasksByStatus[status.id] || [];
+          {visibleLanes.map((status) => {
+            const swimlaneTasks = groupedTasks[status.id] || [];
             const taskIds = swimlaneTasks.map((t) => t.id);
 
             return (
@@ -297,8 +328,8 @@ export function SwimlaneBoardView({
                 isCollapsed={isSwimlaneCollapsed(boardId, status.id)}
                 onToggleCollapse={() => toggleSwimlane(boardId, status.id)}
                 taskIds={taskIds}
-                onAddTask={() => openQuickAddWithContext(boardId, status.id)}
-                onArchiveAll={isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
+                onAddTask={groupBy === 'status' ? () => openQuickAddWithContext(boardId, status.id) : undefined}
+                onArchiveAll={groupBy === 'status' && isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
               >
                 {swimlaneTasks.map((task) => (
                   <React.Fragment key={task.id}>

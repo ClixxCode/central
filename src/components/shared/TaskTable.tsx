@@ -216,7 +216,7 @@ export function TaskTable({
   if (isLoading) {
     return (
       <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[600px] table-fixed">
+        <table className="w-full table-fixed" style={{ minWidth: 600 }}>
           <colgroup>
             {visibleHeaders.map((header) => (
               <col
@@ -259,10 +259,21 @@ export function TaskTable({
     );
   }
 
+  // Compute dynamic min-width so resizing columns causes horizontal scroll
+  // instead of squishing the title column
+  const tableMinWidth = React.useMemo(() => {
+    const titleMinWidth = 200;
+    const actionsWidth = 48;
+    const otherColumnsWidth = visibleHeaders
+      .filter((h) => h.key !== 'title')
+      .reduce((sum, h) => sum + (columnWidths[h.key] ?? 120), 0);
+    return titleMinWidth + otherColumnsWidth + actionsWidth;
+  }, [visibleHeaders, columnWidths]);
+
   return (
     <TooltipProvider>
       <div className={cn('overflow-x-auto rounded-lg border', isResizing && 'select-none')}>
-        <table className="w-full min-w-[600px] table-fixed">
+        <table className="w-full table-fixed" style={{ minWidth: tableMinWidth }}>
           <colgroup>
             {visibleHeaders.map((header) => (
               <col
@@ -354,18 +365,13 @@ export function TaskTable({
                     {columns.source && (
                       <td className="px-3 py-3">
                         {task.clientName ? (
-                          <div className="flex items-center gap-2">
-                            <ClientIcon icon={task.clientIcon ?? null} color={task.clientColor ?? null} name={task.clientName ?? undefined} size="xs" />
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="text-sm truncate max-w-[120px]">
-                                  {task.clientName}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {task.boardName ? `${task.clientName} / ${task.boardName}` : task.clientName}
-                              </TooltipContent>
-                            </Tooltip>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <ClientIcon icon={task.clientIcon ?? null} color={task.clientColor ?? null} name={task.clientName ?? undefined} size="xs" className="shrink-0" />
+                            <span className="text-sm truncate min-w-0">
+                              {task.boardName && task.boardName.toLowerCase() !== task.clientName?.toLowerCase()
+                                ? `${task.clientName} / ${task.boardName}`
+                                : task.clientName}
+                            </span>
                             {onNavigateToSource && (
                               <Button
                                 variant="ghost"
@@ -391,17 +397,17 @@ export function TaskTable({
                       <td className="px-3 py-3">
                         <Badge
                           variant="outline"
-                          className="whitespace-nowrap"
+                          className="max-w-full truncate whitespace-nowrap"
                           style={{
                             borderColor: status.color,
                             backgroundColor: `${status.color}15`,
                           }}
                         >
                           <span
-                            className="mr-1.5 h-2 w-2 rounded-full"
+                            className="mr-1.5 h-2 w-2 rounded-full shrink-0"
                             style={{ backgroundColor: status.color }}
                           />
-                          {status.label}
+                          <span className="truncate">{status.label}</span>
                         </Badge>
                       </td>
                     )}

@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 
 const STORAGE_KEY_PREFIX = 'table-col-widths';
+const SYNC_EVENT = 'column-widths-sync';
 
 const DEFAULT_WIDTHS: Record<string, number> = {
   source: 160,
@@ -37,6 +38,12 @@ function readWidths(userId: string | undefined): Record<string, number> {
   return DEFAULT_WIDTHS;
 }
 
+// Broadcast width changes to other hook instances on the same page
+function broadcastWidths(widths: Record<string, number>, sourceId: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { widths, sourceId } }));
+}
+
 export function useColumnResize(): UseColumnResizeReturn {
   const { data: session } = useSession();
   const userId = session?.user?.id;
@@ -50,6 +57,9 @@ export function useColumnResize(): UseColumnResizeReturn {
     startX: number;
     startWidth: number;
   } | null>(null);
+
+  // Unique ID for this hook instance to avoid self-updates
+  const instanceId = useRef(Math.random().toString(36).slice(2));
 
   // When userId becomes available, re-read from the correct key
   const initializedForUser = useRef<string | undefined>(undefined);
@@ -65,11 +75,11 @@ export function useColumnResize(): UseColumnResizeReturn {
     const { columnKey, startX, startWidth } = resizeState.current;
     const delta = e.clientX - startX;
     const newWidth = Math.max(80, startWidth + delta);
-    setColumnWidths((prev) => ({
-      ...prev,
-      [columnKey]: newWidth,
-    }));
-  }, []);
+    const next = { ...columnWidths, [columnKey]: newWidth };
+    setColumnWidths(next);
+    // Defer broadcast to avoid setState-during-render in sibling instances
+    queueMicrotask(() => broadcastWidths(next, instanceId.current));
+  }, [columnWidths]);
 
   const handleMouseUp = useCallback(() => {
     if (!resizeState.current) return;
@@ -77,6 +87,18 @@ export function useColumnResize(): UseColumnResizeReturn {
     setIsResizing(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
+  }, []);
+
+  // Listen for width changes from other hook instances
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { widths, sourceId } = (e as CustomEvent).detail;
+      if (sourceId !== instanceId.current) {
+        setColumnWidths(widths);
+      }
+    };
+    window.addEventListener(SYNC_EVENT, handler);
+    return () => window.removeEventListener(SYNC_EVENT, handler);
   }, []);
 
   // Persist to localStorage when widths change and not currently resizing

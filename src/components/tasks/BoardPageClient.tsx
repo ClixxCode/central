@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Plus, SlidersHorizontal } from 'lucide-react';
+import { Plus, SlidersHorizontal, CalendarDays } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { BoardTable } from './BoardTable';
 import { TableColumnsButton } from '@/components/shared/TableColumnsButton';
@@ -46,10 +47,11 @@ export function BoardPageClient({
   statusOptions,
   sectionOptions,
 }: BoardPageClientProps) {
-  const { getBoardView, getBoardTableColumns, toggleBoardTableColumn, getSwimlaneCardItems, toggleSwimlaneCardItem } = useBoardViewStore();
+  const { getBoardView, getBoardTableColumns, toggleBoardTableColumn, getSwimlaneCardItems, toggleSwimlaneCardItem, getGroupBy, setGroupBy } = useBoardViewStore();
   const viewMode = getBoardView(boardId, 'kanban');
   const columns = getBoardTableColumns(boardId);
   const swimlaneCardItems = getSwimlaneCardItems(boardId);
+  const groupBy = getGroupBy(boardId);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -353,6 +355,22 @@ export function BoardPageClient({
             statusOptions={statusOptions}
             sectionOptions={sectionOptions}
             assignableUsers={assignableUsers}
+            renderBeforeOverdue={
+              viewMode !== 'table' ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    'h-8 border-dashed',
+                    groupBy === 'date' && 'border-solid bg-primary/10 border-primary/50 text-primary hover:bg-primary/20 hover:text-primary'
+                  )}
+                  onClick={() => setGroupBy(boardId, groupBy === 'date' ? 'status' : 'date')}
+                >
+                  <CalendarDays className="mr-2 size-3" />
+                  By Date
+                </Button>
+              ) : undefined
+            }
           />
         </div>
 
@@ -401,6 +419,7 @@ export function BoardPageClient({
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
+          groupBy={groupBy}
         />
       ) : (
         <KanbanBoardView
@@ -418,6 +437,7 @@ export function BoardPageClient({
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
+          groupBy={groupBy}
         />
       )}
 

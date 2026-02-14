@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight, ExternalLink, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Plus, Clock, CalendarCheck, CalendarDays, Calendar, CalendarOff } from 'lucide-react';
+import { format, parseISO, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
 import { TaskModal } from './TaskModal';
 import { RollupTaskCard } from '@/components/rollups/RollupTaskCard';
 import { TaskTable, type TableTask } from '@/components/shared/TaskTable';
@@ -34,9 +35,18 @@ interface BoardGroup {
   tasks: MyTaskWithContext[];
 }
 
+// Represents a date bucket group for the "by date" view
+interface DateBucketGroup {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  colorClass: string;
+  tasks: MyTaskWithContext[];
+}
+
 interface PersonalRollupViewProps {
   tasksByClient: MyTasksByClient[];
-  viewMode?: 'swimlane' | 'table';
+  viewMode?: 'swimlane' | 'date' | 'table';
   prioritySelectionMode?: boolean;
   priorityFilterActive?: boolean;
   priorityTaskIds?: Set<string>;
@@ -117,6 +127,77 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
 
     return groups;
   }, [filteredTasksByClient]);
+
+  // Group tasks by date bucket for the "by date" view
+  const dateGroups = React.useMemo((): DateBucketGroup[] => {
+    if (viewMode !== 'date') return [];
+
+    const allTasks = filteredTasksByClient.flatMap((c) => c.tasks);
+    const now = new Date();
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const tomorrowStr = format(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1), 'yyyy-MM-dd');
+    const weekEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const nextWeekEnd = format(endOfWeek(addWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+    const buckets: Record<string, MyTaskWithContext[]> = {
+      overdue: [],
+      today: [],
+      tomorrow: [],
+      'this-week': [],
+      'next-week': [],
+      later: [],
+      'no-date': [],
+    };
+
+    allTasks.forEach((task) => {
+      if (!task.dueDate) {
+        buckets['no-date'].push(task);
+      } else if (task.dueDate < todayStr) {
+        buckets.overdue.push(task);
+      } else if (task.dueDate === todayStr) {
+        buckets.today.push(task);
+      } else if (task.dueDate === tomorrowStr) {
+        buckets.tomorrow.push(task);
+      } else if (task.dueDate <= weekEnd) {
+        buckets['this-week'].push(task);
+      } else if (task.dueDate <= nextWeekEnd) {
+        buckets['next-week'].push(task);
+      } else {
+        buckets.later.push(task);
+      }
+    });
+
+    // Sort tasks within each bucket by dueDate asc, then position
+    Object.values(buckets).forEach((tasks) => {
+      tasks.sort((a, b) => {
+        if (a.dueDate && b.dueDate) {
+          const cmp = a.dueDate.localeCompare(b.dueDate);
+          if (cmp !== 0) return cmp;
+        }
+        return a.position - b.position;
+      });
+    });
+
+    const tomorrowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    const definitions: { id: string; label: string; icon: React.ElementType; colorClass: string }[] = [
+      { id: 'overdue', label: 'Overdue', icon: Clock, colorClass: 'text-destructive' },
+      { id: 'today', label: `Today — ${format(now, 'MMM d')}`, icon: CalendarCheck, colorClass: 'text-blue-600 dark:text-blue-400' },
+      { id: 'tomorrow', label: `Tomorrow — ${format(tomorrowDate, 'MMM d')}`, icon: CalendarDays, colorClass: 'text-foreground' },
+      { id: 'this-week', label: 'This Week', icon: Calendar, colorClass: 'text-foreground' },
+      { id: 'next-week', label: 'Next Week', icon: Calendar, colorClass: 'text-foreground' },
+      { id: 'later', label: 'Later', icon: Calendar, colorClass: 'text-muted-foreground' },
+      { id: 'no-date', label: 'No Date', icon: CalendarOff, colorClass: 'text-muted-foreground' },
+    ];
+
+    // Only include non-empty buckets
+    return definitions
+      .filter((def) => buckets[def.id].length > 0)
+      .map((def) => ({
+        ...def,
+        tasks: buckets[def.id],
+      }));
+  }, [filteredTasksByClient, viewMode]);
 
   // Find the selected task from flat data, or fetch individually (for subtasks)
   const myTask = React.useMemo(
@@ -305,6 +386,52 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
           priorityFilterActive={priorityFilterActive}
           priorityTaskIds={priorityTaskIds}
         />
+      ) : viewMode === 'date' ? (
+        // Date view - grouped by date bucket (Overdue, Today, Tomorrow, etc.)
+        <div className="space-y-4">
+          {dateGroups.map((bucket) => {
+            const isCollapsed = isClientCollapsed(bucket.id);
+
+            return (
+              <MyWorkDateSwimlane
+                key={bucket.id}
+                bucket={bucket}
+                isCollapsed={isCollapsed}
+                onToggleCollapse={() => toggleClient(bucket.id)}
+                onTaskClick={(taskId) => {
+                  if (prioritySelectionMode && onTogglePriority) {
+                    onTogglePriority(taskId);
+                  } else {
+                    setSelectedTaskId(taskId);
+                  }
+                }}
+                onNavigateToSource={(task) => {
+                  if (task.clientSlug && task.boardId) {
+                    router.push(`/clients/${task.clientSlug}/boards/${task.boardId}`);
+                  }
+                }}
+                statusOptions={allStatusOptions}
+                sectionOptions={allSectionOptions}
+                prioritySelectionMode={prioritySelectionMode}
+                priorityFilterActive={priorityFilterActive}
+                priorityTaskIds={priorityTaskIds}
+              />
+            );
+          })}
+          {dateGroups.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="rounded-full bg-muted p-4 mb-4">
+                <CalendarCheck className="size-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-1">
+                All clear!
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-sm">
+                No tasks match the current filters.
+              </p>
+            </div>
+          )}
+        </div>
       ) : (
         // Swimlane view - grouped by Client + Board with status columns
         <div className="space-y-6">
@@ -642,6 +769,105 @@ function MyWorkBoardSwimlane({
           </div>
         )}
       </DndProvider>
+    </div>
+  );
+}
+
+// My Work Date Swimlane Component - displays a date bucket (Overdue, Today, etc.) with a table
+interface MyWorkDateSwimlaneProps {
+  bucket: DateBucketGroup;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
+  onTaskClick: (taskId: string) => void;
+  onNavigateToSource: (task: TableTask) => void;
+  statusOptions: StatusOption[];
+  sectionOptions: SectionOption[];
+  prioritySelectionMode?: boolean;
+  priorityFilterActive?: boolean;
+  priorityTaskIds?: Set<string>;
+}
+
+function MyWorkDateSwimlane({
+  bucket,
+  isCollapsed,
+  onToggleCollapse,
+  onTaskClick,
+  onNavigateToSource,
+  statusOptions,
+  sectionOptions,
+  prioritySelectionMode,
+  priorityFilterActive,
+  priorityTaskIds,
+}: MyWorkDateSwimlaneProps) {
+  const { tableColumns } = usePersonalRollupStore();
+  const Icon = bucket.icon;
+  const isOverdue = bucket.id === 'overdue';
+
+  // Transform tasks into TableTask format
+  const tableTasks = React.useMemo((): TableTask[] => {
+    return bucket.tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      section: task.section,
+      position: task.position,
+      dueDate: task.dueDate,
+      assignees: task.assignees.map((a) => ({
+        id: a.id,
+        name: a.name,
+        email: a.email,
+        avatarUrl: a.avatarUrl,
+      })),
+      clientName: task.client.name,
+      clientColor: task.client.color,
+      clientIcon: task.client.icon,
+      boardName: task.board.name,
+      boardId: task.board.id,
+      clientSlug: task.client.slug,
+    }));
+  }, [bucket.tasks]);
+
+  return (
+    <div className={`rounded-lg border ${isOverdue ? 'border-destructive/30' : ''} bg-muted/30`}>
+      {/* Header */}
+      <div className={`flex items-center gap-2 border-b px-4 py-3 ${isOverdue ? 'border-destructive/20' : ''}`}>
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+        >
+          {isCollapsed ? (
+            <ChevronRight className="size-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="size-4 text-muted-foreground" />
+          )}
+          <Icon className={`size-4 ${bucket.colorClass}`} />
+          <span className={`font-medium ${bucket.colorClass}`}>
+            {bucket.label}
+          </span>
+        </button>
+        <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium ${isOverdue ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
+          {bucket.tasks.length}
+        </span>
+      </div>
+
+      {/* Table */}
+      {!isCollapsed && (
+        <div className="p-3">
+          <TaskTable
+            tasks={tableTasks}
+            statusOptions={statusOptions}
+            sectionOptions={sectionOptions}
+            onTaskClick={onTaskClick}
+            onNavigateToSource={onNavigateToSource}
+            showSource
+            columns={tableColumns}
+            prioritySelectionMode={prioritySelectionMode}
+            priorityFilterActive={priorityFilterActive}
+            priorityTaskIds={priorityTaskIds}
+          />
+        </div>
+      )}
     </div>
   );
 }

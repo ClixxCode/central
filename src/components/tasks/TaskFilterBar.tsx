@@ -37,6 +37,8 @@ interface TaskFilterBarProps {
   hideAssigneeFilter?: boolean;
   additionalFilterCount?: number;
   onClearAll?: () => void;
+  /** Rendered after assignee filter, before overdue */
+  renderBeforeOverdue?: React.ReactNode;
 }
 
 export function TaskFilterBar({
@@ -48,6 +50,7 @@ export function TaskFilterBar({
   hideAssigneeFilter,
   additionalFilterCount = 0,
   onClearAll,
+  renderBeforeOverdue,
 }: TaskFilterBarProps) {
   const baseFilterCount = countActiveFilters(filters);
   const activeFilterCount = baseFilterCount + additionalFilterCount;
@@ -314,6 +317,8 @@ export function TaskFilterBar({
           </Command>
         </FilterPopover>
       )}
+
+      {renderBeforeOverdue}
 
       {/* Overdue Filter */}
       <Button

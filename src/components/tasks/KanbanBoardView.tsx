@@ -15,6 +15,7 @@ import { isCompleteStatus } from '@/lib/utils/status';
 import type { TaskWithAssignees, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from './AssigneePicker';
+import { getDateBucketDefinitions, groupByDateBucket } from '@/lib/utils/date-buckets';
 
 interface KanbanBoardViewProps {
   boardId: string;
@@ -36,6 +37,8 @@ interface KanbanBoardViewProps {
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
   isMultiSelectMode?: boolean;
+  /** Group by status (default) or date buckets */
+  groupBy?: 'status' | 'date';
 }
 
 export function KanbanBoardView({
@@ -53,6 +56,7 @@ export function KanbanBoardView({
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
+  groupBy = 'status',
 }: KanbanBoardViewProps) {
   const updateTaskPositions = useUpdateTaskPositions();
   const updateTask = useUpdateTask();
@@ -274,12 +278,39 @@ export function KanbanBoardView({
     [statusOptions]
   );
 
+  // Date bucket definitions (for groupBy='date')
+  const dateBucketDefs = React.useMemo(() => getDateBucketDefinitions(), []);
+
+  // Group tasks by date bucket
+  const tasksByDate = React.useMemo(() => {
+    if (groupBy !== 'date') return {};
+    return groupByDateBucket(tasks);
+  }, [tasks, groupBy]);
+
+  // Build synthetic StatusOptions from date buckets (same shape as StatusOption)
+  const dateBucketStatusOptions: StatusOption[] = React.useMemo(
+    () => dateBucketDefs.map((b, i) => ({ id: b.id, label: b.label, color: b.color, position: i })),
+    [dateBucketDefs]
+  );
+
+  // Choose columns and grouping based on groupBy mode
+  const columns = groupBy === 'date' ? dateBucketStatusOptions : sortedStatusOptions;
+  const groupedTasks = groupBy === 'date' ? tasksByDate : tasksByStatus;
+
+  // In date mode, skip empty buckets
+  const visibleColumns = React.useMemo(
+    () => groupBy === 'date'
+      ? columns.filter((col) => (groupedTasks[col.id]?.length ?? 0) > 0)
+      : columns,
+    [groupBy, columns, groupedTasks]
+  );
+
   return (
     <>
-      <DndProvider onDragEnd={handleDragEnd} renderOverlay={renderOverlay}>
+      <DndProvider onDragEnd={groupBy === 'status' ? handleDragEnd : () => {}} renderOverlay={groupBy === 'status' ? renderOverlay : () => null}>
         <div className="flex h-[calc(100vh-12rem)] gap-4 overflow-x-auto pb-4">
-          {sortedStatusOptions.map((status) => {
-            const columnTasks = tasksByStatus[status.id] || [];
+          {visibleColumns.map((status) => {
+            const columnTasks = groupedTasks[status.id] || [];
             const taskIds = columnTasks.map((t) => t.id);
 
             return (
@@ -288,8 +319,8 @@ export function KanbanBoardView({
                 status={status}
                 taskCount={columnTasks.length}
                 taskIds={taskIds}
-                onAddTask={() => openQuickAddWithContext(boardId, status.id)}
-                onArchiveAll={isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
+                onAddTask={groupBy === 'status' ? () => openQuickAddWithContext(boardId, status.id) : undefined}
+                onArchiveAll={groupBy === 'status' && isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
               >
                 {columnTasks.map((task) => (
                   <React.Fragment key={task.id}>
