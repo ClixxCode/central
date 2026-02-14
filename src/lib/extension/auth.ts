@@ -68,7 +68,7 @@ export async function generateToken(userId: string, name?: string): Promise<stri
   await db.insert(extensionTokens).values({
     userId,
     tokenHash,
-    name: name || 'Browser Extension',
+    name: name || 'API Token',
   });
 
   return rawToken;

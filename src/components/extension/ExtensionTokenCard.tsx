@@ -78,10 +78,10 @@ export function ExtensionTokenCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Puzzle className="h-5 w-5" />
-          Browser Extension
+          API Tokens
         </CardTitle>
         <CardDescription>
-          Generate API tokens for the Central Chrome extension.
+          Generate API tokens for extensions and integrations (Chrome extension, Raycast, etc.).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

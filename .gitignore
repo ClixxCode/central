@@ -44,6 +44,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# raycast extension
+/raycast-extension
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
