@@ -321,8 +321,8 @@ export function BoardPageClient({
           {/* View Toggle */}
           <ViewToggleButtons boardId={boardId} defaultView="kanban" />
 
-          {/* Column visibility (table) / Card items (swimlane/kanban) */}
-          {viewMode === 'table' ? (
+          {/* Column visibility (table/swimlane) / Card items (kanban) */}
+          {viewMode === 'table' || viewMode === 'swimlane' ? (
             <TableColumnsButton
               columns={[
                 { id: 'status', label: 'Status' },
@@ -415,7 +415,6 @@ export function BoardPageClient({
           initialTaskId={urlTaskId}
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
-          hiddenItems={swimlaneHiddenItems}
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}

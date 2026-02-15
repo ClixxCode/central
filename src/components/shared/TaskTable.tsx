@@ -188,7 +188,7 @@ export function TaskTable({
   };
 
   const getSectionLabel = (sectionId: string | null) => {
-    if (!sectionId) return '—';
+    if (!sectionId) return '';
     const section = sectionOptions.find((s) => s.id === sectionId);
     return section?.label ?? sectionId;
   };

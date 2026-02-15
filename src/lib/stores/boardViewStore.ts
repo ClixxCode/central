@@ -26,6 +26,11 @@ export interface SwimlaneCardItems {
   assignees: boolean;
 }
 
+export interface SwimlaneSortConfig {
+  field: 'position' | 'dueDate' | 'createdAt' | 'title' | 'status';
+  direction: 'asc' | 'desc';
+}
+
 const defaultSwimlaneCardItems: SwimlaneCardItems = {
   section: true,
   dueDate: true,
@@ -44,6 +49,8 @@ interface BoardViewState {
   swimlaneCardItems: Record<string, SwimlaneCardItems>;
   // Per-board grouping mode (status columns vs date buckets)
   boardGroupBy: Record<string, GroupBy>;
+  // Per-board swimlane sort
+  swimlaneSort: Record<string, SwimlaneSortConfig>;
 
   // Actions
   getBoardView: (boardId: string, defaultView?: ViewMode) => ViewMode;
@@ -59,6 +66,8 @@ interface BoardViewState {
   toggleBoardTableColumn: (boardId: string, column: keyof BoardTableColumns) => void;
   getSwimlaneCardItems: (boardId: string) => SwimlaneCardItems;
   toggleSwimlaneCardItem: (boardId: string, item: keyof SwimlaneCardItems) => void;
+  getSwimlaneSortConfig: (boardId: string) => SwimlaneSortConfig;
+  setSwimlaneSortConfig: (boardId: string, sort: SwimlaneSortConfig) => void;
 }
 
 export const useBoardViewStore = create<BoardViewState>()(
@@ -69,6 +78,7 @@ export const useBoardViewStore = create<BoardViewState>()(
       boardTableColumns: {},
       swimlaneCardItems: {},
       boardGroupBy: {},
+      swimlaneSort: {},
 
       getBoardView: (boardId, defaultView = 'swimlane') => get().boardViews[boardId] ?? defaultView,
 
@@ -146,6 +156,14 @@ export const useBoardViewStore = create<BoardViewState>()(
             swimlaneCardItems: { ...state.swimlaneCardItems, [boardId]: { ...current, [item]: !current[item] } },
           };
         }),
+
+      getSwimlaneSortConfig: (boardId) =>
+        get().swimlaneSort[boardId] ?? { field: 'position', direction: 'asc' },
+
+      setSwimlaneSortConfig: (boardId, sort) =>
+        set((state) => ({
+          swimlaneSort: { ...state.swimlaneSort, [boardId]: sort },
+        })),
     }),
     {
       name: 'clix-pm-board-views',

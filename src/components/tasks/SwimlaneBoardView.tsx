@@ -1,19 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { arrayMove } from '@dnd-kit/sortable';
-import { DndProvider, type DragEndEvent, type UniqueIdentifier } from '@/components/dnd';
 import { Swimlane } from './Swimlane';
-import { SwimlaneTaskCard } from './SwimlaneTaskCard';
-import { ExpandedSubtasks } from './ExpandedSubtasks';
-import { CompleteParentDialog } from './CompleteParentDialog';
+import { BoardTable } from './BoardTable';
 import { TaskModal } from './TaskModal';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
-import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
+import { useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
 import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 import { isCompleteStatus } from '@/lib/utils/status';
-import type { TaskWithAssignees, CreateTaskInput } from '@/lib/actions/tasks';
+import type { TaskWithAssignees, CreateTaskInput, UpdateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from './AssigneePicker';
 import { getDateBucketDefinitions, groupByDateBucket } from '@/lib/utils/date-buckets';
@@ -32,8 +28,6 @@ interface SwimlaneBoardViewProps {
   highlightedCommentId?: string | null;
   /** Called when the task modal closes (to clear URL params) */
   onTaskModalClose?: () => void;
-  /** Set of card item IDs to hide (e.g. 'section', 'dueDate', 'assignees') */
-  hiddenItems?: Set<string>;
   /** Multi-select state */
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
@@ -53,39 +47,21 @@ export function SwimlaneBoardView({
   initialTaskId,
   highlightedCommentId,
   onTaskModalClose,
-  hiddenItems,
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
   groupBy = 'status',
 }: SwimlaneBoardViewProps) {
-  const { isSwimlaneCollapsed, toggleSwimlane } = useBoardViewStore();
+  const { isSwimlaneCollapsed, toggleSwimlane, getBoardTableColumns, getSwimlaneSortConfig, setSwimlaneSortConfig } = useBoardViewStore();
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
-  const updateTaskPositions = useUpdateTaskPositions();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const bulkArchive = useBulkArchiveDone(boardId);
   const { isAdmin } = useCurrentUser();
 
-  // Expanded subtasks state
-  const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
-
-  // Complete parent dialog state for DnD
-  const [completeParentOpen, setCompleteParentOpen] = React.useState(false);
-  const pendingDnDRef = React.useRef<{
-    taskId: string;
-    updates: { id: string; position: number; status?: string }[];
-    incompleteCount: number;
-  } | null>(null);
-
-  const toggleExpanded = React.useCallback((taskId: string) => {
-    setExpandedParents((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
-  }, []);
+  // Swimlane sort config (persisted per board)
+  const swimlaneSort = getSwimlaneSortConfig(boardId);
+  const columns = getBoardTableColumns(boardId);
 
   // Modal state - use initialTaskId if provided
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(initialTaskId ?? null);
@@ -149,136 +125,6 @@ export function SwimlaneBoardView({
   });
   const selectedTask = boardTask ?? fetchedTask;
 
-  const handleDragEnd = React.useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-
-      if (!over) return;
-
-      const activeId = active.id as string;
-      const overId = over.id as string;
-
-      // Find the task being dragged
-      const activeTask = tasks.find((t) => t.id === activeId);
-      if (!activeTask) return;
-
-      // Determine the target status
-      // If dropped over a swimlane container, overId is the status
-      // If dropped over another task, find that task's status
-      let targetStatus = overId;
-      const overTask = tasks.find((t) => t.id === overId);
-      if (overTask) {
-        targetStatus = overTask.status;
-      }
-
-      // Check if status is a valid status option
-      const isValidStatus = statusOptions.some((s) => s.id === targetStatus);
-      if (!isValidStatus && !overTask) return;
-
-      const sourceStatus = activeTask.status;
-      const newStatus = overTask ? overTask.status : targetStatus;
-
-      // Get tasks in source and target swimlanes
-      const sourceTasks = [...tasksByStatus[sourceStatus]];
-      const targetTasks = sourceStatus === newStatus
-        ? sourceTasks
-        : [...tasksByStatus[newStatus]];
-
-      // Find indices
-      const activeIndex = sourceTasks.findIndex((t) => t.id === activeId);
-
-      if (sourceStatus === newStatus) {
-        // Reorder within same swimlane
-        const overIndex = overTask
-          ? targetTasks.findIndex((t) => t.id === overId)
-          : targetTasks.length;
-
-        if (activeIndex === overIndex) return;
-
-        const reorderedTasks = arrayMove(sourceTasks, activeIndex, overIndex);
-
-        // Calculate position updates
-        const updates = reorderedTasks.map((task, index) => ({
-          id: task.id,
-          position: index * 1000, // Use large gaps for future insertions
-        }));
-
-        updateTaskPositions.mutate(updates);
-      } else {
-        // Move between swimlanes
-        // Remove from source
-        sourceTasks.splice(activeIndex, 1);
-
-        // Find target index
-        const overIndex = overTask
-          ? targetTasks.findIndex((t) => t.id === overId)
-          : targetTasks.length;
-
-        // Insert at target position with new status
-        const updates: { id: string; position: number; status?: string }[] = [];
-
-        // Update moved task's position and status
-        updates.push({
-          id: activeId,
-          position: overIndex * 1000,
-          status: newStatus,
-        });
-
-        // Reindex target tasks after insertion point
-        targetTasks.forEach((task, index) => {
-          if (index >= overIndex) {
-            updates.push({
-              id: task.id,
-              position: (index + 1) * 1000,
-            });
-          }
-        });
-
-        // Check if dragging a parent task with incomplete subtasks to a complete swimlane
-        const hasIncompleteSubtasks =
-          activeTask &&
-          !activeTask.parentTaskId &&
-          activeTask.subtaskCount > 0 &&
-          activeTask.subtaskCompletedCount < activeTask.subtaskCount;
-        const movingToComplete = isCompleteStatus(newStatus, statusOptions);
-        const wasNotComplete = !isCompleteStatus(sourceStatus, statusOptions);
-
-        if (hasIncompleteSubtasks && movingToComplete && wasNotComplete) {
-          pendingDnDRef.current = {
-            taskId: activeId,
-            updates,
-            incompleteCount: activeTask.subtaskCount - activeTask.subtaskCompletedCount,
-          };
-          setCompleteParentOpen(true);
-          return;
-        }
-
-        updateTaskPositions.mutate(updates);
-      }
-    },
-    [tasks, statusOptions, tasksByStatus, updateTaskPositions]
-  );
-
-  const renderOverlay = React.useCallback(
-    (activeId: UniqueIdentifier | null) => {
-      if (!activeId) return null;
-
-      const task = tasks.find((t) => t.id === activeId);
-      if (!task) return null;
-
-      return (
-        <SwimlaneTaskCard
-          task={task}
-          sectionOptions={sectionOptions}
-          assignableUsers={assignableUsers}
-          isOverlay
-          hiddenItems={hiddenItems}
-        />
-      );
-    },
-    [tasks, sectionOptions, assignableUsers, hiddenItems]
-  );
-
   // Sort status options by position
   const sortedStatusOptions = React.useMemo(
     () => [...statusOptions].sort((a, b) => a.position - b.position),
@@ -312,60 +158,102 @@ export function SwimlaneBoardView({
     [groupBy, lanes, groupedTasks]
   );
 
+  // Sort tasks within each lane according to swimlane sort config
+  const sortedGroupedTasks = React.useMemo(() => {
+    const result: Record<string, TaskWithAssignees[]> = {};
+    for (const lane of visibleLanes) {
+      const laneTasks = [...(groupedTasks[lane.id] || [])];
+      laneTasks.sort((a, b) => {
+        let comparison = 0;
+        switch (swimlaneSort.field) {
+          case 'title':
+            comparison = a.title.localeCompare(b.title);
+            break;
+          case 'status': {
+            const aPos = statusOptions.find((s) => s.id === a.status)?.position ?? 0;
+            const bPos = statusOptions.find((s) => s.id === b.status)?.position ?? 0;
+            comparison = aPos - bPos;
+            break;
+          }
+          case 'dueDate': {
+            const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+            const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+            comparison = aDate - bDate;
+            break;
+          }
+          default:
+            comparison = a.position - b.position;
+        }
+        return swimlaneSort.direction === 'asc' ? comparison : -comparison;
+      });
+      result[lane.id] = laneTasks;
+    }
+    return result;
+  }, [visibleLanes, groupedTasks, swimlaneSort, statusOptions]);
+
+  // Track updating task IDs
+  const updatingTaskIds = React.useMemo(() => {
+    const ids: string[] = [];
+    if (updateTask.isPending && updateTask.variables) {
+      ids.push(updateTask.variables.id);
+    }
+    return ids;
+  }, [updateTask.isPending, updateTask.variables]);
+
+  const handleUpdateTask = React.useCallback(
+    (input: UpdateTaskInput) => {
+      updateTask.mutate(input);
+    },
+    [updateTask]
+  );
+
+  const handleDeleteTask = React.useCallback(
+    (taskId: string) => {
+      deleteTask.mutate(taskId);
+    },
+    [deleteTask]
+  );
+
   return (
     <>
-      <DndProvider onDragEnd={groupBy === 'status' ? handleDragEnd : () => {}} renderOverlay={groupBy === 'status' ? renderOverlay : () => null}>
-        <div className="space-y-4">
-          {visibleLanes.map((status) => {
-            const swimlaneTasks = groupedTasks[status.id] || [];
-            const taskIds = swimlaneTasks.map((t) => t.id);
+      <div className="space-y-4">
+        {visibleLanes.map((status) => {
+          const swimlaneTasks = sortedGroupedTasks[status.id] || [];
+          const taskIds = swimlaneTasks.map((t) => t.id);
 
-            return (
-              <Swimlane
-                key={status.id}
-                status={status}
-                taskCount={swimlaneTasks.length}
-                isCollapsed={isSwimlaneCollapsed(boardId, status.id)}
-                onToggleCollapse={() => toggleSwimlane(boardId, status.id)}
-                taskIds={taskIds}
-                onAddTask={groupBy === 'status' ? () => openQuickAddWithContext(boardId, status.id) : undefined}
-                onArchiveAll={groupBy === 'status' && isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
-              >
-                {swimlaneTasks.map((task) => (
-                  <React.Fragment key={task.id}>
-                    <SwimlaneTaskCard
-                      task={task}
-                      sectionOptions={sectionOptions}
-                      assignableUsers={assignableUsers}
-                      onClick={(e) => {
-                        if (isMultiSelectMode || e.shiftKey) {
-                          const swimlaneTaskIds = swimlaneTasks.map((t) => t.id);
-                          onTaskMultiSelect?.(task.id, e.shiftKey, swimlaneTaskIds);
-                        } else {
-                          setSelectedTaskId(task.id);
-                        }
-                      }}
-                      onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
-                      isExpanded={expandedParents.has(task.id)}
-                      hiddenItems={hiddenItems}
-                      isSelected={selectedTaskIds?.has(task.id)}
-                    />
-                    {expandedParents.has(task.id) && (
-                      <ExpandedSubtasks
-                        parentTaskId={task.id}
-                        statusOptions={statusOptions}
-                        sectionOptions={sectionOptions}
-                        onTaskClick={setSelectedTaskId}
-                        hiddenItems={hiddenItems}
-                      />
-                    )}
-                  </React.Fragment>
-                ))}
-              </Swimlane>
-            );
-          })}
-        </div>
-      </DndProvider>
+          return (
+            <Swimlane
+              key={status.id}
+              status={status}
+              taskCount={swimlaneTasks.length}
+              isCollapsed={isSwimlaneCollapsed(boardId, status.id)}
+              onToggleCollapse={() => toggleSwimlane(boardId, status.id)}
+              taskIds={taskIds}
+              onAddTask={groupBy === 'status' ? () => openQuickAddWithContext(boardId, status.id) : undefined}
+              onArchiveAll={groupBy === 'status' && isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
+              disableDnd
+            >
+              <BoardTable
+                tasks={swimlaneTasks}
+                statusOptions={statusOptions}
+                sectionOptions={sectionOptions}
+                assignableUsers={assignableUsers}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
+                onOpenTaskModal={setSelectedTaskId}
+                updatingTaskIds={updatingTaskIds}
+                sort={swimlaneSort}
+                onSortChange={(sort) => setSwimlaneSortConfig(boardId, sort)}
+                columns={columns}
+                emptyMessage="No tasks"
+                selectedTaskIds={selectedTaskIds}
+                onTaskMultiSelect={onTaskMultiSelect}
+                isMultiSelectMode={isMultiSelectMode}
+              />
+            </Swimlane>
+          );
+        })}
+      </div>
 
       {/* Task Detail Modal */}
       <TaskModal
@@ -384,28 +272,6 @@ export function SwimlaneBoardView({
         highlightedCommentId={highlightedCommentId ?? undefined}
         taskBasePath={clientSlug ? `/clients/${clientSlug}/boards/${boardId}` : undefined}
         onOpenSubtask={setSelectedTaskId}
-      />
-
-      {/* Confirmation dialog for DnD to complete swimlane with incomplete subtasks */}
-      <CompleteParentDialog
-        open={completeParentOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setCompleteParentOpen(false);
-            pendingDnDRef.current = null;
-          }
-        }}
-        incompleteCount={pendingDnDRef.current?.incompleteCount ?? 0}
-        onConfirm={(completeSubtasks) => {
-          const pending = pendingDnDRef.current;
-          if (pending) {
-            updateTaskPositions.mutate(pending.updates);
-            if (completeSubtasks) {
-              updateTask.mutate({ id: pending.taskId, completeSubtasks: true });
-            }
-            pendingDnDRef.current = null;
-          }
-        }}
       />
     </>
   );

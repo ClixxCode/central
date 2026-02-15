@@ -24,6 +24,8 @@ interface SwimlaneProps {
   taskIds: string[];
   onAddTask?: () => void;
   onArchiveAll?: () => void;
+  /** When true, renders children directly without DnD wrapping */
+  disableDnd?: boolean;
 }
 
 export function Swimlane({
@@ -35,6 +37,7 @@ export function Swimlane({
   taskIds,
   onAddTask,
   onArchiveAll,
+  disableDnd,
 }: SwimlaneProps) {
   return (
     <div
@@ -99,36 +102,62 @@ export function Swimlane({
 
       {/* Swimlane Content */}
       {!isCollapsed && (
-        <DroppableContainer
-          id={status.id}
-          items={taskIds}
-          className="p-2"
-          aria-label={`Tasks with ${status.label} status`}
-        >
-          {taskCount === 0 ? (
-            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-              No tasks
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {children}
-            </div>
-          )}
+        disableDnd ? (
+          <div className="p-2">
+            {taskCount === 0 ? (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                No tasks
+              </div>
+            ) : (
+              children
+            )}
 
-          {/* Hover "Add task" button */}
-          {onAddTask && (
-            <button
-              type="button"
-              onClick={onAddTask}
-              className="mt-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hexToSubtleBg(status.color, 0.12)}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              <Plus className="h-4 w-4" />
-              Add task
-            </button>
-          )}
-        </DroppableContainer>
+            {/* Hover "Add task" button */}
+            {onAddTask && (
+              <button
+                type="button"
+                onClick={onAddTask}
+                className="mt-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hexToSubtleBg(status.color, 0.12)}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <Plus className="h-4 w-4" />
+                Add task
+              </button>
+            )}
+          </div>
+        ) : (
+          <DroppableContainer
+            id={status.id}
+            items={taskIds}
+            className="p-2"
+            aria-label={`Tasks with ${status.label} status`}
+          >
+            {taskCount === 0 ? (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                No tasks
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {children}
+              </div>
+            )}
+
+            {/* Hover "Add task" button */}
+            {onAddTask && (
+              <button
+                type="button"
+                onClick={onAddTask}
+                className="mt-2 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hexToSubtleBg(status.color, 0.12)}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <Plus className="h-4 w-4" />
+                Add task
+              </button>
+            )}
+          </DroppableContainer>
+        )
       )}
     </div>
   );

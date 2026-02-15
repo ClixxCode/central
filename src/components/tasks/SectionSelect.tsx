@@ -24,17 +24,17 @@ export function SectionSelect({
   onChange,
   options,
   disabled = false,
-  placeholder = 'No section',
+  placeholder = '',
 }: SectionSelectProps) {
   const [open, setOpen] = React.useState(false);
   const selectedOption = options.find((opt) => opt.id === value);
 
   if (options.length === 0) {
-    return (
+    return placeholder ? (
       <span className="text-sm text-muted-foreground">
         {placeholder}
       </span>
-    );
+    ) : null;
   }
 
   return (
