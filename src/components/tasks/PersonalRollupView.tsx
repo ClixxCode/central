@@ -799,13 +799,13 @@ function MyWorkDateSwimlane({
   priorityFilterActive,
   priorityTaskIds,
 }: MyWorkDateSwimlaneProps) {
-  const { tableColumns } = usePersonalRollupStore();
+  const { tableColumns, tableSort, setTableSort } = usePersonalRollupStore();
   const Icon = bucket.icon;
   const isOverdue = bucket.id === 'overdue';
 
-  // Transform tasks into TableTask format
+  // Transform tasks into TableTask format and sort by current table sort
   const tableTasks = React.useMemo((): TableTask[] => {
-    return bucket.tasks.map((task) => ({
+    const tasks: TableTask[] = bucket.tasks.map((task) => ({
       id: task.id,
       title: task.title,
       status: task.status,
@@ -825,7 +825,37 @@ function MyWorkDateSwimlane({
       boardId: task.board.id,
       clientSlug: task.client.slug,
     }));
-  }, [bucket.tasks]);
+
+    // Sort by current table sort config
+    tasks.sort((a, b) => {
+      let comparison = 0;
+      switch (tableSort.field) {
+        case 'title':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'status': {
+          const aPos = statusOptions.find((s) => s.id === a.status)?.position ?? 0;
+          const bPos = statusOptions.find((s) => s.id === b.status)?.position ?? 0;
+          comparison = aPos - bPos;
+          break;
+        }
+        case 'dueDate': {
+          const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+          const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+          comparison = aDate - bDate;
+          break;
+        }
+        case 'client':
+          comparison = (a.clientName ?? '').localeCompare(b.clientName ?? '');
+          break;
+        default:
+          comparison = a.position - b.position;
+      }
+      return tableSort.direction === 'asc' ? comparison : -comparison;
+    });
+
+    return tasks;
+  }, [bucket.tasks, tableSort, statusOptions]);
 
   return (
     <div className={`rounded-lg border ${isOverdue ? 'border-destructive/30' : ''} bg-muted/30`}>
@@ -860,6 +890,8 @@ function MyWorkDateSwimlane({
             sectionOptions={sectionOptions}
             onTaskClick={onTaskClick}
             onNavigateToSource={onNavigateToSource}
+            sort={tableSort}
+            onSortChange={setTableSort}
             showSource
             columns={tableColumns}
             prioritySelectionMode={prioritySelectionMode}
