@@ -618,6 +618,14 @@ function applyMyTasksFilters(
         }
         if (filters.overdue) {
           if (!task.dueDate || task.dueDate >= todayStr) return false;
+          // Exclude completed/done tasks from overdue filter
+          const statusOption = task.board.statusOptions.find((s) => s.id === task.status);
+          if (statusOption && (
+            statusOption.id === 'complete' ||
+            statusOption.id === 'done' ||
+            statusOption.label.toLowerCase().includes('complete') ||
+            statusOption.label.toLowerCase().includes('done')
+          )) return false;
         }
         return true;
       }),

@@ -367,14 +367,28 @@ export async function listTasks(
     }
   }
 
-  // Apply overdue filter
+  // Apply overdue filter (exclude completed/done tasks)
   if (filters?.overdue) {
     const { data: siteSettingsData } = await getSiteSettings();
     const todayStr = getOrgToday(siteSettingsData?.timezone);
+    const boardForOverdue = await db.query.boards.findFirst({
+      where: eq(boards.id, boardId),
+      columns: { statusOptions: true },
+    });
+    const doneStatusIds = (boardForOverdue?.statusOptions ?? [])
+      .filter(
+        (s) =>
+          s.id === 'complete' ||
+          s.id === 'done' ||
+          s.label.toLowerCase().includes('complete') ||
+          s.label.toLowerCase().includes('done')
+      )
+      .map((s) => s.id);
     conditions.push(
       and(
         isNotNull(tasks.dueDate),
-        lt(tasks.dueDate, todayStr)
+        lt(tasks.dueDate, todayStr),
+        ...(doneStatusIds.length > 0 ? [notInArray(tasks.status, doneStatusIds)] : [])
       )!
     );
   }

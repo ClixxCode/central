@@ -878,14 +878,27 @@ export async function getRollupTasks(
       }
     }
 
-    // Apply overdue filter
+    // Apply overdue filter (exclude completed/done tasks)
     if (filters?.overdue) {
       const { data: siteSettingsData } = await getSiteSettings();
       const todayStr = getOrgToday(siteSettingsData?.timezone);
+      const allStatusOptions = rollup.rollupSources.flatMap(
+        (s) => (s.sourceBoard as { statusOptions?: StatusOption[] }).statusOptions ?? []
+      );
+      const doneStatusIds = allStatusOptions
+        .filter(
+          (s) =>
+            s.id === 'complete' ||
+            s.id === 'done' ||
+            s.label.toLowerCase().includes('complete') ||
+            s.label.toLowerCase().includes('done')
+        )
+        .map((s) => s.id);
       conditions.push(
         and(
           isNotNull(tasks.dueDate),
-          lt(tasks.dueDate, todayStr)
+          lt(tasks.dueDate, todayStr),
+          ...(doneStatusIds.length > 0 ? [notInArray(tasks.status, doneStatusIds)] : [])
         )!
       );
     }
