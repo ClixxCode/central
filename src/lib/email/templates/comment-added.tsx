@@ -8,6 +8,7 @@ export interface CommentAddedEmailData {
   commenterName: string;
   taskTitle: string;
   taskId: string;
+  taskShortId?: string;
   boardId: string;
   clientSlug: string;
   commentPreview?: string;
@@ -20,7 +21,9 @@ export function commentAddedEmailSubject(commenterName: string, taskTitle: strin
 }
 
 function CommentAddedEmail({ data }: { data: CommentAddedEmailData }) {
-  const taskUrl = `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
+  const taskUrl = data.taskShortId
+    ? `${getAppUrl()}/t/${data.taskShortId}`
+    : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
 
   return (
     <EmailLayout preheader={`${data.commenterName} commented on "${data.taskTitle}"`}>

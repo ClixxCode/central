@@ -18,6 +18,11 @@ import type { StatusOption, SectionOption, TiptapContent, RecurringConfig } from
 import { eq, and, or, inArray, asc, desc, sql, isNull } from 'drizzle-orm';
 import { getCurrentUser, requireAuth, requireAdmin } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import { randomBytes } from 'crypto';
+
+function generateShortId(): string {
+  return randomBytes(6).toString('base64url');
+}
 import {
   createTemplateSchema,
   createTaskListSchema,
@@ -784,6 +789,7 @@ export async function createBoardFromTemplate(
           .values(
             topLevel.map((t) => ({
               boardId: newBoard.id,
+              shortId: generateShortId(),
               title: t.title,
               description: t.description as TiptapContent | undefined,
               status: t.status ?? defaultStatus,
@@ -816,6 +822,7 @@ export async function createBoardFromTemplate(
             .filter((t) => templateTaskIdMapping.has(t.parentTemplateTaskId!))
             .map((t) => ({
               boardId: newBoard.id,
+              shortId: generateShortId(),
               title: t.title,
               description: t.description as TiptapContent | undefined,
               status: t.status ?? defaultStatus,
@@ -1015,6 +1022,7 @@ export async function applyTemplateTasksToBoard(
         .values(
           topLevel.map((t, i) => ({
             boardId,
+            shortId: generateShortId(),
             title: t.title,
             description: t.description as TiptapContent | undefined,
             status: resolveStatus(t.status),
@@ -1044,6 +1052,7 @@ export async function applyTemplateTasksToBoard(
           .filter((t) => templateTaskIdMapping.has(t.parentTemplateTaskId!))
           .map((t) => ({
             boardId,
+            shortId: generateShortId(),
             title: t.title,
             description: t.description as TiptapContent | undefined,
             status: resolveStatus(t.status),

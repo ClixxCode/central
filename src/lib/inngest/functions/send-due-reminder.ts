@@ -59,6 +59,7 @@ export const sendDueReminder = inngest.createFunction(
           recipientName: data.recipientName || 'there',
           taskTitle: data.taskTitle,
           taskId: data.taskId,
+          taskShortId: data.taskShortId || undefined,
           boardId: data.boardId,
           clientSlug: data.clientSlug,
           clientName: data.clientName,

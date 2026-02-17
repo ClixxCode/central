@@ -46,6 +46,7 @@ export const sendDueDateSlackNotification = inngest.createFunction(
       return formatDueDateReminderNotification(
         {
           taskId: data.taskId,
+          taskShortId: data.taskShortId || undefined,
           taskTitle: data.taskTitle,
           boardId: data.boardId,
           clientSlug: data.clientSlug,

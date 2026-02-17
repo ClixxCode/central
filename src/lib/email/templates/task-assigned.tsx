@@ -8,6 +8,7 @@ export interface TaskAssignedEmailData {
   assignerName: string;
   taskTitle: string;
   taskId: string;
+  taskShortId?: string;
   boardId: string;
   clientSlug: string;
   clientName: string;
@@ -22,7 +23,9 @@ export function taskAssignedEmailSubject(taskTitle: string): string {
 }
 
 function TaskAssignedEmail({ data }: { data: TaskAssignedEmailData }) {
-  const taskUrl = `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
+  const taskUrl = data.taskShortId
+    ? `${getAppUrl()}/t/${data.taskShortId}`
+    : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
 
   return (
     <EmailLayout preheader={`${data.assignerName} assigned you to "${data.taskTitle}"`}>

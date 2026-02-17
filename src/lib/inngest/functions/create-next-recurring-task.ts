@@ -7,6 +7,11 @@ import {
   shouldGenerateNextOccurrence,
 } from '@/lib/utils/recurring';
 import type { RecurringConfig } from '@/lib/db/schema/tasks';
+import { randomBytes } from 'crypto';
+
+function generateShortId(): string {
+  return randomBytes(6).toString('base64url');
+}
 
 /**
  * Inngest function to create the next recurring task instance.
@@ -81,6 +86,7 @@ export const createNextRecurringTask = inngest.createFunction(
         .insert(tasks)
         .values({
           boardId: data.boardId,
+          shortId: generateShortId(),
           title: data.title,
           description: data.description,
           status: defaultStatus,
@@ -166,6 +172,7 @@ export const createNextRecurringTask = inngest.createFunction(
 
               return {
                 boardId: data.boardId,
+                shortId: generateShortId(),
                 parentTaskId: newTask.id,
                 title: s.title,
                 description: s.description,

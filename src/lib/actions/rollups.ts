@@ -60,6 +60,7 @@ export interface RollupBoardWithSources {
 
 export interface RollupTaskWithAssignees {
   id: string;
+  shortId: string | null;
   boardId: string;
   boardName: string;
   clientId: string | null;
@@ -1141,6 +1142,7 @@ export async function getRollupTasks(
 
       return {
         id: task.id,
+        shortId: task.shortId ?? null,
         boardId: task.boardId,
         boardName: boardInfo.boardName,
         clientId: boardInfo.clientId,

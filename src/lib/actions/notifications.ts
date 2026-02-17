@@ -303,6 +303,7 @@ export async function createMentionNotification(input: {
   const taskDetails = await db
     .select({
       id: tasks.id,
+      shortId: tasks.shortId,
       title: tasks.title,
       status: tasks.status,
       dueDate: tasks.dueDate,
@@ -385,6 +386,7 @@ export async function createMentionNotification(input: {
       recipientName: mentionedUser.name,
       mentionerName,
       taskId: task.id,
+      taskShortId: task.shortId,
       taskTitle: task.title,
       taskStatus: task.status,
       taskDueDate: task.dueDate,
@@ -429,6 +431,7 @@ export async function createCommentAddedNotification(input: {
   const taskDetails = await db
     .select({
       id: tasks.id,
+      shortId: tasks.shortId,
       title: tasks.title,
       status: tasks.status,
       dueDate: tasks.dueDate,
@@ -571,6 +574,7 @@ export async function createCommentAddedNotification(input: {
           recipientName: recipient.name,
           commenterName,
           taskId: task.id,
+          taskShortId: task.shortId,
           taskTitle: task.title,
           taskStatus: task.status,
           taskDueDate: task.dueDate,
@@ -624,6 +628,7 @@ export async function createAssignmentNotification(input: {
   const taskDetails = await db
     .select({
       id: tasks.id,
+      shortId: tasks.shortId,
       title: tasks.title,
       status: tasks.status,
       dueDate: tasks.dueDate,
@@ -675,6 +680,7 @@ export async function createAssignmentNotification(input: {
       recipientName: assignee.name,
       assignerName,
       taskId: task.id,
+      taskShortId: task.shortId,
       taskTitle: task.title,
       taskStatus: task.status,
       taskDueDate: task.dueDate,
@@ -716,6 +722,7 @@ export async function createDueNotification(input: {
   const taskDetails = await db
     .select({
       id: tasks.id,
+      shortId: tasks.shortId,
       title: tasks.title,
       status: tasks.status,
       dueDate: tasks.dueDate,
@@ -764,6 +771,7 @@ export async function createDueNotification(input: {
       recipientEmail: user.email,
       recipientName: user.name,
       taskId: task.id,
+      taskShortId: task.shortId,
       taskTitle: task.title,
       taskStatus: task.status,
       dueDate: task.dueDate,

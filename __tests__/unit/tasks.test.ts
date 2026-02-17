@@ -5,6 +5,7 @@ import type { TaskWithAssignees, TaskFilters, TaskSortOptions } from '@/lib/acti
 function createMockTask(overrides: Partial<TaskWithAssignees> = {}): TaskWithAssignees {
   return {
     id: 'task-1',
+    shortId: 'test1234',
     boardId: 'board-1',
     title: 'Test Task',
     description: null,

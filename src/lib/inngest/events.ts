@@ -9,6 +9,7 @@ export interface MentionNotificationEvent {
     recipientName: string | null;
     mentionerName: string;
     taskId: string;
+    taskShortId: string | null;
     taskTitle: string;
     taskStatus: string;
     taskDueDate: string | null;
@@ -28,6 +29,7 @@ export interface AssignmentNotificationEvent {
     recipientName: string | null;
     assignerName: string;
     taskId: string;
+    taskShortId: string | null;
     taskTitle: string;
     taskStatus: string;
     taskDueDate: string | null;
@@ -47,6 +49,7 @@ export interface DueReminderEvent {
     recipientEmail: string;
     recipientName: string | null;
     taskId: string;
+    taskShortId: string | null;
     taskTitle: string;
     taskStatus: string;
     dueDate: string;

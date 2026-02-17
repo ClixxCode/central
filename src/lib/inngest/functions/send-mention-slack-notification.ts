@@ -44,6 +44,7 @@ export const sendMentionSlackNotification = inngest.createFunction(
     const message = await step.run('format-message', async () => {
       return formatMentionNotification({
         taskId: data.taskId,
+        taskShortId: data.taskShortId || undefined,
         taskTitle: data.taskTitle,
         boardId: data.boardId,
         clientSlug: data.clientSlug,

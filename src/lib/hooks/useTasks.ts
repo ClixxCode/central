@@ -132,6 +132,7 @@ export function useCreateTask(boardId: string) {
           // Only add to lists for this board
           const optimisticTask: TaskWithAssignees = {
             id: `temp-${Date.now()}`,
+            shortId: null,
             boardId,
             title: newTask.title,
             description: newTask.description ?? null,

@@ -8,6 +8,7 @@ export interface TaskDueEmailData {
   recipientName: string;
   taskTitle: string;
   taskId: string;
+  taskShortId?: string;
   boardId: string;
   clientSlug: string;
   clientName: string;
@@ -26,7 +27,9 @@ export function taskOverdueEmailSubject(taskTitle: string): string {
 }
 
 function TaskDueEmail({ data }: { data: TaskDueEmailData }) {
-  const taskUrl = `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
+  const taskUrl = data.taskShortId
+    ? `${getAppUrl()}/t/${data.taskShortId}`
+    : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
   const formattedDate = formatEmailDate(data.dueDate);
 
   const headerColor = data.isOverdue ? '#f87171' : '#fbbf24';

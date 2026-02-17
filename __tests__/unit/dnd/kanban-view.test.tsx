@@ -41,6 +41,7 @@ const mockSectionOptions: SectionOption[] = [
 
 const mockTask: TaskWithAssignees = {
   id: 'task-2',
+  shortId: 'test1234',
   boardId: 'board-1',
   title: 'Kanban Test Task',
   description: null,

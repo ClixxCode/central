@@ -50,6 +50,7 @@ export interface TiptapMark {
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
+  shortId: varchar('short_id', { length: 12 }).unique(),
   boardId: uuid('board_id')
     .notNull()
     .references(() => boards.id, { onDelete: 'cascade' }),

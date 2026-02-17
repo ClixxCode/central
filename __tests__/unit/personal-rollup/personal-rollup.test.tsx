@@ -138,6 +138,7 @@ vi.mock('@/lib/hooks/useTasks', () => ({
 // Sample test data
 const createMockTask = (overrides: Partial<MyTaskWithContext> = {}): MyTaskWithContext => ({
   id: 'task-1',
+  shortId: 'test1234',
   boardId: 'board-1',
   title: 'Test Task',
   description: null,

@@ -26,10 +26,16 @@ import { logBoardActivity } from './board-activity';
 import { inngest } from '@/lib/inngest/client';
 import { getSiteSettings } from './site-settings';
 import { getOrgToday } from '@/lib/utils/timezone';
+import { randomBytes } from 'crypto';
+
+function generateShortId(): string {
+  return randomBytes(6).toString('base64url'); // 8 URL-safe chars
+}
 
 // Types
 export interface TaskWithAssignees {
   id: string;
+  shortId: string | null;
   boardId: string;
   title: string;
   description: TiptapContent | null;
@@ -602,6 +608,7 @@ export async function listTasks(
 
     return {
       id: task.id,
+      shortId: task.shortId,
       boardId: task.boardId,
       title: task.title,
       description: task.description,
@@ -732,6 +739,7 @@ export async function getTask(taskId: string): Promise<{
 
   const taskWithAssignees: TaskWithAssignees = {
     id: task.id,
+    shortId: task.shortId,
     boardId: task.boardId,
     title: task.title,
     description: task.description,
@@ -825,6 +833,7 @@ export async function createTask(input: CreateTaskInput): Promise<{
     .insert(tasks)
     .values({
       boardId: input.boardId,
+      shortId: generateShortId(),
       title: input.title,
       description,
       status: input.status,
@@ -875,6 +884,7 @@ export async function createTask(input: CreateTaskInput): Promise<{
 
   const taskWithAssignees: TaskWithAssignees = {
     id: newTask.id,
+    shortId: newTask.shortId,
     boardId: newTask.boardId,
     title: newTask.title,
     description: newTask.description,
@@ -1214,6 +1224,7 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
 
   const taskWithAssignees: TaskWithAssignees = {
     id: updatedTask.id,
+    shortId: updatedTask.shortId,
     boardId: updatedTask.boardId,
     title: updatedTask.title,
     description: updatedTask.description,
@@ -1483,6 +1494,7 @@ export async function listSubtasks(parentTaskId: string): Promise<{
 
     return {
       id: task.id,
+      shortId: task.shortId,
       boardId: task.boardId,
       title: task.title,
       description: task.description,
@@ -1802,6 +1814,7 @@ export async function listMyTasks(): Promise<{
       taskDateFlexibility: tasks.dateFlexibility,
       taskRecurringConfig: tasks.recurringConfig,
       taskRecurringGroupId: tasks.recurringGroupId,
+      taskShortId: tasks.shortId,
       taskParentTaskId: tasks.parentTaskId,
       taskPosition: tasks.position,
       taskCreatedBy: tasks.createdBy,
@@ -2035,6 +2048,7 @@ export async function listMyTasks(): Promise<{
     const parentInfo = row.taskParentTaskId ? parentTaskMap.get(row.taskParentTaskId) : null;
     clientEntry.tasks.push({
       id: row.taskId,
+      shortId: row.taskShortId,
       boardId: row.boardId,
       title: row.taskTitle,
       description: row.taskDescription,
@@ -2928,6 +2942,7 @@ export async function bulkDuplicateTasks(taskIds: string[]): Promise<{
       .insert(tasks)
       .values({
         boardId: source.boardId,
+        shortId: generateShortId(),
         title: `${source.title} (copy)`,
         description: source.description,
         status: source.status,
@@ -2955,6 +2970,7 @@ export async function bulkDuplicateTasks(taskIds: string[]): Promise<{
         .insert(tasks)
         .values({
           boardId: newTask.boardId,
+          shortId: generateShortId(),
           title: subtask.title,
           description: subtask.description,
           status: subtask.status,

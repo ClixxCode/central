@@ -52,6 +52,7 @@ export const sendAssignmentEmail = inngest.createFunction(
           assignerName: data.assignerName,
           taskTitle: data.taskTitle,
           taskId: data.taskId,
+          taskShortId: data.taskShortId || undefined,
           boardId: data.boardId,
           clientSlug: data.clientSlug,
           clientName: data.clientName,

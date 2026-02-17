@@ -52,6 +52,7 @@ export const sendCommentAddedEmail = inngest.createFunction(
           commenterName: data.commenterName,
           taskTitle: data.taskTitle,
           taskId: data.taskId,
+          taskShortId: data.taskShortId || undefined,
           boardId: data.boardId,
           clientSlug: data.clientSlug,
           commentPreview: data.commentPreview || undefined,

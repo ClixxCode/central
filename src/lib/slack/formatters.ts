@@ -11,6 +11,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export interface NotificationContext {
   taskId?: string;
+  taskShortId?: string;
   taskTitle?: string;
   boardId?: string;
   boardName?: string;
@@ -27,6 +28,14 @@ export interface NotificationContext {
  * Build a task URL for linking in Slack messages
  */
 function getTaskUrl(context: NotificationContext): string | null {
+  // Prefer short URL when available
+  if (context.taskShortId) {
+    const url = `${APP_URL}/t/${context.taskShortId}`;
+    if (context.commentId) {
+      return `${url}?comment=${context.commentId}`;
+    }
+    return url;
+  }
   if (!context.clientSlug || !context.boardId || !context.taskId) {
     return null;
   }

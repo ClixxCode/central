@@ -224,18 +224,30 @@ export function TaskModal({
     setTimeout(() => setHighlightedAttachmentId(null), 2000);
   }, []);
 
+  // Build shareable task URL (prefer short URL when available)
+  const getShareableTaskUrl = useCallback(() => {
+    if (task?.shortId) {
+      return `${window.location.origin}/t/${task.shortId}`;
+    }
+    if (taskBasePath && task?.id) {
+      return `${window.location.origin}${taskBasePath}?task=${task.id}`;
+    }
+    return null;
+  }, [task?.shortId, task?.id, taskBasePath]);
+
   // Copy task link to clipboard
   const handleCopyLink = useCallback(() => {
-    if (!task?.id || !taskBasePath) return;
-    const url = `${window.location.origin}${taskBasePath}?task=${task.id}`;
+    const url = getShareableTaskUrl();
+    if (!url) return;
     navigator.clipboard.writeText(url);
     toast.success('Link copied to clipboard');
-  }, [task?.id, taskBasePath]);
+  }, [getShareableTaskUrl]);
 
   // Copy task link and open Slack channel
   const handleSendToSlack = useCallback(() => {
-    if (!task?.id || !taskBasePath || !slackChannelUrl) return;
-    const url = `${window.location.origin}${taskBasePath}?task=${task.id}`;
+    if (!task?.id || !slackChannelUrl) return;
+    const url = getShareableTaskUrl();
+    if (!url) return;
     navigator.clipboard.writeText(url);
 
     // Build Slack URL based on user preference
@@ -261,7 +273,7 @@ export function TaskModal({
     };
     // Dismiss on next click anywhere
     setTimeout(() => document.addEventListener('click', dismiss, { once: true }), 100);
-  }, [task?.id, taskBasePath, slackChannelUrl, slackLinkType, slackTeamId]);
+  }, [task?.id, getShareableTaskUrl, slackChannelUrl, slackLinkType, slackTeamId]);
 
   // Fetch attachments and record view when task changes
   useEffect(() => {

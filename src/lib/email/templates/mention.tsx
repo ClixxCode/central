@@ -8,6 +8,7 @@ export interface MentionEmailData {
   mentionerName: string;
   taskTitle: string;
   taskId: string;
+  taskShortId?: string;
   boardId: string;
   clientSlug: string;
   commentPreview?: string;
@@ -20,7 +21,9 @@ export function mentionEmailSubject(mentionerName: string, taskTitle: string): s
 }
 
 function MentionEmail({ data }: { data: MentionEmailData }) {
-  const taskUrl = `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
+  const taskUrl = data.taskShortId
+    ? `${getAppUrl()}/t/${data.taskShortId}`
+    : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
 
   return (
     <EmailLayout preheader={`${data.mentionerName} mentioned you in "${data.taskTitle}"`}>
