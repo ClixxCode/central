@@ -15,6 +15,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { del } from '@vercel/blob';
 import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import { randomBytes } from 'crypto';
 import { logBoardActivity } from './board-activity';
 
 // Types
@@ -36,6 +37,7 @@ export interface CommentAttachment {
 
 export interface CommentWithAuthor {
   id: string;
+  shortId: string | null;
   taskId: string;
   authorId: string | null;
   parentCommentId: string | null;
@@ -44,6 +46,10 @@ export interface CommentWithAuthor {
   updatedAt: Date | null;
   author: CommentAuthor | null;
   attachments: CommentAttachment[];
+}
+
+function generateShortId(): string {
+  return randomBytes(6).toString('base64url'); // 8 URL-safe chars
 }
 
 export interface CreateCommentInput {
@@ -195,6 +201,7 @@ export async function listComments(taskId: string): Promise<{
   const commentList = await db
     .select({
       id: comments.id,
+      shortId: comments.shortId,
       taskId: comments.taskId,
       authorId: comments.authorId,
       parentCommentId: comments.parentCommentId,
@@ -247,6 +254,7 @@ export async function listComments(taskId: string): Promise<{
   // Build response
   const commentsWithAuthors: CommentWithAuthor[] = commentList.map((c) => ({
     id: c.id,
+    shortId: c.shortId,
     taskId: c.taskId,
     authorId: c.authorId,
     parentCommentId: c.parentCommentId,
@@ -318,6 +326,7 @@ export async function createComment(input: CreateCommentInput): Promise<{
       authorId: user.id,
       parentCommentId: input.parentCommentId ?? null,
       content,
+      shortId: generateShortId(),
     })
     .returning();
 
@@ -371,6 +380,7 @@ export async function createComment(input: CreateCommentInput): Promise<{
 
   const commentWithAuthor: CommentWithAuthor = {
     id: newComment.id,
+    shortId: newComment.shortId,
     taskId: newComment.taskId,
     authorId: newComment.authorId,
     parentCommentId: newComment.parentCommentId,
@@ -483,6 +493,7 @@ export async function updateComment(input: UpdateCommentInput): Promise<{
 
   const commentWithAuthor: CommentWithAuthor = {
     id: updatedComment.id,
+    shortId: updatedComment.shortId,
     taskId: updatedComment.taskId,
     authorId: updatedComment.authorId,
     parentCommentId: updatedComment.parentCommentId,

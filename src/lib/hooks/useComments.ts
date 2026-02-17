@@ -113,6 +113,7 @@ export function useCreateComment() {
           if (!old) return old;
           const optimisticComment: CommentWithAuthor = {
             id: `temp-${Date.now()}`,
+            shortId: null,
             taskId: newComment.taskId,
             authorId: '', // Will be filled by server
             parentCommentId: newComment.parentCommentId ?? null,

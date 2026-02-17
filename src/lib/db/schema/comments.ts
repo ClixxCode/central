@@ -1,4 +1,4 @@
-import { pgTable, uuid, timestamp, jsonb, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, timestamp, jsonb, varchar, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
 import { tasks, type TiptapContent } from './tasks';
@@ -6,6 +6,7 @@ import { attachments } from './attachments';
 
 export const comments = pgTable('comments', {
   id: uuid('id').primaryKey().defaultRandom(),
+  shortId: varchar('short_id', { length: 12 }).unique(),
   taskId: uuid('task_id')
     .notNull()
     .references(() => tasks.id, { onDelete: 'cascade' }),

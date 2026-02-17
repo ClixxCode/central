@@ -17,7 +17,8 @@ import type { CommentWithAuthor } from '@/lib/actions/comments';
 import type { TiptapContent } from '@/lib/db/schema/tasks';
 import type { MentionUser } from '@/components/editor/MentionList';
 import { cn } from '@/lib/utils';
-import { MoreHorizontal, Pencil, Trash2, X, Check, Loader2, Reply } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, X, Check, Loader2, Reply, Link2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface CommentItemProps {
   comment: CommentWithAuthor;
@@ -104,6 +105,13 @@ export function CommentItem({
       setIsDeleting(false);
     }
   }, [comment.id, onDelete]);
+
+  const handleCopyLink = useCallback(() => {
+    if (!comment.shortId) return;
+    const url = `${window.location.origin}/c/${comment.shortId}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Link copied to clipboard');
+  }, [comment.shortId]);
 
   const timeAgo = formatDistanceToNow(new Date(comment.createdAt), {
     addSuffix: true,
@@ -241,7 +249,7 @@ export function CommentItem({
       </div>
 
       {/* Actions menu */}
-      {(canEdit || canDelete) && !isEditing && (
+      {!isEditing && (
         <div className="opacity-0 transition-opacity group-hover:opacity-100">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -251,6 +259,12 @@ export function CommentItem({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {comment.shortId && (
+                <DropdownMenuItem onClick={handleCopyLink}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Copy link
+                </DropdownMenuItem>
+              )}
               {canEdit && (
                 <DropdownMenuItem onClick={handleStartEdit}>
                   <Pencil className="mr-2 h-4 w-4" />

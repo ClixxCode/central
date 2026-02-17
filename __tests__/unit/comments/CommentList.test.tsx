@@ -25,6 +25,7 @@ const mockCurrentUser = {
 const mockComments: CommentWithAuthor[] = [
   {
     id: 'comment-1',
+    shortId: 'abc12345',
     taskId: 'task-1',
     authorId: 'user-1',
     parentCommentId: null,
@@ -42,6 +43,7 @@ const mockComments: CommentWithAuthor[] = [
   },
   {
     id: 'comment-2',
+    shortId: 'def67890',
     taskId: 'task-1',
     authorId: 'user-2',
     parentCommentId: null,
