@@ -1,0 +1,1 @@
+ALTER TABLE "template_tasks" ADD COLUMN "recurring_config" jsonb;

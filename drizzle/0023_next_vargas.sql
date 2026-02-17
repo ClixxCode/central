@@ -1,0 +1,1 @@
+ALTER TABLE "boards" ADD COLUMN "review_mode_enabled" boolean DEFAULT false NOT NULL;

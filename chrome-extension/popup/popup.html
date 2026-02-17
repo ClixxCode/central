@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="popup.css">
+  <title>Central for Front</title>
+</head>
+<body data-central-theme="light">
+  <div class="container">
+    <div class="header">
+      <h1>Central</h1>
+    </div>
+
+    <!-- Not connected state -->
+    <div id="setup-form">
+      <p class="hint">
+        Paste your API token from <a id="settings-link" href="#" target="_blank">Settings &gt; Integrations</a>,
+        or just visit that page and it will be picked up automatically.
+      </p>
+      <div class="field">
+        <label for="api-token">API Token</label>
+        <input type="text" id="api-token" placeholder="cntrl_...">
+      </div>
+      <button id="connect-btn" class="btn-primary">Connect</button>
+      <p id="error-msg" class="error" hidden></p>
+    </div>
+
+    <!-- Connected state -->
+    <div id="connected-state" hidden>
+      <div class="status-row">
+        <span class="status-dot"></span>
+        <span id="user-name">Connected</span>
+      </div>
+      <button id="disconnect-btn" class="btn-secondary">Disconnect</button>
+    </div>
+
+    <!-- Theme selector (always visible) -->
+    <div class="theme-section">
+      <label class="theme-label">Theme</label>
+      <div class="theme-toggle">
+        <button data-theme="light" class="theme-btn">Light</button>
+        <button data-theme="dark" class="theme-btn">Dark</button>
+        <button data-theme="system" class="theme-btn">System</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
