@@ -4,6 +4,16 @@ import { useState } from 'react';
 import { Users, UserPlus, Globe, X, Check, Crown, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -52,6 +62,7 @@ export function RollupSharingDialog({
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [transferUserId, setTransferUserId] = useState('');
+  const [showShareAllConfirm, setShowShareAllConfirm] = useState(false);
 
   const { user: currentUser } = useCurrentUser();
   const { data: owners, isLoading: ownersLoading } = useRollupOwners(rollupBoardId);
@@ -98,9 +109,13 @@ export function RollupSharingDialog({
   };
 
   const handleInviteAllUsers = () => {
-    if (confirm('This will share this rollup with all current and future users (excluding contractors). Continue?')) {
-      inviteAllUsers.mutate(rollupBoardId);
-    }
+    setShowShareAllConfirm(true);
+  };
+
+  const confirmInviteAllUsers = () => {
+    inviteAllUsers.mutate(rollupBoardId, {
+      onSettled: () => setShowShareAllConfirm(false),
+    });
   };
 
   const handleRemoveInvitation = (invitationId: string) => {
@@ -385,6 +400,26 @@ export function RollupSharingDialog({
           </TabsContent>
         </Tabs>
       </DialogContent>
+
+      <AlertDialog open={showShareAllConfirm} onOpenChange={setShowShareAllConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Share with All Users</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will share <strong>{rollupName}</strong> with all current and future users (excluding contractors). This can be undone by removing the invitation later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={confirmInviteAllUsers}
+              disabled={inviteAllUsers.isPending}
+            >
+              {inviteAllUsers.isPending ? 'Sharing...' : 'Share with All'}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={inviteAllUsers.isPending}>Cancel</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
