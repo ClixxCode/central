@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
-import { Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy } from 'lucide-react';
+import { Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -42,10 +42,12 @@ interface MultiSelectFloatingBarProps {
   currentBoardId: string;
   onApply: (updates: BulkEditPayload) => void;
   onDuplicate: () => void;
+  onDelete: () => void;
   onRemoveAllAssignees: () => void;
   onCancel: () => void;
   isPending: boolean;
   isDuplicating: boolean;
+  isDeleting: boolean;
   selectedTasksHaveAssignees: boolean;
   bottomOffset?: string;
 }
@@ -58,10 +60,12 @@ export function MultiSelectFloatingBar({
   currentBoardId,
   onApply,
   onDuplicate,
+  onDelete,
   onRemoveAllAssignees,
   onCancel,
   isPending,
   isDuplicating,
+  isDeleting,
   selectedTasksHaveAssignees,
   bottomOffset,
 }: MultiSelectFloatingBarProps) {
@@ -530,6 +534,34 @@ export function MultiSelectFloatingBar({
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={onDuplicate}>Duplicate</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Delete */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={isDeleting}
+              className="gap-1 text-xs h-8 px-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedCount} task{selectedCount === 1 ? '' : 's'}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. All selected tasks and their subtasks will be permanently deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

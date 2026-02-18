@@ -3008,3 +3008,53 @@ export async function bulkDuplicateTasks(taskIds: string[]): Promise<{
 
   return { success: true, duplicatedCount };
 }
+
+export async function bulkDeleteTasks(taskIds: string[]): Promise<{
+  success: boolean;
+  deletedCount?: number;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  if (!taskIds.length) {
+    return { success: false, error: 'No tasks specified' };
+  }
+
+  // Fetch all tasks to delete
+  const tasksToDelete = await db
+    .select({ id: tasks.id, boardId: tasks.boardId, title: tasks.title, parentTaskId: tasks.parentTaskId })
+    .from(tasks)
+    .where(inArray(tasks.id, taskIds));
+
+  if (tasksToDelete.length !== taskIds.length) {
+    return { success: false, error: 'Some tasks not found' };
+  }
+
+  // Verify board access for all unique boards
+  const uniqueBoardIds = [...new Set(tasksToDelete.map((t) => t.boardId))];
+  for (const boardId of uniqueBoardIds) {
+    const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+    if (!accessLevel) {
+      return { success: false, error: 'Access denied to one or more boards' };
+    }
+  }
+
+  // Log board activity for each task before deleting
+  for (const task of tasksToDelete) {
+    logBoardActivity({
+      boardId: task.boardId,
+      taskId: task.id,
+      taskTitle: task.title,
+      userId: user.id,
+      action: task.parentTaskId ? 'subtask_deleted' : 'task_deleted',
+    }).catch((err) => console.error('Failed to log board activity:', err));
+  }
+
+  // Batch delete (cascades to assignees and subtasks via FK)
+  await db.delete(tasks).where(inArray(tasks.id, taskIds));
+
+  revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
+
+  return { success: true, deletedCount: tasksToDelete.length };
+}

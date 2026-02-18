@@ -17,6 +17,7 @@ import {
   listArchivedTasks,
   bulkUpdateTasks,
   bulkDuplicateTasks,
+  bulkDeleteTasks,
   TaskWithAssignees,
   CreateTaskInput,
   UpdateTaskInput,
@@ -739,6 +740,29 @@ export function useBulkDuplicateTasks() {
     onSuccess: (count) => {
       toast.success(`Duplicated ${count} task${count === 1 ? '' : 's'}`);
       trackEvent('bulk_operation', { action: 'duplicate', count });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.details() });
+      queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+    },
+  });
+}
+
+export function useBulkDeleteTasks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskIds: string[]) => {
+      const result = await bulkDeleteTasks(taskIds);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to delete tasks');
+      }
+      return result.deletedCount!;
+    },
+    onSuccess: (count) => {
+      toast.success(`Deleted ${count} task${count === 1 ? '' : 's'}`);
+      trackEvent('bulk_operation', { action: 'delete', count });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });

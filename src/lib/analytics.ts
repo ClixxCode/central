@@ -9,7 +9,7 @@ type AnalyticsEvents = {
   board_viewed: { view_type: 'kanban' | 'swimlane' | 'table' };
   comment_created: { is_reply?: boolean; has_attachments?: boolean };
   template_used: { action: 'create_board' | 'apply_tasks' };
-  bulk_operation: { action: 'update' | 'duplicate' | 'archive'; count: number };
+  bulk_operation: { action: 'update' | 'duplicate' | 'archive' | 'delete'; count: number };
   search_performed: { result_count: number; has_results: boolean };
   user_signed_up: { provider: 'credentials' };
   user_invited: {};

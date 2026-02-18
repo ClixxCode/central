@@ -11,7 +11,7 @@ import { MoveTasksDialog } from '@/components/tasks/MoveTasksDialog';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useRollupTasks, rollupKeys } from '@/lib/hooks/useRollupBoards';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
-import { useBulkUpdateTasks, useBulkDuplicateTasks } from '@/lib/hooks/useTasks';
+import { useBulkUpdateTasks, useBulkDuplicateTasks, useBulkDeleteTasks } from '@/lib/hooks/useTasks';
 import type { TaskFilters, TaskSortOptions } from '@/lib/actions/tasks';
 import type { RollupBoardWithSources } from '@/lib/actions/rollups';
 
@@ -98,6 +98,7 @@ export function RollupPageClient({
   // ─── Multi-select state ───────────────────────────────────
   const bulkUpdate = useBulkUpdateTasks();
   const bulkDuplicate = useBulkDuplicateTasks();
+  const bulkDelete = useBulkDeleteTasks();
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<string>>(new Set());
   const lastSelectedIdRef = React.useRef<string | null>(null);
   const isMultiSelectMode = selectedTaskIds.size > 0;
@@ -182,6 +183,12 @@ export function RollupPageClient({
       onSuccess: () => clearSelection(),
     });
   }, [selectedTaskIds, bulkDuplicate, clearSelection]);
+
+  const handleBulkDelete = React.useCallback(() => {
+    bulkDelete.mutate(Array.from(selectedTaskIds), {
+      onSuccess: () => clearSelection(),
+    });
+  }, [selectedTaskIds, bulkDelete, clearSelection]);
 
   const handleConfirmMove = React.useCallback(() => {
     if (!moveDialog.payload) return;
@@ -334,10 +341,12 @@ export function RollupPageClient({
           currentBoardId=""
           onApply={handleBulkApply}
           onDuplicate={handleBulkDuplicate}
+          onDelete={handleBulkDelete}
           onRemoveAllAssignees={handleRemoveAllAssignees}
           onCancel={clearSelection}
           isPending={bulkUpdate.isPending}
           isDuplicating={bulkDuplicate.isPending}
+          isDeleting={bulkDelete.isPending}
           selectedTasksHaveAssignees={selectedTasksHaveAssignees}
           bottomOffset={reviewMode ? '112px' : undefined}
         />
