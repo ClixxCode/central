@@ -10,15 +10,16 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { List } from 'lucide-react';
+import { CornerDownRight, List } from 'lucide-react';
+import type { PasteItem } from './SmartTaskInput';
 
 const MAX_LINES = 50;
-const PREVIEW_COUNT = 3;
+const PREVIEW_COUNT = 5;
 
 interface MultiLinePasteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lines: string[];
+  items: PasteItem[];
   onConfirm: () => void;
   isCreating: boolean;
   progress: { completed: number; total: number } | null;
@@ -27,14 +28,16 @@ interface MultiLinePasteDialogProps {
 export function MultiLinePasteDialog({
   open,
   onOpenChange,
-  lines,
+  items,
   onConfirm,
   isCreating,
   progress,
 }: MultiLinePasteDialogProps) {
-  const taskCount = Math.min(lines.length, MAX_LINES);
-  const previewLines = lines.slice(0, PREVIEW_COUNT);
-  const remaining = taskCount - PREVIEW_COUNT;
+  const itemCount = Math.min(items.length, MAX_LINES);
+  const previewItems = items.slice(0, PREVIEW_COUNT);
+  const remaining = itemCount - PREVIEW_COUNT;
+  const parentCount = items.slice(0, MAX_LINES).filter((i) => !i.isSubtask).length;
+  const subtaskCount = items.slice(0, MAX_LINES).filter((i) => i.isSubtask).length;
 
   return (
     <AlertDialog open={open} onOpenChange={isCreating ? undefined : onOpenChange}>
@@ -42,20 +45,28 @@ export function MultiLinePasteDialog({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <List className="size-5" />
-            Create {taskCount} tasks?
+            Create {itemCount} {itemCount === 1 ? 'task' : 'tasks'}?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Each line will become a separate task with the current board, status, assignee, and date settings.
+            {subtaskCount > 0
+              ? `${parentCount} ${parentCount === 1 ? 'task' : 'tasks'} and ${subtaskCount} ${subtaskCount === 1 ? 'subtask' : 'subtasks'} will be created. Indented lines become subtasks of the task above them.`
+              : 'Each line will become a separate task with the current board, status, assignee, and date settings.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <div className="space-y-1">
-          {previewLines.map((line, i) => (
-            <div key={i} className="flex gap-2 text-sm py-0.5">
-              <span className="text-muted-foreground/60 tabular-nums w-5 shrink-0 text-right">
-                {i + 1}.
+          {previewItems.map((item, i) => (
+            <div key={i} className="flex gap-2 text-sm py-0.5 items-center">
+              {item.isSubtask ? (
+                <CornerDownRight className="size-3.5 text-muted-foreground/60 shrink-0 ml-5" />
+              ) : (
+                <span className="text-muted-foreground/60 tabular-nums w-5 shrink-0 text-right">
+                  &bull;
+                </span>
+              )}
+              <span className={`truncate ${item.isSubtask ? 'text-muted-foreground' : ''}`}>
+                {item.title}
               </span>
-              <span className="truncate">{line}</span>
             </div>
           ))}
           {remaining > 0 && (
@@ -65,9 +76,9 @@ export function MultiLinePasteDialog({
           )}
         </div>
 
-        {lines.length > MAX_LINES && (
+        {items.length > MAX_LINES && (
           <p className="text-xs text-muted-foreground">
-            Only the first {MAX_LINES} lines will be created ({lines.length - MAX_LINES} lines omitted).
+            Only the first {MAX_LINES} lines will be created ({items.length - MAX_LINES} lines omitted).
           </p>
         )}
 
@@ -83,7 +94,7 @@ export function MultiLinePasteDialog({
         ) : (
           <AlertDialogFooter>
             <Button onClick={onConfirm}>
-              Create {taskCount} {taskCount === 1 ? 'task' : 'tasks'}
+              Create {itemCount} {itemCount === 1 ? 'task' : 'tasks'}
             </Button>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel

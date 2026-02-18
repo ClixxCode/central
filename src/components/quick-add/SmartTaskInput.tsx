@@ -12,6 +12,11 @@ import {
   type StatusSelection,
 } from './TriggerPopover';
 
+export interface PasteItem {
+  title: string;
+  isSubtask: boolean;
+}
+
 export interface InputPill {
   type: 'board' | 'assignee' | 'date' | 'status';
   id: string;
@@ -30,7 +35,7 @@ interface SmartTaskInputProps {
   onDateRemove: () => void;
   onStatusRemove: () => void;
   onSubmit?: () => void;
-  onMultiLinePaste?: (lines: string[]) => void;
+  onMultiLinePaste?: (items: PasteItem[]) => void;
   hasBoardSelected?: boolean;
   selectedBoardId?: string;
   statusOptions?: { id: string; label: string; color: string; position: number }[];
@@ -241,16 +246,57 @@ export function SmartTaskInput({
       if (!onMultiLinePaste || !hasBoardSelected) return;
 
       const text = e.clipboardData.getData('text/plain');
-      const lines = text
-        .split(/\r?\n/)
-        .map((line) => line.replace(/\t/g, ' ').trim())
-        .filter(Boolean)
-        .map((line) => line.replace(/^(?:[-*+]|\d+[.)]\s*|#{1,6}\s+)\s*/, ''))
-        .filter(Boolean);
+      const rawLines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
 
-      if (lines.length >= 2) {
-        e.preventDefault();
-        onMultiLinePaste(lines);
+      if (rawLines.length < 2) return;
+
+      e.preventDefault();
+
+      const listMarkerRe = /^[-*+]|\d+[.)]\s*/;
+
+      // Check if the list is mixed (some lines have markers, some don't).
+      // In a mixed list, bare lines are parents and bulleted lines are subtasks.
+      const trimmedLines = rawLines.map((l) => l.trim());
+      const hasBulleted = trimmedLines.some((l) => listMarkerRe.test(l));
+      const hasPlain = trimmedLines.some((l) => !listMarkerRe.test(l));
+      const isMixedList = hasBulleted && hasPlain;
+
+      const items: PasteItem[] = [];
+      let lastParentIndex = -1;
+
+      for (const raw of rawLines) {
+        const trimmed = raw.trim();
+
+        // Measure leading whitespace (tabs count as 2 spaces)
+        const leadingMatch = raw.match(/^(\s*)/);
+        const leading = leadingMatch ? leadingMatch[1].replace(/\t/g, '  ') : '';
+        const indentLevel = leading.length;
+
+        const hasMarker = listMarkerRe.test(trimmed);
+
+        // Clean the line: strip list markers and trim
+        const cleaned = trimmed
+          .replace(/^(?:[-*+]|\d+[.)]\s*|#{1,6}\s+)\s*/, '')
+          .trim();
+
+        if (!cleaned) continue;
+
+        // A line is a subtask if:
+        // 1. It has leading whitespace (explicit indentation), OR
+        // 2. It has a list marker in a mixed list (bullet under a plain parent)
+        const isSubtask =
+          lastParentIndex >= 0 &&
+          (indentLevel > 0 || (isMixedList && hasMarker));
+
+        if (!isSubtask) {
+          lastParentIndex = items.length;
+        }
+
+        items.push({ title: cleaned, isSubtask });
+      }
+
+      if (items.length >= 2) {
+        onMultiLinePaste(items);
       }
     },
     [onMultiLinePaste, hasBoardSelected]

@@ -17,7 +17,7 @@ import { useBoard, usePersonalBoard } from '@/lib/hooks/useBoards';
 import { useQuickAddCreateTask, useQuickAddUsers } from '@/lib/hooks/useQuickAdd';
 import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 import { useQuickActionsStore } from '@/lib/stores';
-import { SmartTaskInput, type InputPill } from './SmartTaskInput';
+import { SmartTaskInput, type InputPill, type PasteItem } from './SmartTaskInput';
 import { MultiLinePasteDialog } from './MultiLinePasteDialog';
 import { cn } from '@/lib/utils';
 import { getDateSuggestions } from '@/lib/utils/parse-natural-date';
@@ -53,7 +53,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
-  const [pasteLines, setPasteLines] = useState<string[] | null>(null);
+  const [pasteItems, setPasteItems] = useState<PasteItem[] | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [isBatchCreating, setIsBatchCreating] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ completed: number; total: number } | null>(null);
@@ -174,7 +174,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
     setDueDate(null);
     setStatus(null);
     setPills([]);
-    setPasteLines(null);
+    setPasteItems(null);
     setAddMenuOpen(false);
     setIsBatchCreating(false);
     setBatchProgress(null);
@@ -307,10 +307,10 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
   }, [selectedBoard, title, status, boardData, assignees, dueDate, description, createTask, resetForm, onOpenChange, isPersonalBoard, currentUser, onTaskCreatedAndEdit, clients]);
 
   const handleBatchCreate = useCallback(async () => {
-    if (!pasteLines || !selectedBoard) return;
+    if (!pasteItems || !selectedBoard) return;
 
     const MAX_LINES = 50;
-    const lines = pasteLines.slice(0, MAX_LINES);
+    const items = pasteItems.slice(0, MAX_LINES);
     const statusToUse = status ?? boardData?.statusOptions?.[0]?.id ?? 'todo';
     const assigneeIdList = isPersonalBoard && currentUser
       ? [currentUser.id]
@@ -318,40 +318,53 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
     const dueDateStr = dueDate ? format(dueDate.date, 'yyyy-MM-dd') : undefined;
 
     setIsBatchCreating(true);
-    setBatchProgress({ completed: 0, total: lines.length });
+    setBatchProgress({ completed: 0, total: items.length });
 
     let successCount = 0;
     let failCount = 0;
+    let lastParentTaskId: string | null = null;
 
-    for (const line of lines) {
+    for (const item of items) {
       const result = await createTaskAction({
         boardId: selectedBoard.boardId,
-        title: line,
+        title: item.title,
         status: statusToUse,
         assigneeIds: assigneeIdList,
         dueDate: dueDateStr,
+        ...(item.isSubtask && lastParentTaskId ? { parentTaskId: lastParentTaskId } : {}),
       });
 
       if (result.success) {
         successCount++;
+        if (!item.isSubtask && result.task) {
+          lastParentTaskId = result.task.id;
+        }
       } else {
         failCount++;
+        if (!item.isSubtask) {
+          lastParentTaskId = null;
+        }
       }
 
-      setBatchProgress({ completed: successCount + failCount, total: lines.length });
+      setBatchProgress({ completed: successCount + failCount, total: items.length });
     }
 
     await queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
 
+    const subtaskCount = items.filter((i) => i.isSubtask).length;
     if (failCount === 0) {
-      toast.success(`Created ${successCount} tasks`);
+      toast.success(
+        subtaskCount > 0
+          ? `Created ${successCount - subtaskCount} tasks and ${subtaskCount} subtasks`
+          : `Created ${successCount} tasks`
+      );
     } else {
       toast.warning(`Created ${successCount} tasks, ${failCount} failed`);
     }
 
     resetForm();
     onOpenChange(false);
-  }, [pasteLines, selectedBoard, status, boardData, assignees, dueDate, queryClient, resetForm, onOpenChange, isPersonalBoard, currentUser]);
+  }, [pasteItems, selectedBoard, status, boardData, assignees, dueDate, queryClient, resetForm, onOpenChange, isPersonalBoard, currentUser]);
 
   const canSubmit = !!selectedBoard && !!title.trim() && !createTask.isPending;
 
@@ -375,7 +388,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
           onDateRemove={handleDateRemove}
           onStatusRemove={handleStatusRemove}
           onSubmit={handleSubmit}
-          onMultiLinePaste={setPasteLines}
+          onMultiLinePaste={setPasteItems}
           hasBoardSelected={!!selectedBoard}
           selectedBoardId={selectedBoard?.boardId}
           statusOptions={boardData?.statusOptions}
@@ -739,11 +752,11 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
     </Dialog>
 
       <MultiLinePasteDialog
-        open={!!pasteLines}
+        open={!!pasteItems}
         onOpenChange={(open) => {
-          if (!open) setPasteLines(null);
+          if (!open) setPasteItems(null);
         }}
-        lines={pasteLines ?? []}
+        items={pasteItems ?? []}
         onConfirm={handleBatchCreate}
         isCreating={isBatchCreating}
         progress={batchProgress}
