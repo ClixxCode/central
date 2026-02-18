@@ -519,7 +519,7 @@ export function TaskModal({
         }
         onOpenChange(isOpen);
       }}>
-      <SheetContent side="right" className="!w-full sm:!w-[80vw] lg:!w-[66vw] !max-w-none p-0 flex flex-col gap-0">
+      <SheetContent side="right" className="!w-full sm:!w-[80vw] lg:!w-[66vw] !max-w-none p-0 flex flex-col gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="border-b px-6 py-5 shrink-0">
           {/* Parent task breadcrumb for subtasks */}
           {!isNew && task?.parentTaskId && onOpenSubtask && (
