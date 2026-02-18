@@ -520,23 +520,23 @@ export function TaskModal({
         onOpenChange(isOpen);
       }}>
       <SheetContent side="right" className="!w-full sm:!w-[80vw] lg:!w-[66vw] !max-w-none p-0 flex flex-col gap-0">
-        <SheetHeader className="border-b px-6 py-4 shrink-0">
+        <SheetHeader className="border-b px-6 py-5 shrink-0">
           {/* Parent task breadcrumb for subtasks */}
           {!isNew && task?.parentTaskId && onOpenSubtask && (
             <button
               type="button"
               onClick={() => onOpenSubtask(task.parentTaskId!)}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors mb-1 -ml-2"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors mb-1 -ml-2"
             >
               <CornerDownRight className="size-3" />
               <span>This is a subtask — view parent task</span>
             </button>
           )}
-          <div className="flex items-start gap-3">
+          <div className="flex items-center gap-3 pr-8">
             {/* Status badge */}
             {currentStatus && (
               <Badge
-                className="mt-1 shrink-0"
+                className="shrink-0"
                 style={{ backgroundColor: currentStatus.color }}>
                 {currentStatus.label}
               </Badge>
@@ -560,7 +560,7 @@ export function TaskModal({
               onFocus={() => { titleFocusedRef.current = true; }}
               onBlur={() => { titleFocusedRef.current = false; }}
               placeholder="Task title"
-              className="flex-1 border-0 bg-transparent p-0 text-lg font-semibold shadow-none focus-visible:ring-0"
+              className="flex-1 border-0 bg-transparent pl-2 py-0 text-lg font-semibold shadow-none focus-visible:ring-0"
             />
             {/* Saving indicator */}
             {isSaving && (
