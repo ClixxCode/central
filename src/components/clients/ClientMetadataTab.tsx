@@ -1,19 +1,25 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Pencil, Plus, X, Check, Users, ExternalLink, LayoutGrid, Hash } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Pencil, Plus, X, Check, Users, ExternalLink, LayoutGrid, Hash, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useUpdateClient } from '@/lib/hooks';
+import { useUpdateClient, useClients } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { ClientWithBoards } from '@/lib/actions/clients';
@@ -46,53 +52,136 @@ interface LinkData {
 function LeadEditRow({
   initial,
   teamMembers,
+  existingRoles,
   onSave,
   onCancel,
 }: {
   initial?: LeadData;
   teamMembers: TeamMember[];
+  existingRoles: string[];
   onSave: (lead: LeadData) => void;
   onCancel: () => void;
 }) {
   const [role, setRole] = useState(initial?.role ?? '');
   const [userId, setUserId] = useState(initial?.userId ?? '');
+  const [personOpen, setPersonOpen] = useState(false);
+  const [showRoleSuggestions, setShowRoleSuggestions] = useState(false);
+  const roleInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedMember = teamMembers.find((m) => m.id === userId);
+
+  const filteredRoles = useMemo(() => {
+    if (!role.trim()) return existingRoles;
+    const lower = role.toLowerCase();
+    return existingRoles.filter((r) => r.toLowerCase().includes(lower) && r.toLowerCase() !== lower);
+  }, [role, existingRoles]);
 
   return (
     <div className="flex items-center gap-3 py-2 px-3 rounded-lg bg-muted/30">
-      <Input
-        value={role}
-        onChange={(e) => setRole(e.target.value)}
-        placeholder="Role (e.g., Creative Director)"
-        className="flex-1 h-8 text-sm"
-        autoFocus
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && role.trim() && userId) {
-            onSave({ role: role.trim(), userId });
-          } else if (e.key === 'Escape') {
-            onCancel();
-          }
-        }}
-      />
-      <Select value={userId} onValueChange={setUserId}>
-        <SelectTrigger className="w-[200px] h-8 text-sm">
-          <SelectValue placeholder="Select person" />
-        </SelectTrigger>
-        <SelectContent>
-          {teamMembers.map((member) => (
-            <SelectItem key={member.id} value={member.id}>
-              <div className="flex items-center gap-2">
-                <Avatar className="h-5 w-5">
-                  <AvatarImage src={member.avatarUrl ?? undefined} />
+      <div className="relative flex-1">
+        <Input
+          ref={roleInputRef}
+          value={role}
+          onChange={(e) => {
+            setRole(e.target.value);
+            setShowRoleSuggestions(true);
+          }}
+          onFocus={() => setShowRoleSuggestions(true)}
+          onBlur={() => {
+            // Delay to allow click on suggestion
+            setTimeout(() => setShowRoleSuggestions(false), 150);
+          }}
+          placeholder="Role (eg. Account Manager)"
+          className="flex-1 h-8 text-sm"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && role.trim() && userId) {
+              onSave({ role: role.trim(), userId });
+            } else if (e.key === 'Escape') {
+              onCancel();
+            } else if (e.key === 'Tab' && showRoleSuggestions && filteredRoles.length > 0) {
+              e.preventDefault();
+              setRole(filteredRoles[0]);
+              setShowRoleSuggestions(false);
+            }
+          }}
+        />
+        {showRoleSuggestions && filteredRoles.length > 0 && (
+          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border rounded-md shadow-md overflow-hidden">
+            {filteredRoles.map((r) => (
+              <button
+                key={r}
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setRole(r);
+                  setShowRoleSuggestions(false);
+                  roleInputRef.current?.focus();
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <Popover open={personOpen} onOpenChange={setPersonOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={personOpen}
+            className="w-[200px] h-8 text-sm justify-between font-normal"
+          >
+            {selectedMember ? (
+              <div className="flex items-center gap-2 truncate">
+                <Avatar className="h-5 w-5 shrink-0">
+                  <AvatarImage src={selectedMember.avatarUrl ?? undefined} />
                   <AvatarFallback className="text-[10px]">
-                    {(member.name ?? member.email).slice(0, 2).toUpperCase()}
+                    {(selectedMember.name ?? selectedMember.email).slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <span>{member.name ?? member.email}</span>
+                <span className="truncate">{selectedMember.name ?? selectedMember.email}</span>
               </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+            ) : (
+              <span className="text-muted-foreground">Select person</span>
+            )}
+            <ChevronsUpDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[250px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search people..." />
+            <CommandList>
+              <CommandEmpty>No person found.</CommandEmpty>
+              <CommandGroup>
+                {teamMembers.map((member) => (
+                  <CommandItem
+                    key={member.id}
+                    value={`${member.name ?? ''} ${member.email}`}
+                    onSelect={() => {
+                      setUserId(member.id);
+                      setPersonOpen(false);
+                    }}
+                  >
+                    <Avatar className="h-5 w-5 shrink-0">
+                      <AvatarImage src={member.avatarUrl ?? undefined} />
+                      <AvatarFallback className="text-[10px]">
+                        {(member.name ?? member.email).slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span>{member.name ?? member.email}</span>
+                    {member.id === userId && (
+                      <Check className="ml-auto h-4 w-4" />
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
       <Button
         size="icon"
         variant="ghost"
@@ -181,6 +270,18 @@ function LinkEditRow({
 
 export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetadataTabProps) {
   const updateClient = useUpdateClient();
+  const { data: allClients } = useClients();
+
+  // Gather unique roles from all clients for autocomplete
+  const existingRoles = useMemo(() => {
+    const roles = new Set<string>();
+    allClients?.forEach((c) => {
+      c.metadata?.leads?.forEach((lead: { role: string }) => {
+        if (lead.role) roles.add(lead.role);
+      });
+    });
+    return Array.from(roles).sort();
+  }, [allClients]);
 
   const [leads, setLeads] = useState<LeadData[]>(client.metadata?.leads ?? []);
   const [links, setLinks] = useState<LinkData[]>(client.metadata?.links ?? []);
@@ -193,18 +294,24 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
   const [slackChannelUrl, setSlackChannelUrl] = useState(client.metadata?.slackChannelUrl ?? '');
   const [editingSlack, setEditingSlack] = useState(false);
 
+  // Sync data from server but preserve editing state
+  const clientId = client.id;
   useEffect(() => {
     setLeads(client.metadata?.leads ?? []);
     setLinks(client.metadata?.links ?? []);
+    setSlackChannelUrl(client.metadata?.slackChannelUrl ?? '');
+  }, [client.metadata]);
+
+  // Reset editing state only when navigating to a different client
+  useEffect(() => {
     setEditingLeads(false);
     setEditingLeadIndex(null);
     setIsAddingLead(false);
     setEditingLinks(false);
     setEditingLinkIndex(null);
     setIsAddingLink(false);
-    setSlackChannelUrl(client.metadata?.slackChannelUrl ?? '');
     setEditingSlack(false);
-  }, [client]);
+  }, [clientId]);
 
   const persist = useCallback(
     (newLeads: LeadData[], newLinks: LinkData[]) => {
@@ -236,7 +343,11 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
         : [...leads, lead];
     setLeads(newLeads);
     setEditingLeadIndex(null);
-    setIsAddingLead(false);
+    // Stay in editing mode — don't exit isAddingLead for new leads,
+    // just clear the form so user can add another or click Done
+    if (index === null) {
+      setIsAddingLead(false);
+    }
     persist(newLeads, links);
   };
 
@@ -336,6 +447,7 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
                     key={index}
                     initial={lead}
                     teamMembers={teamMembers}
+                    existingRoles={existingRoles}
                     onSave={(updated) => handleSaveLead(index, updated)}
                     onCancel={() => setEditingLeadIndex(null)}
                   />
@@ -385,6 +497,7 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
             {editingLeads && isAddingLead && (
               <LeadEditRow
                 teamMembers={teamMembers}
+                existingRoles={existingRoles}
                 onSave={(lead) => handleSaveLead(null, lead)}
                 onCancel={() => setIsAddingLead(false)}
               />
