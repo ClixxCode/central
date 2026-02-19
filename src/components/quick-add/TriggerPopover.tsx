@@ -12,7 +12,7 @@ import { useQuickAddUsers } from '@/lib/hooks/useQuickAdd';
 import { parseNaturalDate, getDateSuggestions } from '@/lib/utils/parse-natural-date';
 import { cn } from '@/lib/utils';
 
-export type TriggerMode = '#' | '@' | '!' | '+';
+export type TriggerMode = '#' | '@' | '!' | '+' | '/';
 
 export interface BoardSelection {
   boardId: string;
@@ -39,16 +39,24 @@ export interface StatusSelection {
   color: string;
 }
 
+export interface SectionSelection {
+  id: string;
+  label: string;
+  color: string;
+}
+
 interface TriggerPopoverProps {
   mode: TriggerMode;
   query: string;
   position: { top: number; left: number };
   selectedBoardId?: string;
   statusOptions?: { id: string; label: string; color: string; position: number }[];
+  sectionOptions?: { id: string; label: string; color: string; position: number }[];
   onSelectBoard: (board: BoardSelection) => void;
   onSelectUser: (user: UserSelection) => void;
   onSelectDate: (date: DateSelection) => void;
   onSelectStatus: (status: StatusSelection) => void;
+  onSelectSection: (section: SectionSelection) => void;
   onClose: () => void;
 }
 
@@ -58,10 +66,12 @@ export function TriggerPopover({
   position,
   selectedBoardId,
   statusOptions,
+  sectionOptions,
   onSelectBoard,
   onSelectUser,
   onSelectDate,
   onSelectStatus,
+  onSelectSection,
   onClose,
 }: TriggerPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -118,6 +128,16 @@ export function TriggerPopover({
         />
       )}
       {mode === '+' && (
+        <SectionList
+          query={query}
+          sectionOptions={sectionOptions ?? []}
+          activeIndex={activeIndex}
+          setActiveIndex={setActiveIndex}
+          onSelect={onSelectSection}
+          onClose={onClose}
+        />
+      )}
+      {mode === '/' && (
         <StatusList
           query={query}
           statusOptions={statusOptions ?? []}
@@ -479,6 +499,72 @@ function StatusList({
         >
           <span
             className="h-3 w-3 rounded-full shrink-0"
+            style={{ backgroundColor: item.color }}
+          />
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// --- Section list ---
+function SectionList({
+  query,
+  sectionOptions,
+  activeIndex,
+  setActiveIndex,
+  onSelect,
+  onClose,
+}: {
+  query: string;
+  sectionOptions: { id: string; label: string; color: string; position: number }[];
+  activeIndex: number;
+  setActiveIndex: (i: number) => void;
+  onSelect: (section: SectionSelection) => void;
+  onClose: () => void;
+}) {
+  const lowerQuery = query.toLowerCase();
+
+  const items = React.useMemo(() => {
+    const sorted = [...sectionOptions].sort((a, b) => a.position - b.position);
+    if (!lowerQuery) return sorted;
+    return sorted.filter((s) => s.label.toLowerCase().includes(lowerQuery));
+  }, [sectionOptions, lowerQuery]);
+
+  const handleSelect = useCallback(
+    (index: number) => {
+      if (items[index]) {
+        onSelect({ id: items[index].id, label: items[index].label, color: items[index].color });
+      }
+    },
+    [items, onSelect]
+  );
+
+  useListKeyboard(items.length, activeIndex, setActiveIndex, handleSelect, onClose);
+
+  if (sectionOptions.length === 0) {
+    return <div className="p-3 text-sm text-muted-foreground">No sections on this board</div>;
+  }
+
+  if (items.length === 0) {
+    return <div className="p-3 text-sm text-muted-foreground">No matching section</div>;
+  }
+
+  return (
+    <div className="py-1">
+      {items.map((item, i) => (
+        <button
+          key={item.id}
+          className={cn(
+            'flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent',
+            i === activeIndex && 'bg-accent'
+          )}
+          onClick={() => onSelect({ id: item.id, label: item.label, color: item.color })}
+          onMouseEnter={() => setActiveIndex(i)}
+        >
+          <span
+            className="h-3 w-3 rounded-sm shrink-0"
             style={{ backgroundColor: item.color }}
           />
           <span>{item.label}</span>

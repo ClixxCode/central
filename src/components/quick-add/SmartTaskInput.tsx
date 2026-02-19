@@ -10,6 +10,7 @@ import {
   type UserSelection,
   type DateSelection,
   type StatusSelection,
+  type SectionSelection,
 } from './TriggerPopover';
 
 export interface PasteItem {
@@ -18,10 +19,10 @@ export interface PasteItem {
 }
 
 export interface InputPill {
-  type: 'board' | 'assignee' | 'date' | 'status';
+  type: 'board' | 'assignee' | 'date' | 'status' | 'section';
   id: string;
   label: string;
-  data: BoardSelection | UserSelection | DateSelection | StatusSelection;
+  data: BoardSelection | UserSelection | DateSelection | StatusSelection | SectionSelection;
 }
 
 interface SmartTaskInputProps {
@@ -30,15 +31,18 @@ interface SmartTaskInputProps {
   onUserSelect: (user: UserSelection) => void;
   onDateSelect: (date: DateSelection) => void;
   onStatusSelect: (status: StatusSelection) => void;
+  onSectionSelect: (section: SectionSelection) => void;
   onBoardRemove: () => void;
   onUserRemove: (userId: string) => void;
   onDateRemove: () => void;
   onStatusRemove: () => void;
+  onSectionRemove: () => void;
   onSubmit?: () => void;
   onMultiLinePaste?: (items: PasteItem[]) => void;
   hasBoardSelected?: boolean;
   selectedBoardId?: string;
   statusOptions?: { id: string; label: string; color: string; position: number }[];
+  sectionOptions?: { id: string; label: string; color: string; position: number }[];
   pills: InputPill[];
   placeholder?: string;
   autoFocus?: boolean;
@@ -50,17 +54,20 @@ export function SmartTaskInput({
   onUserSelect,
   onDateSelect,
   onStatusSelect,
+  onSectionSelect,
   onBoardRemove,
   onUserRemove,
   onDateRemove,
   onStatusRemove,
+  onSectionRemove,
   onSubmit,
   onMultiLinePaste,
   hasBoardSelected,
   selectedBoardId,
   statusOptions,
+  sectionOptions,
   pills,
-  placeholder = 'Task name... use # board, @ assignee, ! date, + status',
+  placeholder = 'Task name... use # board, @ assignee, ! date, / status, + section',
   autoFocus = true,
 }: SmartTaskInputProps) {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -116,7 +123,7 @@ export function SmartTaskInput({
 
     for (let i = cursorPos - 1; i >= 0; i--) {
       const ch = text[i];
-      if (ch === '#' || ch === '@' || ch === '!' || ch === '+') {
+      if (ch === '#' || ch === '@' || ch === '!' || ch === '+' || ch === '/') {
         // Must be preceded by whitespace or at start
         if (i === 0 || /\s/.test(text[i - 1])) {
           triggerPos = i;
@@ -200,6 +207,7 @@ export function SmartTaskInput({
             else if (pillType === 'assignee') onUserRemove(pillId);
             else if (pillType === 'date') onDateRemove();
             else if (pillType === 'status') onStatusRemove();
+            else if (pillType === 'section') onSectionRemove();
 
             onTitleChange(extractTitle());
             return;
@@ -219,6 +227,7 @@ export function SmartTaskInput({
             else if (pillType === 'assignee') onUserRemove(pillId);
             else if (pillType === 'date') onDateRemove();
             else if (pillType === 'status') onStatusRemove();
+            else if (pillType === 'section') onSectionRemove();
 
             onTitleChange(extractTitle());
           }
@@ -237,7 +246,7 @@ export function SmartTaskInput({
         onSubmit();
       }
     },
-    [trigger, onBoardRemove, onUserRemove, onDateRemove, onStatusRemove, onTitleChange, extractTitle, onSubmit]
+    [trigger, onBoardRemove, onUserRemove, onDateRemove, onStatusRemove, onSectionRemove, onTitleChange, extractTitle, onSubmit]
   );
 
   // Intercept multi-line pastes
@@ -304,7 +313,7 @@ export function SmartTaskInput({
 
   // Insert a pill span replacing the trigger text
   const insertPill = useCallback(
-    (type: 'board' | 'assignee' | 'date' | 'status', id: string, label: string, colorClasses: string) => {
+    (type: 'board' | 'assignee' | 'date' | 'status' | 'section', id: string, label: string, colorClasses: string) => {
       if (!editorRef.current || !trigger) return;
 
       const sel = window.getSelection();
@@ -393,6 +402,14 @@ export function SmartTaskInput({
     [insertPill, onStatusSelect]
   );
 
+  const handleSectionSelect = useCallback(
+    (section: SectionSelection) => {
+      insertPill('section', section.id, section.label, 'bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300');
+      onSectionSelect(section);
+    },
+    [insertPill, onSectionSelect]
+  );
+
   return (
     <div className={cn('relative', trigger && 'z-50')}>
       <div
@@ -419,10 +436,12 @@ export function SmartTaskInput({
           position={trigger.position}
           selectedBoardId={selectedBoardId}
           statusOptions={statusOptions}
+          sectionOptions={sectionOptions}
           onSelectBoard={handleBoardSelect}
           onSelectUser={handleUserSelect}
           onSelectDate={handleDateSelect}
           onSelectStatus={handleStatusSelect}
+          onSelectSection={handleSectionSelect}
           onClose={() => setTrigger(null)}
         />
       )}

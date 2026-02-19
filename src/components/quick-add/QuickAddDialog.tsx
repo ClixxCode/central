@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useCallback, useState } from 'react';
 import { format } from 'date-fns';
-import { Building2, CalendarIcon, ChevronDown, CircleDot, User } from 'lucide-react';
+import { Building2, CalendarIcon, ChevronDown, CircleDot, LayoutGrid, User } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +52,8 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
+  const [section, setSection] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [pasteItems, setPasteItems] = useState<PasteItem[] | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -61,6 +63,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
   const assigneeDropdownRef = React.useRef<HTMLDivElement>(null);
   const dateDropdownRef = React.useRef<HTMLDivElement>(null);
   const statusDropdownRef = React.useRef<HTMLDivElement>(null);
+  const sectionDropdownRef = React.useRef<HTMLDivElement>(null);
   const addMenuRef = React.useRef<HTMLDivElement>(null);
 
   const queryClient = useQueryClient();
@@ -155,16 +158,19 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
         setStatusDropdownOpen(false);
       }
+      if (sectionDropdownRef.current && !sectionDropdownRef.current.contains(e.target as Node)) {
+        setSectionDropdownOpen(false);
+      }
       if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
         setAddMenuOpen(false);
       }
     }
-    const anyOpen = boardDropdownOpen || assigneeDropdownOpen || dateDropdownOpen || statusDropdownOpen || addMenuOpen;
+    const anyOpen = boardDropdownOpen || assigneeDropdownOpen || dateDropdownOpen || statusDropdownOpen || sectionDropdownOpen || addMenuOpen;
     if (anyOpen) {
       document.addEventListener('mousedown', handleClick);
       return () => document.removeEventListener('mousedown', handleClick);
     }
-  }, [boardDropdownOpen, assigneeDropdownOpen, dateDropdownOpen, statusDropdownOpen, addMenuOpen]);
+  }, [boardDropdownOpen, assigneeDropdownOpen, dateDropdownOpen, statusDropdownOpen, sectionDropdownOpen, addMenuOpen]);
 
   const resetForm = useCallback(() => {
     setTitle('');
@@ -173,6 +179,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
     setAssignees([]);
     setDueDate(null);
     setStatus(null);
+    setSection(null);
     setPills([]);
     setPasteItems(null);
     setAddMenuOpen(false);
@@ -193,12 +200,13 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
   const handleBoardSelect = useCallback((board: BoardSelection) => {
     setSelectedBoard(board);
     setStatus(null); // Reset status to pick default from new board
+    setSection(null); // Reset section for new board
     // Clear assignees when switching to personal board
     if (board.boardId === personalBoard?.id) {
       setAssignees([]);
-      setPills((prev) => prev.filter((p) => p.type !== 'board' && p.type !== 'assignee'));
+      setPills((prev) => prev.filter((p) => p.type !== 'board' && p.type !== 'assignee' && p.type !== 'section'));
     } else {
-      setPills((prev) => prev.filter((p) => p.type !== 'board'));
+      setPills((prev) => prev.filter((p) => p.type !== 'board' && p.type !== 'section'));
     }
     setPills((prev) => [
       ...prev,
@@ -257,6 +265,19 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
     setPills((prev) => prev.filter((p) => p.type !== 'status'));
   }, []);
 
+  const handleSectionSelect = useCallback((sectionSel: { id: string; label: string; color: string }) => {
+    setSection(sectionSel.id);
+    setPills((prev) => {
+      const filtered = prev.filter((p) => p.type !== 'section');
+      return [...filtered, { type: 'section' as const, id: sectionSel.id, label: sectionSel.label, data: sectionSel }];
+    });
+  }, []);
+
+  const handleSectionRemove = useCallback(() => {
+    setSection(null);
+    setPills((prev) => prev.filter((p) => p.type !== 'section'));
+  }, []);
+
   const handleBoardFromDropdown = useCallback(
     (board: BoardSelection) => {
       handleBoardSelect(board);
@@ -280,6 +301,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
         boardId: selectedBoard.boardId,
         title: title.trim(),
         status: statusToUse,
+        section: section ?? undefined,
         assigneeIds,
         dueDate: dueDate ? format(dueDate.date, 'yyyy-MM-dd') : undefined,
         descriptionJson: description.trim()
@@ -304,7 +326,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
         },
       }
     );
-  }, [selectedBoard, title, status, boardData, assignees, dueDate, description, createTask, resetForm, onOpenChange, isPersonalBoard, currentUser, onTaskCreatedAndEdit, clients]);
+  }, [selectedBoard, title, status, section, boardData, assignees, dueDate, description, createTask, resetForm, onOpenChange, isPersonalBoard, currentUser, onTaskCreatedAndEdit, clients]);
 
   const handleBatchCreate = useCallback(async () => {
     if (!pasteItems || !selectedBoard) return;
@@ -329,6 +351,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
         boardId: selectedBoard.boardId,
         title: item.title,
         status: statusToUse,
+        section: section ?? undefined,
         assigneeIds: assigneeIdList,
         dueDate: dueDateStr,
         ...(item.isSubtask && lastParentTaskId ? { parentTaskId: lastParentTaskId } : {}),
@@ -383,15 +406,18 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
           onUserSelect={handleUserSelect}
           onDateSelect={handleDateSelect}
           onStatusSelect={handleStatusSelect}
+          onSectionSelect={handleSectionSelect}
           onBoardRemove={handleBoardRemove}
           onUserRemove={handleUserRemove}
           onDateRemove={handleDateRemove}
           onStatusRemove={handleStatusRemove}
+          onSectionRemove={handleSectionRemove}
           onSubmit={handleSubmit}
           onMultiLinePaste={setPasteItems}
           hasBoardSelected={!!selectedBoard}
           selectedBoardId={selectedBoard?.boardId}
           statusOptions={boardData?.statusOptions}
+          sectionOptions={boardData?.sectionOptions}
           pills={pills}
           autoFocus={open}
         />
@@ -425,6 +451,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                   setAssigneeDropdownOpen(false);
                   setDateDropdownOpen(false);
                   setStatusDropdownOpen(false);
+                  setSectionDropdownOpen(false);
                 }}
                 className={cn(
                   'gap-1 text-xs h-8 px-2',
@@ -514,6 +541,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                   setBoardDropdownOpen(false);
                   setDateDropdownOpen(false);
                   setStatusDropdownOpen(false);
+                  setSectionDropdownOpen(false);
                 }}
                 className={cn(
                   'gap-1 text-xs h-8 px-2',
@@ -587,6 +615,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                   setBoardDropdownOpen(false);
                   setAssigneeDropdownOpen(false);
                   setStatusDropdownOpen(false);
+                  setSectionDropdownOpen(false);
                 }}
                 className={cn(
                   'gap-1 text-xs h-8 px-2',
@@ -651,6 +680,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                         setBoardDropdownOpen(false);
                         setAssigneeDropdownOpen(false);
                         setDateDropdownOpen(false);
+                        setSectionDropdownOpen(false);
                       }}
                       className={cn(
                         'gap-1 text-xs h-8 px-2',
@@ -703,6 +733,95 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                 );
               })()}
             </div>
+            {/* Section selector - only if board has sections */}
+            {boardData?.sectionOptions && boardData.sectionOptions.length > 0 && (
+              <div ref={sectionDropdownRef} className="relative">
+                {(() => {
+                  const currentSection = boardData.sectionOptions.find((s) => s.id === section);
+                  return (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        onClick={() => {
+                          setSectionDropdownOpen(!sectionDropdownOpen);
+                          setBoardDropdownOpen(false);
+                          setAssigneeDropdownOpen(false);
+                          setDateDropdownOpen(false);
+                          setStatusDropdownOpen(false);
+                        }}
+                        className={cn(
+                          'gap-1 text-xs h-8 px-2',
+                          currentSection && 'border-border'
+                        )}
+                        style={currentSection?.color ? {
+                          borderColor: currentSection.color + '40',
+                          color: currentSection.color,
+                          backgroundColor: currentSection.color + '14',
+                        } : undefined}
+                      >
+                        {currentSection ? (
+                          <>
+                            <span
+                              className="h-2.5 w-2.5 rounded-sm"
+                              style={{ backgroundColor: currentSection.color }}
+                            />
+                            {currentSection.label}
+                          </>
+                        ) : (
+                          <>
+                            <LayoutGrid className="h-3.5 w-3.5" />
+                            Section
+                          </>
+                        )}
+                      </Button>
+
+                      {sectionDropdownOpen && (
+                        <div className="absolute bottom-full left-0 z-50 mb-1 min-w-[200px] max-h-[300px] overflow-y-auto rounded-md border bg-popover shadow-lg py-1">
+                          <button
+                            type="button"
+                            className={cn(
+                              'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
+                              !section && 'bg-accent/50 font-medium'
+                            )}
+                            onClick={() => {
+                              setSection(null);
+                              setSectionDropdownOpen(false);
+                            }}
+                          >
+                            <span className="text-muted-foreground">None</span>
+                          </button>
+                          {[...boardData.sectionOptions]
+                            .sort((a, b) => a.position - b.position)
+                            .map((opt) => (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                className={cn(
+                                  'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
+                                  opt.id === section && 'bg-accent/50 font-medium'
+                                )}
+                                onClick={() => {
+                                  setSection(opt.id);
+                                  setSectionDropdownOpen(false);
+                                }}
+                              >
+                                <span
+                                  className="h-2.5 w-2.5 rounded-sm"
+                                  style={{ backgroundColor: opt.color }}
+                                />
+                                <span>{opt.label}</span>
+                              </button>
+                            ))}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
           <div className="flex items-center gap-2 ml-auto">
             <Button variant="ghost" size="sm" type="button" onClick={() => handleClose(false)}>
               Cancel
