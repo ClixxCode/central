@@ -928,6 +928,8 @@ export function TaskModal({
                                             ? assigneeIds.filter((id) => id !== user.id)
                                             : [...assigneeIds, user.id];
                                           setAssigneeIds(newAssigneeIds);
+                                          setAssigneeSearch('');
+                                          setAssigneeHighlight(0);
                                           if (isAutoSaveEnabled) {
                                             autoSave({ assigneeIds: newAssigneeIds });
                                           }
@@ -954,6 +956,8 @@ export function TaskModal({
                                           ? assigneeIds.filter((id) => id !== user.id)
                                           : [...assigneeIds, user.id];
                                         setAssigneeIds(newAssigneeIds);
+                                        setAssigneeSearch('');
+                                        setAssigneeHighlight(0);
                                         if (isAutoSaveEnabled) {
                                           autoSave({ assigneeIds: newAssigneeIds });
                                         }
