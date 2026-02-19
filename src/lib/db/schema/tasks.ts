@@ -23,7 +23,7 @@ export interface RecurringConfig {
   daysOfWeek?: number[]; // For weekly: [0-6] where 0 = Sunday
   dayOfMonth?: number; // For monthly: 1-31
   monthlyPattern?: 'dayOfMonth' | 'dayOfWeek'; // For monthly/quarterly: which pattern to use
-  weekOfMonth?: number; // 1-4 or -1 (last) — used with monthlyPattern 'dayOfWeek'
+  weekOfMonth?: number; // 1-4, -1 (last), or -2 (last full business week) — used with monthlyPattern 'dayOfWeek'
   monthlyDayOfWeek?: number; // 0-6 (Sun-Sat) — used with monthlyPattern 'dayOfWeek'
   endDate?: string; // ISO date string
   endAfterOccurrences?: number;

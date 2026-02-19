@@ -50,6 +50,7 @@ const weekOfMonthOptions = [
   { value: '3', label: '3rd' },
   { value: '4', label: '4th' },
   { value: '-1', label: 'Last' },
+  { value: '-2', label: 'Last full week' },
 ];
 
 type EndType = 'never' | 'date' | 'occurrences';
@@ -319,9 +320,16 @@ export function RecurringPicker({
                 <div className="flex items-center gap-2">
                   <Select
                     value={String(weekOfMonth)}
-                    onValueChange={(v) => setWeekOfMonth(parseInt(v))}
+                    onValueChange={(v) => {
+                      const val = parseInt(v);
+                      setWeekOfMonth(val);
+                      // Last full week only supports Mon-Fri; clamp weekend selections
+                      if (val === -2 && (monthlyDayOfWeek === 0 || monthlyDayOfWeek === 6)) {
+                        setMonthlyDayOfWeek(1); // Default to Monday
+                      }
+                    }}
                   >
-                    <SelectTrigger className="h-8 w-[80px]">
+                    <SelectTrigger className="h-8 w-[120px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -340,11 +348,17 @@ export function RecurringPicker({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {daySelectLabels.map((label, index) => (
-                        <SelectItem key={index} value={String(index)}>
-                          {label}
-                        </SelectItem>
-                      ))}
+                      {daySelectLabels
+                        .map((label, index) => ({ label, index }))
+                        .filter(({ index }) =>
+                          // Last full week: only Mon-Fri
+                          weekOfMonth === -2 ? index >= 1 && index <= 5 : true
+                        )
+                        .map(({ label, index }) => (
+                          <SelectItem key={index} value={String(index)}>
+                            {label}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

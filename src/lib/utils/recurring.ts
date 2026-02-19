@@ -215,6 +215,11 @@ export function getNthWeekdayOfMonth(
   weekOfMonth: number,
   dayOfWeek: number
 ): Date {
+  if (weekOfMonth === -2) {
+    // Last full business week: find the last Mon–Fri span fully within the month
+    return getLastFullBusinessWeekDay(year, month, dayOfWeek);
+  }
+
   if (weekOfMonth === -1) {
     // Find the last occurrence: start from last day of month, walk backwards
     const last = lastDayOfMonth(new Date(year, month, 1));
@@ -235,6 +240,37 @@ export function getNthWeekdayOfMonth(
   // Now d is the 1st occurrence; advance (weekOfMonth - 1) weeks
   d = addWeeks(d, weekOfMonth - 1);
   return d;
+}
+
+/**
+ * Find a weekday within the last full business week (Mon–Fri) of the month.
+ * The last full business week is the last Mon–Fri span where Friday ≤ last day of month.
+ * @param dayOfWeek - 1 (Mon) through 5 (Fri)
+ */
+function getLastFullBusinessWeekDay(
+  year: number,
+  month: number,
+  dayOfWeek: number
+): Date {
+  const last = lastDayOfMonth(new Date(year, month, 1));
+
+  // Find the last Friday in the month
+  let friday = last;
+  while (getDay(friday) !== 5) {
+    friday = addDays(friday, -1);
+  }
+
+  // Monday of that week
+  const monday = addDays(friday, -4);
+
+  // If Monday is in the previous month, go back one week
+  if (monday.getMonth() !== month) {
+    friday = addDays(friday, -7);
+    const prevMonday = addDays(friday, -4);
+    return addDays(prevMonday, dayOfWeek - 1);
+  }
+
+  return addDays(monday, dayOfWeek - 1);
 }
 
 /**
@@ -405,6 +441,7 @@ function getWeekOfMonthLabel(weekOfMonth: number): string {
     case 3: return '3rd';
     case 4: return '4th';
     case -1: return 'last';
+    case -2: return 'last full week';
     default: return `${weekOfMonth}th`;
   }
 }
