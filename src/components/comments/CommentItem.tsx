@@ -59,10 +59,15 @@ export function CommentItem({
   const editorRef = useRef<TaskEditorRef>(null);
   const commentRef = useRef<HTMLDivElement>(null);
 
-  // Scroll into view and flash highlight when this comment is highlighted
+  const [showHighlight, setShowHighlight] = useState(false);
+
+  // Scroll into view and flash highlight when this comment is highlighted, then fade after 2s
   useEffect(() => {
     if (isHighlighted && commentRef.current) {
       commentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setShowHighlight(true);
+      const timer = setTimeout(() => setShowHighlight(false), 2000);
+      return () => clearTimeout(timer);
     }
   }, [isHighlighted]);
 
@@ -123,11 +128,11 @@ export function CommentItem({
     <div
       ref={commentRef}
       className={cn(
-        'group relative flex gap-3 rounded-none p-3 transition-colors',
+        'group relative flex gap-3 rounded-none p-3 transition-all duration-700',
         'hover:bg-muted/50',
         isReply ? 'border-l-2 border-l-border' : 'border-l-[3px] border-l-primary/30',
         isDeleting && 'pointer-events-none opacity-50',
-        isHighlighted && 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-500/10 animate-pulse-once'
+        showHighlight && 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-500/10'
       )}
     >
       {/* Author avatar */}
