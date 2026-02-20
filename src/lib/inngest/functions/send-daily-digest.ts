@@ -107,6 +107,7 @@ export const sendDailyDigest = inngest.createFunction(
           dueDate: tasks.dueDate,
           boardId: tasks.boardId,
           boardName: boards.name,
+          statusOptions: boards.statusOptions,
           clientId: boards.clientId,
           clientName: clients.name,
           clientSlug: clients.slug,
@@ -129,15 +130,19 @@ export const sendDailyDigest = inngest.createFunction(
       for (const task of allTasks) {
         if (!task.dueDate) continue;
 
+        // Resolve status ID to label
+        const statusOption = task.statusOptions?.find((s) => s.id === task.status);
+        const statusLabel = statusOption?.label ?? task.status;
+
         // Skip completed tasks
-        if (task.status.toLowerCase() === 'complete' || task.status.toLowerCase() === 'done') {
+        if (statusLabel.toLowerCase() === 'complete' || statusLabel.toLowerCase() === 'done') {
           continue;
         }
 
         const digestTask: DigestTask = {
           id: task.id,
           title: task.title,
-          status: task.status,
+          status: statusLabel,
           dueDate: task.dueDate,
           clientName: task.clientName,
           boardName: task.boardName,

@@ -78,7 +78,7 @@ function TaskSection({
           key={task.id}
           title={task.title}
           status={task.status}
-          dueDate={task.dueDate ? formatEmailDate(task.dueDate) : undefined}
+          dueDate={task.dueDate}
           clientName={task.clientName}
           boardName={task.boardName}
         />
@@ -113,7 +113,10 @@ function DailyDigestEmail({ data }: { data: DailyDigestEmailData }) {
             title="Overdue"
             titleColor="#f87171"
             borderColor="#5c2b2b"
-            tasks={data.tasksOverdue}
+            tasks={data.tasksOverdue.map((t) => ({
+              ...t,
+              dueDate: t.dueDate ? formatEmailDate(t.dueDate) : undefined,
+            }))}
           />
           <TaskSection
             title="Due Today"
