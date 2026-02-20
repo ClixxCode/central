@@ -21,6 +21,7 @@ import { SmartTaskInput, type InputPill, type PasteItem } from './SmartTaskInput
 import { MultiLinePasteDialog } from './MultiLinePasteDialog';
 import { cn } from '@/lib/utils';
 import { getDateSuggestions } from '@/lib/utils/parse-natural-date';
+import { useIgnoreWeekends } from '@/lib/hooks/useIgnoreWeekends';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Calendar } from '@/components/ui/calendar';
 import { createTask as createTaskAction } from '@/lib/actions/tasks';
@@ -41,6 +42,7 @@ interface QuickAddDialogProps {
 }
 
 export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: QuickAddDialogProps) {
+  const ignoreWeekends = useIgnoreWeekends();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedBoard, setSelectedBoard] = useState<BoardSelection | null>(null);
@@ -630,7 +632,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                 <div className="absolute bottom-full left-0 z-50 mb-1 w-auto rounded-md border bg-popover shadow-lg">
                   {/* Quick date suggestions */}
                   <div className="py-1 border-b">
-                    {getDateSuggestions().map((s) => (
+                    {getDateSuggestions(ignoreWeekends).map((s) => (
                       <button
                         key={s.label}
                         type="button"
@@ -659,6 +661,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                       }}
                       month={calendarMonth}
                       onMonthChange={setCalendarMonth}
+                      hideWeekends={ignoreWeekends}
                     />
                   </div>
                 </div>

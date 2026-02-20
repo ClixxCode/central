@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useClients } from '@/lib/hooks/useClients';
 import { getDateSuggestions } from '@/lib/utils/parse-natural-date';
+import { useIgnoreWeekends } from '@/lib/hooks/useIgnoreWeekends';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Calendar } from '@/components/ui/calendar';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
@@ -69,6 +70,7 @@ export function MultiSelectFloatingBar({
   selectedTasksHaveAssignees,
   bottomOffset,
 }: MultiSelectFloatingBarProps) {
+  const ignoreWeekends = useIgnoreWeekends();
   // Pending edits
   const [pendingStatus, setPendingStatus] = React.useState<string | undefined>();
   const [pendingSection, setPendingSection] = React.useState<string | null | undefined>();
@@ -419,7 +421,7 @@ export function MultiSelectFloatingBar({
                   <X className="h-3.5 w-3.5" />
                   Clear date
                 </button>
-                {getDateSuggestions().map((s) => (
+                {getDateSuggestions(ignoreWeekends).map((s) => (
                   <button
                     key={s.label}
                     type="button"
@@ -447,6 +449,7 @@ export function MultiSelectFloatingBar({
                   }}
                   month={calendarMonth}
                   onMonthChange={setCalendarMonth}
+                  hideWeekends={ignoreWeekends}
                 />
               </div>
             </div>

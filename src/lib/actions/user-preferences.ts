@@ -307,6 +307,41 @@ export async function updatePersonalListVisibility(hidden: boolean): Promise<{
 }
 
 /**
+ * Update ignore weekends preference
+ */
+export async function updateIgnoreWeekends(ignored: boolean): Promise<{
+  success: boolean;
+  preferences?: UserPreferences;
+  error?: string;
+}> {
+  const user = await requireAuth();
+
+  const dbUser = await db.query.users.findFirst({
+    where: eq(users.id, user.id),
+    columns: { preferences: true },
+  });
+
+  if (!dbUser) {
+    return { success: false, error: 'User not found' };
+  }
+
+  const currentPrefs = mergeWithDefaults(dbUser.preferences as UserPreferences | null);
+  const newPrefs: UserPreferences = {
+    ...currentPrefs,
+    ignoreWeekends: ignored,
+  };
+
+  await db
+    .update(users)
+    .set({ preferences: newPrefs, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+
+  revalidatePath('/settings/profile');
+
+  return { success: true, preferences: newPrefs };
+}
+
+/**
  * Update sidebar display preferences
  */
 export async function updateSidebarPreferences(input: {
@@ -448,6 +483,7 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
     hiddenColumns: prefs.hiddenColumns ?? DEFAULT_PREFERENCES.hiddenColumns,
     defaultView: prefs.defaultView ?? DEFAULT_PREFERENCES.defaultView,
     hidePersonalList: prefs.hidePersonalList ?? false,
+    ignoreWeekends: prefs.ignoreWeekends ?? true,
     priorityTaskIds: prefs.priorityTaskIds ?? [],
     myWorkFilters: prefs.myWorkFilters,
     personalTaskFilters: prefs.personalTaskFilters,

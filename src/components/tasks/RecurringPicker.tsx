@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
+import { useIgnoreWeekends } from '@/lib/hooks/useIgnoreWeekends';
 import { format, parseISO, isValid, getDay } from 'date-fns';
 import type { RecurringConfig } from '@/lib/db/schema/tasks';
 import { getRecurringLabel, getNthWeekdayOfMonth } from '@/lib/utils/recurring';
@@ -90,6 +91,7 @@ export function RecurringPicker({
   disabled = false,
   baseDueDate,
 }: RecurringPickerProps) {
+  const ignoreWeekends = useIgnoreWeekends();
   const [open, setOpen] = React.useState(false);
   const [endDatePickerOpen, setEndDatePickerOpen] = React.useState(false);
 
@@ -411,6 +413,7 @@ export function RecurringPicker({
                       setEndDatePickerOpen(false);
                     }}
                     initialFocus
+                    hideWeekends={ignoreWeekends}
                   />
                 </PopoverContent>
               </Popover>

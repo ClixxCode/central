@@ -19,7 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { updateProfile } from '@/lib/actions/profile';
-import { getUserPreferences, updatePersonalListVisibility } from '@/lib/actions/user-preferences';
+import { getUserPreferences, updatePersonalListVisibility, updateIgnoreWeekends } from '@/lib/actions/user-preferences';
 
 interface ProfilePageClientProps {
   user: {
@@ -99,6 +99,24 @@ export function ProfilePageClient({ user }: ProfilePageClientProps) {
     staleTime: 5 * 60 * 1000,
   });
   const [isTogglingPersonalList, setIsTogglingPersonalList] = React.useState(false);
+  const [isTogglingWeekends, setIsTogglingWeekends] = React.useState(false);
+
+  const handleToggleWeekends = async (checked: boolean) => {
+    setIsTogglingWeekends(true);
+    try {
+      const result = await updateIgnoreWeekends(checked);
+      if (result.success) {
+        queryClient.invalidateQueries({ queryKey: ['userPreferences'] });
+        toast.success(checked ? 'Weekends hidden from date pickers' : 'Weekends shown in date pickers');
+      } else {
+        toast.error(result.error ?? 'Failed to update preference');
+      }
+    } catch {
+      toast.error('Failed to update preference');
+    } finally {
+      setIsTogglingWeekends(false);
+    }
+  };
 
   const handleTogglePersonalList = async (checked: boolean) => {
     setIsTogglingPersonalList(true);
@@ -230,6 +248,30 @@ export function ProfilePageClient({ user }: ProfilePageClientProps) {
               checked={!userPrefs?.hidePersonalList}
               onCheckedChange={handleTogglePersonalList}
               disabled={isTogglingPersonalList || !userPrefs}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Weekends</CardTitle>
+          <CardDescription>
+            Hide weekends from date pickers and suggestions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Ignore Weekends</Label>
+              <p className="text-xs text-muted-foreground">
+                Date suggestions will skip to the next weekday and calendar pickers will hide Saturday and Sunday.
+              </p>
+            </div>
+            <Switch
+              checked={userPrefs?.ignoreWeekends ?? false}
+              onCheckedChange={handleToggleWeekends}
+              disabled={isTogglingWeekends || !userPrefs}
             />
           </div>
         </CardContent>

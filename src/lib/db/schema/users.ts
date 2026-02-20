@@ -27,6 +27,7 @@ export interface UserPreferences {
   hiddenColumns: string[];
   defaultView: 'table' | 'kanban';
   hidePersonalList?: boolean;
+  ignoreWeekends?: boolean;
   myWorkFilters?: SavedTaskFilters;
   personalTaskFilters?: SavedTaskFilters;
   todaysEvents?: {

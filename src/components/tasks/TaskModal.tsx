@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
+import { useIgnoreWeekends } from '@/lib/hooks/useIgnoreWeekends';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { TaskEditor, type TaskEditorRef } from '@/components/editor/TaskEditor';
@@ -159,6 +160,7 @@ export function TaskModal({
   taskBasePath,
   onOpenSubtask,
 }: TaskModalProps) {
+  const ignoreWeekends = useIgnoreWeekends();
   const editorRef = useRef<TaskEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadResolverRef = useRef<((file: File | null) => void) | null>(null);
@@ -760,6 +762,7 @@ export function TaskModal({
                               }
                             }}
                             initialFocus
+                            hideWeekends={ignoreWeekends}
                           />
                           {dueDate && (
                             <div className="border-t p-2">

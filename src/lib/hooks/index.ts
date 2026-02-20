@@ -166,4 +166,5 @@ export {
   extensionTokenKeys,
 } from './useExtensionTokens';
 export { useMyWorkPreferences } from './useMyWorkPreferences';
+export { useIgnoreWeekends } from './useIgnoreWeekends';
 export { useDragToScroll } from './useDragToScroll';

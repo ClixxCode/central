@@ -6,6 +6,7 @@ import { format, parseISO, isValid } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { useIgnoreWeekends } from '@/lib/hooks/useIgnoreWeekends';
 import {
   Popover,
   PopoverContent,
@@ -46,6 +47,7 @@ export function TaskDatePicker({
   showFlexibility = true,
   showRecurring = false,
 }: TaskDatePickerProps) {
+  const ignoreWeekends = useIgnoreWeekends();
   const [open, setOpen] = React.useState(false);
   const parsedDate = date ? parseISO(date) : undefined;
   const isDateValid = parsedDate && isValid(parsedDate);
@@ -105,6 +107,7 @@ export function TaskDatePicker({
             defaultMonth={isDateValid ? parsedDate : undefined}
             onSelect={handleSelect}
             initialFocus
+            hideWeekends={ignoreWeekends}
           />
           {showFlexibility && (
             <div className="border-t p-3">

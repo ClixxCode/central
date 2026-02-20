@@ -23,15 +23,22 @@ function Calendar({
   buttonVariant = "ghost",
   formatters,
   components,
+  hideWeekends,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"]
+  hideWeekends?: boolean
 }) {
   const defaultClassNames = getDefaultClassNames()
+
+  const hideWeekendChild = hideWeekends
+    ? "[&>:first-child]:hidden! [&>:last-child]:hidden!"
+    : undefined
 
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      hidden={hideWeekends ? { dayOfWeek: [0, 6] } : props.hidden}
       className={cn(
         "bg-background group/calendar p-3 [--cell-size:--spacing(8)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
@@ -82,19 +89,19 @@ function Calendar({
           defaultClassNames.dropdown
         ),
         caption_label: cn(
-          "select-none font-medium",
+          "select-none font-medium whitespace-nowrap",
           captionLayout === "label"
             ? "text-sm"
             : "rounded-md pl-2 pr-1 flex items-center gap-1 text-sm h-8 [&>svg]:text-muted-foreground [&>svg]:size-3.5",
           defaultClassNames.caption_label
         ),
         table: "w-full border-collapse",
-        weekdays: cn("flex", defaultClassNames.weekdays),
+        weekdays: cn("flex", hideWeekendChild, defaultClassNames.weekdays),
         weekday: cn(
           "text-muted-foreground rounded-md flex-1 font-normal text-[0.8rem] select-none",
           defaultClassNames.weekday
         ),
-        week: cn("flex w-full mt-2", defaultClassNames.week),
+        week: cn("flex w-full mt-2", hideWeekendChild, defaultClassNames.week),
         week_number_header: cn(
           "select-none w-(--cell-size)",
           defaultClassNames.week_number_header

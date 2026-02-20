@@ -10,6 +10,7 @@ import { useClients } from '@/lib/hooks/useClients';
 import { usePersonalBoard } from '@/lib/hooks/useBoards';
 import { useQuickAddUsers } from '@/lib/hooks/useQuickAdd';
 import { parseNaturalDate, getDateSuggestions } from '@/lib/utils/parse-natural-date';
+import { useIgnoreWeekends } from '@/lib/hooks/useIgnoreWeekends';
 import { cn } from '@/lib/utils';
 
 export type TriggerMode = '#' | '@' | '!' | '+' | '/';
@@ -74,6 +75,7 @@ export function TriggerPopover({
   onSelectSection,
   onClose,
 }: TriggerPopoverProps) {
+  const ignoreWeekends = useIgnoreWeekends();
   const ref = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -125,6 +127,7 @@ export function TriggerPopover({
           setActiveIndex={setActiveIndex}
           onSelect={onSelectDate}
           onClose={onClose}
+          ignoreWeekends={ignoreWeekends}
         />
       )}
       {mode === '+' && (
@@ -363,16 +366,18 @@ function DatePicker({
   setActiveIndex,
   onSelect,
   onClose,
+  ignoreWeekends,
 }: {
   query: string;
   activeIndex: number;
   setActiveIndex: (i: number) => void;
   onSelect: (date: DateSelection) => void;
   onClose: () => void;
+  ignoreWeekends?: boolean;
 }) {
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const parsed = query ? parseNaturalDate(query) : null;
-  const suggestions = getDateSuggestions();
+  const suggestions = getDateSuggestions(ignoreWeekends);
 
   // Build items: parsed result first (if any), then suggestions
   const items: DateSelection[] = React.useMemo(() => {
@@ -436,6 +441,7 @@ function DatePicker({
           }}
           month={calendarMonth}
           onMonthChange={setCalendarMonth}
+          hideWeekends={ignoreWeekends}
         />
       </div>
     </div>

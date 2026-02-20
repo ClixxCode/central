@@ -14,6 +14,7 @@ import {
   parse,
   isValid,
   isBefore,
+  isWeekend,
 } from 'date-fns';
 
 export interface ParsedDate {
@@ -166,9 +167,16 @@ export interface DateSuggestion {
   shortLabel: string;
 }
 
-export function getDateSuggestions(): DateSuggestion[] {
+function skipToWeekday(date: Date): Date {
+  if (isWeekend(date)) {
+    return nextMonday(date);
+  }
+  return date;
+}
+
+export function getDateSuggestions(ignoreWeekends?: boolean): DateSuggestion[] {
   const today = startOfDay(new Date());
-  return [
+  const suggestions: DateSuggestion[] = [
     { date: today, label: 'Today', shortLabel: 'Today' },
     { date: addDays(today, 1), label: 'Tomorrow', shortLabel: 'Tomorrow' },
     { date: nextMonday(today), label: format(nextMonday(today), "'Next' EEEE"), shortLabel: 'Next Mon' },
@@ -176,4 +184,18 @@ export function getDateSuggestions(): DateSuggestion[] {
     { date: addWeeks(today, 2), label: 'In 2 weeks', shortLabel: '2 weeks' },
     { date: addMonths(today, 1), label: 'Next month', shortLabel: 'Next month' },
   ];
+
+  if (!ignoreWeekends) return suggestions;
+
+  // Apply skipToWeekday and deduplicate by date
+  const seen = new Set<number>();
+  return suggestions.reduce<DateSuggestion[]>((acc, s) => {
+    const adjusted = skipToWeekday(s.date);
+    const key = adjusted.getTime();
+    if (!seen.has(key)) {
+      seen.add(key);
+      acc.push({ ...s, date: adjusted });
+    }
+    return acc;
+  }, []);
 }
