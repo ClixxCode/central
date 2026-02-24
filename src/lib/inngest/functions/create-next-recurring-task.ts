@@ -1,7 +1,7 @@
 import { inngest } from '../client';
 import { db } from '@/lib/db';
 import { tasks, taskAssignees, boards } from '@/lib/db/schema';
-import { eq, asc, sql } from 'drizzle-orm';
+import { eq, asc, sql, inArray } from 'drizzle-orm';
 import {
   calculateNextOccurrence,
   shouldGenerateNextOccurrence,
@@ -130,7 +130,7 @@ export const createNextRecurringTask = inngest.createFunction(
       const allAssignees = await db
         .select({ taskId: taskAssignees.taskId, userId: taskAssignees.userId })
         .from(taskAssignees)
-        .where(sql`${taskAssignees.taskId} = ANY(${subtaskIds})`);
+        .where(inArray(taskAssignees.taskId, subtaskIds));
 
       const assigneesByTask = new Map<string, string[]>();
       for (const a of allAssignees) {

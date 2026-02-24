@@ -825,11 +825,50 @@ export async function getRollupTasks(
     // Build task query conditions — exclude subtasks from rollup views
     const conditions = [inArray(tasks.boardId, sourceBoardIds), isNull(tasks.parentTaskId)];
 
+    // Build mappings from status/section ID to all equivalent IDs across source boards
+    // (different boards may use different IDs for the same label)
+    const statusIdToLabel = new Map<string, string>();
+    const labelToStatusIds = new Map<string, string[]>();
+    const sectionIdToLabel = new Map<string, string>();
+    const labelToSectionIds = new Map<string, string[]>();
+    for (const source of rollup.rollupSources) {
+      const sourceBoard = source.sourceBoard as { statusOptions?: StatusOption[]; sectionOptions?: SectionOption[] };
+      for (const status of sourceBoard?.statusOptions ?? []) {
+        statusIdToLabel.set(status.id, status.label);
+        const ids = labelToStatusIds.get(status.label) ?? [];
+        if (!ids.includes(status.id)) {
+          ids.push(status.id);
+          labelToStatusIds.set(status.label, ids);
+        }
+      }
+      for (const section of sourceBoard?.sectionOptions ?? []) {
+        sectionIdToLabel.set(section.id, section.label);
+        const ids = labelToSectionIds.get(section.label) ?? [];
+        if (!ids.includes(section.id)) {
+          ids.push(section.id);
+          labelToSectionIds.set(section.label, ids);
+        }
+      }
+    }
+
     // Apply filters
     if (filters?.status) {
-      const statuses = Array.isArray(filters.status)
+      const selectedIds = Array.isArray(filters.status)
         ? filters.status
         : [filters.status];
+      // Expand selected IDs to include equivalent IDs from other boards with the same label
+      const expandedIds = new Set<string>();
+      for (const id of selectedIds) {
+        const label = statusIdToLabel.get(id);
+        if (label) {
+          for (const equivalentId of labelToStatusIds.get(label) ?? []) {
+            expandedIds.add(equivalentId);
+          }
+        } else {
+          expandedIds.add(id);
+        }
+      }
+      const statuses = Array.from(expandedIds);
       if (filters.statusMode === 'is_not') {
         conditions.push(notInArray(tasks.status, statuses));
       } else {
@@ -842,7 +881,20 @@ export async function getRollupTasks(
         ? filters.section
         : [filters.section];
       const hasNoSection = sections.includes('__none__');
-      const actualSections = sections.filter((s) => s !== '__none__');
+      const selectedSections = sections.filter((s) => s !== '__none__');
+      // Expand selected section IDs to include equivalent IDs from other boards with the same label
+      const expandedSectionIds = new Set<string>();
+      for (const id of selectedSections) {
+        const label = sectionIdToLabel.get(id);
+        if (label) {
+          for (const equivalentId of labelToSectionIds.get(label) ?? []) {
+            expandedSectionIds.add(equivalentId);
+          }
+        } else {
+          expandedSectionIds.add(id);
+        }
+      }
+      const actualSections = Array.from(expandedSectionIds);
       const isNot = filters.sectionMode === 'is_not';
 
       if (isNot) {
@@ -1174,24 +1226,43 @@ export async function getRollupTasks(
     });
 
     // Aggregate status and section options from all source boards
+    // Deduplicate by label (not ID) since different boards may have different IDs for the same status
     const statusOptionsMap = new Map<string, StatusOption>();
     const sectionOptionsMap = new Map<string, SectionOption>();
+    // Map any status/section ID to its canonical ID (first seen for that label)
+    const canonicalStatusId = new Map<string, string>();
+    const canonicalSectionId = new Map<string, string>();
 
     for (const source of rollup.rollupSources) {
-      const sourceBoard = await db.query.boards.findFirst({
-        where: eq(boards.id, source.sourceBoardId),
-      });
+      const sourceBoard = source.sourceBoard as { statusOptions?: StatusOption[]; sectionOptions?: SectionOption[] };
 
       if (sourceBoard) {
-        for (const status of sourceBoard.statusOptions) {
-          if (!statusOptionsMap.has(status.id)) {
-            statusOptionsMap.set(status.id, status);
+        for (const status of sourceBoard.statusOptions ?? []) {
+          if (!statusOptionsMap.has(status.label)) {
+            statusOptionsMap.set(status.label, status);
           }
+          canonicalStatusId.set(status.id, statusOptionsMap.get(status.label)!.id);
         }
         for (const section of sourceBoard.sectionOptions ?? []) {
-          if (!sectionOptionsMap.has(section.id)) {
-            sectionOptionsMap.set(section.id, section);
+          if (!sectionOptionsMap.has(section.label)) {
+            sectionOptionsMap.set(section.label, section);
           }
+          canonicalSectionId.set(section.id, sectionOptionsMap.get(section.label)!.id);
+        }
+      }
+    }
+
+    // Normalize task statuses/sections to canonical IDs so tasks from different boards
+    // with the same status label are grouped together in kanban/swimlane views
+    for (const task of resultTasks) {
+      const canonical = canonicalStatusId.get(task.status);
+      if (canonical && canonical !== task.status) {
+        task.status = canonical;
+      }
+      if (task.section) {
+        const canonicalSec = canonicalSectionId.get(task.section);
+        if (canonicalSec && canonicalSec !== task.section) {
+          task.section = canonicalSec;
         }
       }
     }
