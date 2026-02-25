@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -60,6 +60,7 @@ export function CommentItem({
   const commentRef = useRef<HTMLDivElement>(null);
 
   const [showHighlight, setShowHighlight] = useState(false);
+  const [showAbsoluteTime, setShowAbsoluteTime] = useState(false);
 
   // Scroll into view and flash highlight when this comment is highlighted, then fade after 2s
   useEffect(() => {
@@ -118,9 +119,9 @@ export function CommentItem({
     toast.success('Link copied to clipboard');
   }, [comment.shortId]);
 
-  const timeAgo = formatDistanceToNow(new Date(comment.createdAt), {
-    addSuffix: true,
-  });
+  const createdDate = new Date(comment.createdAt);
+  const timeAgo = formatDistanceToNow(createdDate, { addSuffix: true });
+  const absoluteTime = format(createdDate, 'MMM d, yyyy h:mm a');
 
   const wasEdited = comment.updatedAt && comment.updatedAt > comment.createdAt;
 
@@ -152,7 +153,13 @@ export function CommentItem({
               ? 'Deleted user'
               : (comment.author!.name ?? comment.author!.email.split('@')[0]) + (isDeactivatedAuthor ? ' (deactivated)' : '')}
           </span>
-          <span className="text-xs text-muted-foreground">{timeAgo}</span>
+          <span
+            className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+            onClick={() => setShowAbsoluteTime(!showAbsoluteTime)}
+            title={showAbsoluteTime ? timeAgo : absoluteTime}
+          >
+            {showAbsoluteTime ? absoluteTime : timeAgo}
+          </span>
           {wasEdited && (
             <span className="text-xs text-muted-foreground">(edited)</span>
           )}
