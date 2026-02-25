@@ -1072,6 +1072,7 @@ export function TaskModal({
                           if (!descriptionFocused) {
                             const link = (e.target as HTMLElement).closest('a');
                             if (link?.href) {
+                              e.preventDefault();
                               window.open(link.href, '_blank', 'noopener,noreferrer');
                               return;
                             }
