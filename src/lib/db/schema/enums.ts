@@ -21,4 +21,5 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'task_due_soon',
   'task_overdue',
   'comment_added',
+  'reaction_added',
 ]);

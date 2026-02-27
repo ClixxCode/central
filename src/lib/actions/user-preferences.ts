@@ -20,6 +20,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
       dueDates: true,
       newComments: true,
       replies: true,
+      reactions: true,
       digest: 'instant',
     },
     slack: {
@@ -29,6 +30,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
       dueDates: true,
       newComments: true,
       replies: true,
+      reactions: true,
     },
     inApp: {
       enabled: true,
@@ -37,6 +39,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
       dueDates: false,
       newComments: true,
       replies: true,
+      reactions: true,
     },
   },
 };
@@ -84,6 +87,7 @@ export async function updateEmailPreferences(input: {
   dueDates?: boolean;
   newComments?: boolean;
   replies?: boolean;
+  reactions?: boolean;
   digest?: 'instant' | 'daily' | 'weekly' | 'none';
 }): Promise<{
   success: boolean;
@@ -117,6 +121,7 @@ export async function updateEmailPreferences(input: {
         ...(input.dueDates !== undefined && { dueDates: input.dueDates }),
         ...(input.newComments !== undefined && { newComments: input.newComments }),
         ...(input.replies !== undefined && { replies: input.replies }),
+        ...(input.reactions !== undefined && { reactions: input.reactions }),
         ...(input.digest !== undefined && { digest: input.digest }),
       },
     },
@@ -148,6 +153,7 @@ export async function updateSlackPreferences(input: {
   dueDates?: boolean;
   newComments?: boolean;
   replies?: boolean;
+  reactions?: boolean;
 }): Promise<{
   success: boolean;
   preferences?: UserPreferences;
@@ -182,6 +188,7 @@ export async function updateSlackPreferences(input: {
         ...(input.dueDates !== undefined && { dueDates: input.dueDates }),
         ...(input.newComments !== undefined && { newComments: input.newComments }),
         ...(input.replies !== undefined && { replies: input.replies }),
+        ...(input.reactions !== undefined && { reactions: input.reactions }),
       },
     },
   };
@@ -210,6 +217,7 @@ export async function updateInAppPreferences(input: {
   dueDates?: boolean;
   newComments?: boolean;
   replies?: boolean;
+  reactions?: boolean;
 }): Promise<{
   success: boolean;
   preferences?: UserPreferences;
@@ -242,6 +250,7 @@ export async function updateInAppPreferences(input: {
         ...(input.dueDates !== undefined && { dueDates: input.dueDates }),
         ...(input.newComments !== undefined && { newComments: input.newComments }),
         ...(input.replies !== undefined && { replies: input.replies }),
+        ...(input.reactions !== undefined && { reactions: input.reactions }),
       },
     },
   };
@@ -504,6 +513,7 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
         dueDates: prefs.notifications?.email?.dueDates ?? DEFAULT_PREFERENCES.notifications.email.dueDates,
         newComments: prefs.notifications?.email?.newComments ?? DEFAULT_PREFERENCES.notifications.email.newComments,
         replies: prefs.notifications?.email?.replies ?? DEFAULT_PREFERENCES.notifications.email.replies,
+        reactions: prefs.notifications?.email?.reactions ?? DEFAULT_PREFERENCES.notifications.email.reactions,
         digest: prefs.notifications?.email?.digest ?? DEFAULT_PREFERENCES.notifications.email.digest,
       },
       slack: {
@@ -515,6 +525,7 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
         dueDates: prefs.notifications?.slack?.dueDates ?? DEFAULT_PREFERENCES.notifications.slack.dueDates,
         newComments: prefs.notifications?.slack?.newComments ?? DEFAULT_PREFERENCES.notifications.slack.newComments,
         replies: prefs.notifications?.slack?.replies ?? DEFAULT_PREFERENCES.notifications.slack.replies,
+        reactions: prefs.notifications?.slack?.reactions ?? DEFAULT_PREFERENCES.notifications.slack.reactions,
       },
       inApp: {
         enabled: prefs.notifications?.inApp?.enabled ?? DEFAULT_PREFERENCES.notifications.inApp.enabled,
@@ -523,6 +534,7 @@ function mergeWithDefaults(prefs: UserPreferences | null): UserPreferences {
         dueDates: prefs.notifications?.inApp?.dueDates ?? DEFAULT_PREFERENCES.notifications.inApp.dueDates,
         newComments: prefs.notifications?.inApp?.newComments ?? DEFAULT_PREFERENCES.notifications.inApp.newComments,
         replies: prefs.notifications?.inApp?.replies ?? DEFAULT_PREFERENCES.notifications.inApp.replies,
+        reactions: prefs.notifications?.inApp?.reactions ?? DEFAULT_PREFERENCES.notifications.inApp.reactions,
       },
     },
   };

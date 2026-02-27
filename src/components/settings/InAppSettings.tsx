@@ -16,6 +16,7 @@ interface InAppSettingsProps {
     dueDates: boolean;
     newComments: boolean;
     replies: boolean;
+    reactions?: boolean;
   };
   onUpdate: (settings: Partial<InAppSettingsProps['settings']>) => Promise<{ success: boolean; error?: string }>;
 }
@@ -82,6 +83,7 @@ export function InAppSettings({ settings, onUpdate }: InAppSettingsProps) {
                 dueDates: localSettings.dueDates,
                 newComments: localSettings.newComments,
                 replies: localSettings.replies,
+                reactions: localSettings.reactions ?? true,
               }}
               onChange={handleToggleChange}
               disabled={isSaving}

@@ -10,6 +10,7 @@ export interface NotificationChannelSettings {
   dueDates: boolean;
   newComments: boolean;
   replies: boolean;
+  reactions?: boolean;
 }
 
 // Saved filter shape for My Work preferences (stored in DB)
@@ -77,6 +78,7 @@ export const users = pgTable('users', {
         dueDates: true,
         newComments: true,
         replies: true,
+        reactions: true,
         digest: 'instant',
       },
       slack: {
@@ -86,6 +88,7 @@ export const users = pgTable('users', {
         dueDates: true,
         newComments: true,
         replies: true,
+        reactions: true,
       },
       inApp: {
         enabled: true,
@@ -94,6 +97,7 @@ export const users = pgTable('users', {
         dueDates: true,
         newComments: true,
         replies: true,
+        reactions: true,
       },
     },
   }),

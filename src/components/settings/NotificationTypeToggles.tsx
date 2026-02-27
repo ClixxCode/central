@@ -9,6 +9,7 @@ export interface NotificationToggleSettings {
   dueDates: boolean;
   newComments: boolean;
   replies: boolean;
+  reactions: boolean;
 }
 
 interface NotificationTypeTogglesProps {
@@ -42,6 +43,11 @@ const NOTIFICATION_TYPES = [
     key: 'replies' as const,
     label: 'Replies',
     description: 'When someone replies to your comments',
+  },
+  {
+    key: 'reactions' as const,
+    label: 'Reactions',
+    description: 'When someone reacts to your comments',
   },
 ];
 

@@ -58,6 +58,7 @@ describe('Notification Types', () => {
         'task_due_soon',
         'task_overdue',
         'comment_added',
+        'reaction_added',
       ];
 
       for (const type of types) {
@@ -315,6 +316,7 @@ describe('Notification Type Display', () => {
     task_due_soon: 'Due Soon',
     task_overdue: 'Overdue',
     comment_added: 'Comment',
+    reaction_added: 'Reaction',
   };
 
   function getTypeLabel(type: NotificationType): string {
@@ -327,6 +329,7 @@ describe('Notification Type Display', () => {
     expect(getTypeLabel('task_due_soon')).toBe('Due Soon');
     expect(getTypeLabel('task_overdue')).toBe('Overdue');
     expect(getTypeLabel('comment_added')).toBe('Comment');
+    expect(getTypeLabel('reaction_added')).toBe('Reaction');
   });
 });
 

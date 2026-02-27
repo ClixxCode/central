@@ -298,7 +298,7 @@ export function useMarkNotificationsByTypeAsRead() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (type: 'mention' | 'comment_added') => {
+    mutationFn: async (type: 'mention' | 'comment_added' | 'reaction_added') => {
       const result = await markNotificationsByTypeAsRead(type);
       if (!result.success) {
         throw new Error(result.error ?? 'Failed to mark notifications as read');

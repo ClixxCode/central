@@ -97,6 +97,7 @@ describe('Database Schema', () => {
         'task_due_soon',
         'task_overdue',
         'comment_added',
+        'reaction_added',
       ]);
     });
   });

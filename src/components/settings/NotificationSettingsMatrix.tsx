@@ -59,6 +59,11 @@ const NOTIFICATION_TYPES = [
     label: 'Replies',
     description: 'Replies to your comments',
   },
+  {
+    key: 'reactions' as const,
+    label: 'Reactions',
+    description: 'Reactions to your comments',
+  },
 ];
 
 // Channel configuration
@@ -94,7 +99,7 @@ interface NotificationSettingsMatrixProps {
   isContractor?: boolean;
   onUpdateEmail: (settings: Partial<UserPreferences['notifications']['email']>) => Promise<{ success: boolean; error?: string }>;
   onUpdateSlack: (settings: Partial<UserPreferences['notifications']['slack']>) => Promise<{ success: boolean; error?: string }>;
-  onUpdateInApp: (settings: Partial<UserPreferences['notifications']['inApp'] & { mentions?: boolean; assignments?: boolean; dueDates?: boolean; newComments?: boolean; replies?: boolean }>) => Promise<{ success: boolean; error?: string }>;
+  onUpdateInApp: (settings: Partial<UserPreferences['notifications']['inApp'] & { mentions?: boolean; assignments?: boolean; dueDates?: boolean; newComments?: boolean; replies?: boolean; reactions?: boolean }>) => Promise<{ success: boolean; error?: string }>;
 }
 
 export function NotificationSettingsMatrix({

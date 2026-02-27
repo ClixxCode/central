@@ -672,10 +672,21 @@ export async function toggleCommentReaction(input: {
     userId: user.id,
     reaction: input.reaction,
   });
+
+  createReactionNotification({
+    reactorUserId: user.id,
+    commentId: input.commentId,
+    reaction: input.reaction,
+  }).catch((err) => console.error('Failed to create reaction notification:', err));
+
   revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
   return { success: true, active: true };
 }
 
 // Import for notification integration
 import { extractMentionedUserIds } from '@/lib/editor/mentions';
-import { createMentionNotification, createCommentAddedNotification } from './notifications';
+import {
+  createMentionNotification,
+  createCommentAddedNotification,
+  createReactionNotification,
+} from './notifications';

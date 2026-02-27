@@ -19,6 +19,7 @@ interface SlackSettingsProps {
     dueDates: boolean;
     newComments: boolean;
     replies: boolean;
+    reactions?: boolean;
   };
   onUpdate: (settings: Partial<SlackSettingsProps['settings']>) => Promise<{ success: boolean; error?: string }>;
 }
@@ -124,6 +125,7 @@ export function SlackSettings({ settings, onUpdate }: SlackSettingsProps) {
                 dueDates: localSettings.dueDates,
                 newComments: localSettings.newComments,
                 replies: localSettings.replies,
+                reactions: localSettings.reactions ?? true,
               }}
               onChange={handleToggleChange}
               disabled={isSaving}

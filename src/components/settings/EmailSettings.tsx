@@ -23,6 +23,7 @@ interface EmailSettingsProps {
     dueDates: boolean;
     newComments: boolean;
     replies: boolean;
+    reactions?: boolean;
     digest: 'instant' | 'daily' | 'weekly' | 'none';
   };
   onUpdate: (settings: Partial<EmailSettingsProps['settings']>) => Promise<{ success: boolean; error?: string }>;
@@ -125,6 +126,7 @@ export function EmailSettings({ settings, onUpdate }: EmailSettingsProps) {
                 dueDates: localSettings.dueDates,
                 newComments: localSettings.newComments,
                 replies: localSettings.replies,
+                reactions: localSettings.reactions ?? true,
               }}
               onChange={handleToggleChange}
               disabled={isSaving}

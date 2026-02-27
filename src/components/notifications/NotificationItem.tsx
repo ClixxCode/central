@@ -8,6 +8,7 @@ import {
   Clock,
   AlertTriangle,
   MessageSquare,
+  SmilePlus,
   Check,
   X,
   Circle,
@@ -33,6 +34,7 @@ const notificationIcons: Record<NotificationType, typeof AtSign> = {
   task_due_soon: Clock,
   task_overdue: AlertTriangle,
   comment_added: MessageSquare,
+  reaction_added: SmilePlus,
 };
 
 const notificationColors: Record<NotificationType, string> = {
@@ -41,6 +43,7 @@ const notificationColors: Record<NotificationType, string> = {
   task_due_soon: 'text-yellow-600 bg-yellow-50 dark:text-yellow-400 dark:bg-yellow-500/20',
   task_overdue: 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-500/20',
   comment_added: 'text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-500/20',
+  reaction_added: 'text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-500/20',
 };
 
 export function NotificationItem({

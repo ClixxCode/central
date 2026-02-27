@@ -18,6 +18,8 @@ import { eq, and, isNull, desc, inArray, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { inngest } from '@/lib/inngest/client';
 import { getPlainText } from '@/lib/editor/mentions';
+import type { UserPreferences } from '@/lib/db/schema/users';
+import type { CommentReactionType } from '@/lib/comments/reactions';
 
 // Helper to get parent task title for subtask notifications
 async function getParentTaskTitle(parentTaskId: string | null): Promise<string | null> {
@@ -30,7 +32,13 @@ async function getParentTaskTitle(parentTaskId: string | null): Promise<string |
 }
 
 // Types
-export type NotificationType = 'mention' | 'task_assigned' | 'task_due_soon' | 'task_overdue' | 'comment_added';
+export type NotificationType =
+  | 'mention'
+  | 'task_assigned'
+  | 'task_due_soon'
+  | 'task_overdue'
+  | 'comment_added'
+  | 'reaction_added';
 
 export interface NotificationWithTask {
   id: string;
@@ -242,10 +250,10 @@ export async function markAllAsRead(): Promise<{
 }
 
 /**
- * Mark notifications by type as read (mentions or comment_added)
+ * Mark notifications by type as read
  */
 export async function markNotificationsByTypeAsRead(
-  type: 'mention' | 'comment_added'
+  type: 'mention' | 'comment_added' | 'reaction_added'
 ): Promise<{
   success: boolean;
   count?: number;
@@ -266,6 +274,89 @@ export async function markNotificationsByTypeAsRead(
     .returning({ id: notifications.id });
 
   return { success: true, count: result.length };
+}
+
+function formatReactionLabel(reaction: CommentReactionType): string {
+  return reaction
+    .split('_')
+    .map((word) => word[0]?.toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Create an in-app notification when someone reacts to your comment.
+ */
+export async function createReactionNotification(input: {
+  reactorUserId: string;
+  commentId: string;
+  reaction: CommentReactionType;
+}): Promise<{ success: boolean; notificationId?: string }> {
+  const reactor = await db.query.users.findFirst({
+    where: eq(users.id, input.reactorUserId),
+    columns: { name: true, email: true },
+  });
+
+  const comment = await db.query.comments.findFirst({
+    where: eq(comments.id, input.commentId),
+    columns: { id: true, taskId: true, authorId: true },
+  });
+
+  if (!reactor || !comment || !comment.authorId) {
+    return { success: false };
+  }
+
+  if (comment.authorId === input.reactorUserId) {
+    return { success: true };
+  }
+
+  const recipient = await db.query.users.findFirst({
+    where: eq(users.id, comment.authorId),
+    columns: { id: true, deactivatedAt: true, preferences: true },
+  });
+
+  if (!recipient || recipient.deactivatedAt) {
+    return { success: false };
+  }
+
+  const prefs = recipient.preferences as UserPreferences | null;
+  if (prefs?.notifications?.inApp?.enabled === false) {
+    return { success: true };
+  }
+  if (prefs?.notifications?.inApp?.reactions === false) {
+    return { success: true };
+  }
+
+  const taskDetails = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      parentTaskId: tasks.parentTaskId,
+    })
+    .from(tasks)
+    .where(eq(tasks.id, comment.taskId))
+    .limit(1);
+
+  const task = taskDetails[0];
+  if (!task) {
+    return { success: false };
+  }
+
+  const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const reactorName = reactor.name || reactor.email;
+  const taskLabel = parentTitle ? `"${task.title}" (subtask of "${parentTitle}")` : `"${task.title}"`;
+  const [notification] = await db
+    .insert(notifications)
+    .values({
+      userId: recipient.id,
+      type: 'reaction_added',
+      taskId: task.id,
+      commentId: comment.id,
+      title: `${reactorName} reacted to your comment on ${taskLabel}`,
+      body: formatReactionLabel(input.reaction),
+    })
+    .returning();
+
+  return { success: true, notificationId: notification.id };
 }
 
 /**
