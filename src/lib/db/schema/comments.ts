@@ -3,6 +3,7 @@ import { relations } from 'drizzle-orm';
 import { users } from './users';
 import { tasks, type TiptapContent } from './tasks';
 import { attachments } from './attachments';
+import { commentReactions } from './comment-reactions';
 
 export const comments = pgTable('comments', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -34,4 +35,5 @@ export const commentsRelations = relations(comments, ({ one, many }) => ({
   }),
   replies: many(comments, { relationName: 'commentReplies' }),
   attachments: many(attachments),
+  reactions: many(commentReactions),
 }));

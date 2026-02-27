@@ -3,11 +3,12 @@
 import { useCallback } from 'react';
 import { CommentList } from './CommentList';
 import { CommentEditor, type PendingAttachment } from './CommentEditor';
-import { useCommentThreads, useCreateComment, useUpdateComment, useDeleteComment } from '@/lib/hooks/useComments';
+import { useCommentThreads, useCreateComment, useUpdateComment, useDeleteComment, useToggleCommentReaction } from '@/lib/hooks/useComments';
 import { useMentionableUsers } from '@/lib/hooks/useQuickAdd';
 import type { TiptapContent } from '@/lib/db/schema/tasks';
 import type { MentionUser } from '@/components/editor/MentionList';
 import type { FileMentionItem } from '@/components/editor/FileMentionList';
+import type { CommentReactionType } from '@/lib/comments/reactions';
 
 interface CommentsSectionProps {
   taskId: string;
@@ -51,6 +52,7 @@ export function CommentsSection({
   const createComment = useCreateComment();
   const updateComment = useUpdateComment(taskId);
   const deleteComment = useDeleteComment(taskId);
+  const toggleReaction = useToggleCommentReaction(taskId);
 
   // Handlers
   const handleSubmit = useCallback(
@@ -94,6 +96,13 @@ export function CommentsSection({
     [taskId, createComment]
   );
 
+  const handleToggleReaction = useCallback(
+    async (commentId: string, reaction: CommentReactionType) => {
+      await toggleReaction.mutateAsync({ commentId, reaction });
+    },
+    [toggleReaction]
+  );
+
   return (
     <div className="flex flex-col gap-4">
       {/* Comment editor at the top */}
@@ -118,6 +127,8 @@ export function CommentsSection({
         onUpdate={handleUpdate}
         onDelete={handleDelete}
         onReply={handleReply}
+        onToggleReaction={handleToggleReaction}
+        isTogglingReaction={toggleReaction.isPending}
         onFileMentionClick={onFileMentionClick}
         highlightedCommentId={highlightedCommentId}
       />

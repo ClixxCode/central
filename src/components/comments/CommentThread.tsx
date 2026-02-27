@@ -6,6 +6,7 @@ import { ReplyEditor } from './ReplyEditor';
 import type { CommentThread as CommentThreadType } from '@/lib/hooks/useComments';
 import type { TiptapContent } from '@/lib/db/schema/tasks';
 import type { MentionUser } from '@/components/editor/MentionList';
+import type { CommentReactionType } from '@/lib/comments/reactions';
 
 interface CommentThreadProps {
   thread: CommentThreadType;
@@ -21,6 +22,8 @@ interface CommentThreadProps {
   onUpdate?: (id: string, content: TiptapContent) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onReply?: (parentCommentId: string, content: TiptapContent) => Promise<void>;
+  onToggleReaction?: (commentId: string, reaction: CommentReactionType) => Promise<void>;
+  isTogglingReaction?: boolean;
   onFileMentionClick?: (attachmentId: string) => void;
   highlightedCommentId?: string;
 }
@@ -34,6 +37,8 @@ export function CommentThread({
   onUpdate,
   onDelete,
   onReply,
+  onToggleReaction,
+  isTogglingReaction,
   onFileMentionClick,
   highlightedCommentId,
 }: CommentThreadProps) {
@@ -52,7 +57,7 @@ export function CommentThread({
   const hasReplies = thread.replies.length > 0 || showReplyEditor;
 
   return (
-    <div>
+    <div className="space-y-2">
       {/* Top-level comment */}
       <CommentItem
         comment={thread.comment}
@@ -61,6 +66,8 @@ export function CommentThread({
         mentionUsers={mentionUsers}
         onUpdate={onUpdate}
         onDelete={onDelete}
+        onToggleReaction={onToggleReaction}
+        isTogglingReaction={isTogglingReaction}
         onFileMentionClick={onFileMentionClick}
         isHighlighted={thread.comment.id === highlightedCommentId}
         onReply={() => setShowReplyEditor(true)}
@@ -69,9 +76,10 @@ export function CommentThread({
 
       {/* Replies + reply editor */}
       {hasReplies && (
-        <div style={{ paddingLeft: 48 }}>
+        <div className="relative ml-5 pl-6">
+          <div className="absolute bottom-2 left-0 top-2 w-px bg-border/70" aria-hidden />
           {thread.replies.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {thread.replies.map((reply) => (
                 <CommentItem
                   key={reply.id}
@@ -81,6 +89,8 @@ export function CommentThread({
                   mentionUsers={mentionUsers}
                   onUpdate={onUpdate}
                   onDelete={onDelete}
+                  onToggleReaction={onToggleReaction}
+                  isTogglingReaction={isTogglingReaction}
                   onFileMentionClick={onFileMentionClick}
                   isHighlighted={reply.id === highlightedCommentId}
                   isReply
@@ -91,13 +101,15 @@ export function CommentThread({
           )}
 
           {showReplyEditor && (
-            <ReplyEditor
-              currentUser={currentUser}
-              mentionUsers={mentionUsers}
-              onSubmit={handleReply}
-              onCancel={() => setShowReplyEditor(false)}
-              autoFocus
-            />
+            <div className="pt-1">
+              <ReplyEditor
+                currentUser={currentUser}
+                mentionUsers={mentionUsers}
+                onSubmit={handleReply}
+                onCancel={() => setShowReplyEditor(false)}
+                autoFocus
+              />
+            </div>
           )}
         </div>
       )}

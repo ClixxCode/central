@@ -40,6 +40,7 @@ const mockComments: CommentWithAuthor[] = [
       deactivatedAt: null,
     },
     attachments: [],
+    reactions: [],
   },
   {
     id: 'comment-2',
@@ -58,6 +59,7 @@ const mockComments: CommentWithAuthor[] = [
       deactivatedAt: null,
     },
     attachments: [],
+    reactions: [],
   },
 ];
 

@@ -6,10 +6,12 @@ import {
   createComment,
   updateComment,
   deleteComment,
+  toggleCommentReaction,
   CommentWithAuthor,
   CreateCommentInput,
   UpdateCommentInput,
 } from '@/lib/actions/comments';
+import { COMMENT_REACTIONS, type CommentReactionType } from '@/lib/comments/reactions';
 import { trackEvent } from '@/lib/analytics';
 
 // Types
@@ -128,6 +130,7 @@ export function useCreateComment() {
               deactivatedAt: null,
             },
             attachments: [],
+            reactions: [],
           };
           return [...old, optimisticComment];
         }
@@ -261,6 +264,88 @@ export function useDeleteComment(taskId: string) {
     },
     onSettled: () => {
       // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
+    },
+  });
+}
+
+/**
+ * Hook to toggle a reaction on a comment with optimistic updates
+ */
+export function useToggleCommentReaction(taskId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { commentId: string; reaction: CommentReactionType }) => {
+      const result = await toggleCommentReaction(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to toggle reaction');
+      }
+      return result;
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({
+        queryKey: commentKeys.list(taskId),
+      });
+
+      const previousComments = queryClient.getQueryData<CommentWithAuthor[]>(
+        commentKeys.list(taskId)
+      );
+
+      queryClient.setQueryData<CommentWithAuthor[]>(
+        commentKeys.list(taskId),
+        (old) => {
+          if (!old) return old;
+
+          return old.map((comment) => {
+            if (comment.id !== input.commentId) return comment;
+
+            const existing = comment.reactions.find((r) => r.reaction === input.reaction);
+            if (existing?.reacted) {
+              const updatedReactions = comment.reactions
+                .map((r) =>
+                  r.reaction === input.reaction
+                    ? { ...r, count: Math.max(0, r.count - 1), reacted: false }
+                    : r
+                )
+                .filter((r) => r.count > 0 || r.reacted);
+              return { ...comment, reactions: updatedReactions };
+            }
+
+            if (existing) {
+              return {
+                ...comment,
+                reactions: comment.reactions.map((r) =>
+                  r.reaction === input.reaction
+                    ? { ...r, count: r.count + 1, reacted: true }
+                    : r
+                ),
+              };
+            }
+
+            if (!COMMENT_REACTIONS.includes(input.reaction)) {
+              return comment;
+            }
+
+            return {
+              ...comment,
+              reactions: [
+                ...comment.reactions,
+                { reaction: input.reaction, count: 1, reacted: true },
+              ],
+            };
+          });
+        }
+      );
+
+      return { previousComments };
+    },
+    onError: (_err, _input, context) => {
+      if (context?.previousComments) {
+        queryClient.setQueryData(commentKeys.list(taskId), context.previousComments);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
     },
   });

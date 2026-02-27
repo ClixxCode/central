@@ -6,6 +6,7 @@ import type { CommentThread } from '@/lib/hooks/useComments';
 import type { TiptapContent } from '@/lib/db/schema/tasks';
 import type { MentionUser } from '@/components/editor/MentionList';
 import { MessageSquare } from 'lucide-react';
+import type { CommentReactionType } from '@/lib/comments/reactions';
 
 interface CommentListProps {
   threads: CommentThread[];
@@ -22,6 +23,8 @@ interface CommentListProps {
   onUpdate?: (id: string, content: TiptapContent) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onReply?: (parentCommentId: string, content: TiptapContent) => Promise<void>;
+  onToggleReaction?: (commentId: string, reaction: CommentReactionType) => Promise<void>;
+  isTogglingReaction?: boolean;
   onFileMentionClick?: (attachmentId: string) => void;
   highlightedCommentId?: string;
 }
@@ -36,12 +39,14 @@ export function CommentList({
   onUpdate,
   onDelete,
   onReply,
+  onToggleReaction,
+  isTogglingReaction,
   onFileMentionClick,
   highlightedCommentId,
 }: CommentListProps) {
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {[1, 2, 3].map((i) => (
           <CommentSkeleton key={i} />
         ))}
@@ -51,7 +56,7 @@ export function CommentList({
 
   if (threads.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 py-10 text-center">
         <MessageSquare className="mb-2 h-8 w-8 text-muted-foreground/50" />
         <p className="text-sm text-muted-foreground">
           No comments yet. Be the first to add one!
@@ -61,7 +66,7 @@ export function CommentList({
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-3">
       {threads.map((thread) => (
         <CommentThreadComponent
           key={thread.comment.id}
@@ -73,6 +78,8 @@ export function CommentList({
           onUpdate={onUpdate}
           onDelete={onDelete}
           onReply={onReply}
+          onToggleReaction={onToggleReaction}
+          isTogglingReaction={isTogglingReaction}
           onFileMentionClick={onFileMentionClick}
           highlightedCommentId={highlightedCommentId}
         />
@@ -83,7 +90,7 @@ export function CommentList({
 
 function CommentSkeleton() {
   return (
-    <div className="flex gap-3 p-3">
+    <div className="flex gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-2">

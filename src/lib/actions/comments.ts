@@ -7,6 +7,7 @@ import {
   taskAssignees,
   users,
   attachments,
+  commentReactions,
   boardAccess,
   teamMembers,
 } from '@/lib/db/schema';
@@ -17,6 +18,7 @@ import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { randomBytes } from 'crypto';
 import { logBoardActivity } from './board-activity';
+import { COMMENT_REACTIONS, type CommentReactionType } from '@/lib/comments/reactions';
 
 // Types
 export interface CommentAuthor {
@@ -35,6 +37,12 @@ export interface CommentAttachment {
   mimeType: string | null;
 }
 
+export interface CommentReactionSummary {
+  reaction: CommentReactionType;
+  count: number;
+  reacted: boolean;
+}
+
 export interface CommentWithAuthor {
   id: string;
   shortId: string | null;
@@ -46,6 +54,7 @@ export interface CommentWithAuthor {
   updatedAt: Date | null;
   author: CommentAuthor | null;
   attachments: CommentAttachment[];
+  reactions: CommentReactionSummary[];
 }
 
 function generateShortId(): string {
@@ -235,6 +244,18 @@ export async function listComments(taskId: string): Promise<{
           .where(inArray(attachments.commentId, commentIds))
       : [];
 
+  const reactionsList =
+    commentIds.length > 0
+      ? await db
+          .select({
+            commentId: commentReactions.commentId,
+            userId: commentReactions.userId,
+            reaction: commentReactions.reaction,
+          })
+          .from(commentReactions)
+          .where(inArray(commentReactions.commentId, commentIds))
+      : [];
+
   // Group attachments by comment
   const attachmentsByComment = new Map<string, CommentAttachment[]>();
   for (const a of attachmentsList) {
@@ -249,6 +270,27 @@ export async function listComments(taskId: string): Promise<{
       size: a.size,
       mimeType: a.mimeType,
     });
+  }
+
+  const reactionsByComment = new Map<string, CommentReactionSummary[]>();
+  for (const reactionRow of reactionsList) {
+    if (!COMMENT_REACTIONS.includes(reactionRow.reaction as CommentReactionType)) continue;
+    const reactionType = reactionRow.reaction as CommentReactionType;
+    const commentReactionList = reactionsByComment.get(reactionRow.commentId) ?? [];
+    const existing = commentReactionList.find((r) => r.reaction === reactionType);
+    if (existing) {
+      existing.count += 1;
+      if (reactionRow.userId === user.id) {
+        existing.reacted = true;
+      }
+    } else {
+      commentReactionList.push({
+        reaction: reactionType,
+        count: 1,
+        reacted: reactionRow.userId === user.id,
+      });
+      reactionsByComment.set(reactionRow.commentId, commentReactionList);
+    }
   }
 
   // Build response
@@ -271,6 +313,7 @@ export async function listComments(taskId: string): Promise<{
         }
       : null,
     attachments: attachmentsByComment.get(c.id) ?? [],
+    reactions: reactionsByComment.get(c.id) ?? [],
   }));
 
   return { success: true, comments: commentsWithAuthors };
@@ -395,6 +438,7 @@ export async function createComment(input: CreateCommentInput): Promise<{
       deactivatedAt: author!.deactivatedAt,
     },
     attachments: commentAttachments,
+    reactions: [],
   };
 
   // Send mention notifications (fire and forget)
@@ -508,6 +552,7 @@ export async function updateComment(input: UpdateCommentInput): Promise<{
       deactivatedAt: author!.deactivatedAt,
     },
     attachments: commentAttachments,
+    reactions: [],
   };
 
   revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
@@ -576,6 +621,59 @@ export async function deleteComment(commentId: string): Promise<{
   revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
 
   return { success: true };
+}
+
+/**
+ * Toggle a reaction for a comment by the current user.
+ * If already present, remove it; otherwise add it.
+ */
+export async function toggleCommentReaction(input: {
+  commentId: string;
+  reaction: CommentReactionType;
+}): Promise<{ success: boolean; active?: boolean; error?: string }> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  if (!COMMENT_REACTIONS.includes(input.reaction)) {
+    return { success: false, error: 'Invalid reaction type' };
+  }
+
+  const comment = await db.query.comments.findFirst({
+    where: eq(comments.id, input.commentId),
+    columns: { id: true, taskId: true },
+  });
+
+  if (!comment) {
+    return { success: false, error: 'Comment not found' };
+  }
+
+  const { accessLevel } = await getTaskAccessLevel(user.id, comment.taskId, isAdmin);
+  if (!accessLevel) {
+    return { success: false, error: 'Access denied to this task' };
+  }
+
+  const existingReaction = await db.query.commentReactions.findFirst({
+    where: and(
+      eq(commentReactions.commentId, input.commentId),
+      eq(commentReactions.userId, user.id),
+      eq(commentReactions.reaction, input.reaction)
+    ),
+    columns: { id: true },
+  });
+
+  if (existingReaction) {
+    await db.delete(commentReactions).where(eq(commentReactions.id, existingReaction.id));
+    revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
+    return { success: true, active: false };
+  }
+
+  await db.insert(commentReactions).values({
+    commentId: input.commentId,
+    userId: user.id,
+    reaction: input.reaction,
+  });
+  revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
+  return { success: true, active: true };
 }
 
 // Import for notification integration
