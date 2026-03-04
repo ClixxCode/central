@@ -72,6 +72,7 @@ import {
   deactivateUser,
   reactivateUser,
   deleteUser,
+  reassignUserTasks,
   type ManagedUser,
 } from '@/lib/actions/user-management';
 import {
@@ -96,6 +97,9 @@ export function UsersPageClient() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<ManagedUser | null>(null);
   const [deleteStep1Open, setDeleteStep1Open] = useState(false);
+  const [reassignStepOpen, setReassignStepOpen] = useState(false);
+  const [reassignTargetUserId, setReassignTargetUserId] = useState<string | undefined>(undefined);
+  const [reassignedToName, setReassignedToName] = useState<string | null>(null);
   const [deleteStep2Open, setDeleteStep2Open] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ManagedUser | null>(null);
 
@@ -248,6 +252,17 @@ export function UsersPageClient() {
     },
   });
 
+  const reassignTasksMutation = useMutation({
+    mutationFn: async ({ fromUserId, toUserId }: { fromUserId: string; toUserId: string }) => {
+      const result = await reassignUserTasks(fromUserId, toUserId);
+      if (!result.success) throw new Error(result.error);
+      return result;
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return;
     await inviteMutation.mutateAsync({ email: inviteEmail.trim(), role: inviteRole, teamId: inviteTeamId });
@@ -276,6 +291,31 @@ export function UsersPageClient() {
 
   const confirmDeleteStep1 = () => {
     setDeleteStep1Open(false);
+    setReassignTargetUserId(undefined);
+    setReassignedToName(null);
+    setReassignStepOpen(true);
+  };
+
+  const handleReassignAndContinue = async () => {
+    if (!deleteTarget || !reassignTargetUserId) return;
+    const result = await reassignTasksMutation.mutateAsync({
+      fromUserId: deleteTarget.id,
+      toUserId: reassignTargetUserId,
+    });
+    const targetUser = users?.find((u) => u.id === reassignTargetUserId);
+    setReassignedToName(targetUser?.name || targetUser?.email || null);
+    if (result.data?.reassignedCount === 0) {
+      toast.info('No task assignments to reassign');
+    } else {
+      toast.success(`Reassigned ${result.data?.reassignedCount} task(s)`);
+    }
+    setReassignStepOpen(false);
+    setDeleteStep2Open(true);
+  };
+
+  const handleSkipReassign = () => {
+    setReassignStepOpen(false);
+    setReassignedToName(null);
     setDeleteStep2Open(true);
   };
 
@@ -284,6 +324,7 @@ export function UsersPageClient() {
     await deleteUserMutation.mutateAsync(deleteTarget.id);
     setDeleteStep2Open(false);
     setDeleteTarget(null);
+    setReassignedToName(null);
   };
 
   const handleSendReset = (user: ManagedUser) => {
@@ -718,6 +759,58 @@ export function UsersPageClient() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Delete user — Reassign step */}
+      <Dialog open={reassignStepOpen} onOpenChange={setReassignStepOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reassign tasks</DialogTitle>
+            <DialogDescription>
+              Choose a user to reassign {deleteTarget?.name || deleteTarget?.email}&apos;s tasks to, or skip to remove their assignments.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Select value={reassignTargetUserId ?? ''} onValueChange={setReassignTargetUserId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a user..." />
+              </SelectTrigger>
+              <SelectContent>
+                {users
+                  ?.filter((u) => u.id !== deleteTarget?.id && !u.deactivatedAt)
+                  .map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={u.avatarUrl ?? undefined} />
+                          <AvatarFallback className="text-[10px]">
+                            {getInitials(u.name, u.email)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {u.name || u.email}
+                      </div>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between pt-4">
+            <Button variant="ghost" onClick={() => setReassignStepOpen(false)}>
+              Cancel
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleSkipReassign}>
+                Skip
+              </Button>
+              <Button
+                onClick={handleReassignAndContinue}
+                disabled={!reassignTargetUserId || reassignTasksMutation.isPending}
+              >
+                {reassignTasksMutation.isPending ? 'Reassigning...' : 'Reassign & continue'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete user — Step 2: Final confirmation with consequences */}
       <AlertDialog open={deleteStep2Open} onOpenChange={setDeleteStep2Open}>
         <AlertDialogContent>
@@ -728,7 +821,12 @@ export function UsersPageClient() {
                 <p>This will permanently delete {deleteTarget?.name || deleteTarget?.email}. The following will happen:</p>
                 <ul className="list-disc pl-5 space-y-1 text-sm">
                   <li>Their name will be removed from all tasks, boards, and comments they created</li>
-                  <li>Their task assignments and team memberships will be removed</li>
+                  <li>
+                    {reassignedToName
+                      ? `Their tasks were reassigned to ${reassignedToName}`
+                      : 'Their task assignments will be removed'}
+                    . Team memberships will be removed.
+                  </li>
                   <li>Their comments will be preserved but shown as &quot;Deleted user&quot;</li>
                   <li>This action cannot be undone</li>
                 </ul>

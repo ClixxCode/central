@@ -1,8 +1,9 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { users, teamMembers, tasks, boards, clients, attachments, comments, invitations, rollupInvitations } from '@/lib/db/schema';
-import { eq, desc, ne } from 'drizzle-orm';
+import { users, teamMembers, tasks, boards, clients, attachments, comments, invitations, rollupInvitations, taskAssignees } from '@/lib/db/schema';
+import { eq, desc, ne, and, inArray, notInArray } from 'drizzle-orm';
+import { createAssignmentNotification } from './notifications';
 import { requireAdmin, getCurrentUser } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { del } from '@vercel/blob';
@@ -225,5 +226,77 @@ export async function deleteUser(userId: string): Promise<ActionResult> {
   } catch (error) {
     console.error('deleteUser error:', error);
     return { success: false, error: 'Failed to delete user' };
+  }
+}
+
+/**
+ * Reassign all task assignments from one user to another (admin only)
+ * Skips tasks where the target user is already assigned.
+ */
+export async function reassignUserTasks(
+  fromUserId: string,
+  toUserId: string
+): Promise<ActionResult<{ reassignedCount: number }>> {
+  try {
+    const admin = await requireAdmin();
+
+    if (fromUserId === toUserId) {
+      return { success: false, error: 'Cannot reassign tasks to the same user' };
+    }
+
+    // Get all task assignments for the source user
+    const fromAssignments = await db
+      .select({ taskId: taskAssignees.taskId })
+      .from(taskAssignees)
+      .where(eq(taskAssignees.userId, fromUserId));
+
+    if (fromAssignments.length === 0) {
+      return { success: true, data: { reassignedCount: 0 } };
+    }
+
+    const taskIds = fromAssignments.map((a) => a.taskId);
+
+    // Find tasks where the target user is already assigned (to skip duplicates)
+    const existingAssignments = await db
+      .select({ taskId: taskAssignees.taskId })
+      .from(taskAssignees)
+      .where(
+        and(
+          eq(taskAssignees.userId, toUserId),
+          inArray(taskAssignees.taskId, taskIds)
+        )
+      );
+
+    const alreadyAssignedTaskIds = new Set(existingAssignments.map((a) => a.taskId));
+    const tasksToReassign = taskIds.filter((id) => !alreadyAssignedTaskIds.has(id));
+
+    await db.transaction(async (tx) => {
+      // Insert new assignments for the target user (only for tasks they're not already on)
+      if (tasksToReassign.length > 0) {
+        await tx.insert(taskAssignees).values(
+          tasksToReassign.map((taskId) => ({
+            taskId,
+            userId: toUserId,
+          }))
+        );
+      }
+
+      // Remove all assignments from the source user
+      await tx.delete(taskAssignees).where(eq(taskAssignees.userId, fromUserId));
+    });
+
+    // Send assignment notifications for newly assigned tasks (fire-and-forget)
+    for (const taskId of tasksToReassign) {
+      createAssignmentNotification({
+        assigneeUserId: toUserId,
+        assignerUserId: admin.id,
+        taskId,
+      }).catch(() => {});
+    }
+
+    return { success: true, data: { reassignedCount: tasksToReassign.length } };
+  } catch (error) {
+    console.error('reassignUserTasks error:', error);
+    return { success: false, error: 'Failed to reassign tasks' };
   }
 }
