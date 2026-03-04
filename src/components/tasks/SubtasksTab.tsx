@@ -11,8 +11,13 @@ import { Button } from '@/components/ui/button';
 import { AssigneeAvatars } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { TaskActivityIndicators } from './TaskActivityIndicators';
-import { useSubtasks, useCreateSubtask, useDeleteTask, useUpdateTaskPositions } from '@/lib/hooks/useTasks';
+import { useSubtasks, useCreateSubtask, useDeleteTask, useUpdateTaskPositions, taskKeys } from '@/lib/hooks/useTasks';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
+import { MultiLinePasteDialog } from '@/components/quick-add/MultiLinePasteDialog';
+import type { PasteItem } from '@/components/quick-add/SmartTaskInput';
+import { createTask as createTaskAction } from '@/lib/actions/tasks';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { TaskWithAssignees } from '@/lib/actions/tasks';
 
@@ -177,9 +182,14 @@ export function SubtasksTab({
   const deleteTask = useDeleteTask();
   const updatePositions = useUpdateTaskPositions();
 
+  const queryClient = useQueryClient();
+
   const [newTitle, setNewTitle] = React.useState('');
   const [deleteSubtaskId, setDeleteSubtaskId] = React.useState<string | null>(null);
   const [orderedIds, setOrderedIds] = React.useState<string[]>([]);
+  const [pasteItems, setPasteItems] = React.useState<PasteItem[] | null>(null);
+  const [isBatchCreating, setIsBatchCreating] = React.useState(false);
+  const [batchProgress, setBatchProgress] = React.useState<{ completed: number; total: number } | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   // Keep orderedIds in sync with server data
@@ -264,6 +274,61 @@ export function SubtasksTab({
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData('text/plain');
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length <= 1) return;
+
+    e.preventDefault();
+    setPasteItems(lines.map(title => ({ title, isSubtask: false })));
+    setNewTitle('');
+  };
+
+  const handleBatchCreate = React.useCallback(async () => {
+    if (!pasteItems) return;
+
+    const MAX_LINES = 50;
+    const items = pasteItems.slice(0, MAX_LINES);
+    const defaultStatus = statusOptions[0]?.id ?? '';
+
+    setIsBatchCreating(true);
+    setBatchProgress({ completed: 0, total: items.length });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const item of items) {
+      const result = await createTaskAction({
+        boardId,
+        title: item.title,
+        status: defaultStatus,
+        parentTaskId,
+      });
+
+      if (result.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+
+      setBatchProgress({ completed: successCount + failCount, total: items.length });
+    }
+
+    await queryClient.invalidateQueries({ queryKey: taskKeys.subtasks(parentTaskId) });
+    await queryClient.invalidateQueries({ queryKey: taskKeys.detail(parentTaskId) });
+    await queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+
+    if (failCount === 0) {
+      toast.success(`Created ${successCount} subtasks`);
+    } else {
+      toast.warning(`Created ${successCount} subtasks, ${failCount} failed`);
+    }
+
+    setPasteItems(null);
+    setIsBatchCreating(false);
+    setBatchProgress(null);
+  }, [pasteItems, boardId, parentTaskId, statusOptions, queryClient]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -322,6 +387,7 @@ export function SubtasksTab({
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder="Add a subtask..."
           className="h-7 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
         />
@@ -356,6 +422,16 @@ export function SubtasksTab({
           setDeleteSubtaskId(null);
         }}
         isSubtask
+      />
+
+      <MultiLinePasteDialog
+        open={!!pasteItems}
+        onOpenChange={(open) => { if (!open) setPasteItems(null); }}
+        items={pasteItems ?? []}
+        onConfirm={handleBatchCreate}
+        isCreating={isBatchCreating}
+        progress={batchProgress}
+        noun={{ singular: 'subtask', plural: 'subtasks' }}
       />
     </div>
   );

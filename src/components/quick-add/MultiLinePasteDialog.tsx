@@ -23,6 +23,8 @@ interface MultiLinePasteDialogProps {
   onConfirm: () => void;
   isCreating: boolean;
   progress: { completed: number; total: number } | null;
+  /** Override the noun used in labels (default: "task"/"tasks") */
+  noun?: { singular: string; plural: string };
 }
 
 export function MultiLinePasteDialog({
@@ -32,12 +34,16 @@ export function MultiLinePasteDialog({
   onConfirm,
   isCreating,
   progress,
+  noun,
 }: MultiLinePasteDialogProps) {
   const itemCount = Math.min(items.length, MAX_LINES);
   const previewItems = items.slice(0, PREVIEW_COUNT);
   const remaining = itemCount - PREVIEW_COUNT;
   const parentCount = items.slice(0, MAX_LINES).filter((i) => !i.isSubtask).length;
   const subtaskCount = items.slice(0, MAX_LINES).filter((i) => i.isSubtask).length;
+  const nounSingular = noun?.singular ?? 'task';
+  const nounPlural = noun?.plural ?? 'tasks';
+  const nounLabel = itemCount === 1 ? nounSingular : nounPlural;
 
   return (
     <AlertDialog open={open} onOpenChange={isCreating ? undefined : onOpenChange}>
@@ -45,12 +51,12 @@ export function MultiLinePasteDialog({
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <List className="size-5" />
-            Create {itemCount} {itemCount === 1 ? 'task' : 'tasks'}?
+            Create {itemCount} {nounLabel}?
           </AlertDialogTitle>
           <AlertDialogDescription>
             {subtaskCount > 0
-              ? `${parentCount} ${parentCount === 1 ? 'task' : 'tasks'} and ${subtaskCount} ${subtaskCount === 1 ? 'subtask' : 'subtasks'} will be created. Indented lines become subtasks of the task above them.`
-              : 'Each line will become a separate task with the current board, status, assignee, and date settings.'}
+              ? `${parentCount} ${parentCount === 1 ? nounSingular : nounPlural} and ${subtaskCount} ${subtaskCount === 1 ? 'subtask' : 'subtasks'} will be created. Indented lines become subtasks of the ${nounSingular} above them.`
+              : `Each line will become a separate ${nounSingular} with the current board, status, assignee, and date settings.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -87,14 +93,14 @@ export function MultiLinePasteDialog({
             <Progress value={(progress.completed / progress.total) * 100} />
             <p className="text-sm text-muted-foreground text-center">
               {progress.completed < progress.total
-                ? `Creating task ${progress.completed + 1} of ${progress.total}...`
+                ? `Creating ${nounSingular} ${progress.completed + 1} of ${progress.total}...`
                 : `Finishing up...`}
             </p>
           </div>
         ) : (
           <AlertDialogFooter>
             <Button onClick={onConfirm}>
-              Create {itemCount} {itemCount === 1 ? 'task' : 'tasks'}
+              Create {itemCount} {nounLabel}
             </Button>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
