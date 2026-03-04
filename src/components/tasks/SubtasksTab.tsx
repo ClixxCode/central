@@ -14,7 +14,7 @@ import { TaskActivityIndicators } from './TaskActivityIndicators';
 import { useSubtasks, useCreateSubtask, useDeleteTask, useUpdateTaskPositions, taskKeys } from '@/lib/hooks/useTasks';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { MultiLinePasteDialog } from '@/components/quick-add/MultiLinePasteDialog';
-import type { PasteItem } from '@/components/quick-add/SmartTaskInput';
+import { parsePastedItems, type ParsedPasteItem } from '@/lib/utils/parse-pasted-items';
 import { createTask as createTaskAction } from '@/lib/actions/tasks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -187,7 +187,7 @@ export function SubtasksTab({
   const [newTitle, setNewTitle] = React.useState('');
   const [deleteSubtaskId, setDeleteSubtaskId] = React.useState<string | null>(null);
   const [orderedIds, setOrderedIds] = React.useState<string[]>([]);
-  const [pasteItems, setPasteItems] = React.useState<PasteItem[] | null>(null);
+  const [pasteItems, setPasteItems] = React.useState<ParsedPasteItem[] | null>(null);
   const [isBatchCreating, setIsBatchCreating] = React.useState(false);
   const [batchProgress, setBatchProgress] = React.useState<{ completed: number; total: number } | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -275,12 +275,11 @@ export function SubtasksTab({
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
-    const text = e.clipboardData.getData('text/plain');
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    if (lines.length <= 1) return;
+    const items = parsePastedItems(e.nativeEvent.clipboardData!);
+    if (!items || (items.length < 2 && !(items.length === 1 && items[0].description))) return;
 
     e.preventDefault();
-    setPasteItems(lines.map(title => ({ title, isSubtask: false })));
+    setPasteItems(items);
     setNewTitle('');
   };
 
@@ -298,11 +297,23 @@ export function SubtasksTab({
     let failCount = 0;
 
     for (const item of items) {
+      // Convert plain text description to TiptapContent JSON
+      const descriptionJson = item.description
+        ? JSON.stringify({
+            type: 'doc',
+            content: item.description.split('\n').map(line => ({
+              type: 'paragraph',
+              content: [{ type: 'text', text: line }],
+            })),
+          })
+        : undefined;
+
       const result = await createTaskAction({
         boardId,
         title: item.title,
         status: defaultStatus,
         parentTaskId,
+        descriptionJson,
       });
 
       if (result.success) {

@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { CornerDownRight, List } from 'lucide-react';
-import type { PasteItem } from './SmartTaskInput';
+import type { ParsedPasteItem as PasteItem } from '@/lib/utils/parse-pasted-items';
 
 const MAX_LINES = 50;
 const PREVIEW_COUNT = 5;
@@ -39,8 +39,10 @@ export function MultiLinePasteDialog({
   const itemCount = Math.min(items.length, MAX_LINES);
   const previewItems = items.slice(0, PREVIEW_COUNT);
   const remaining = itemCount - PREVIEW_COUNT;
-  const parentCount = items.slice(0, MAX_LINES).filter((i) => !i.isSubtask).length;
-  const subtaskCount = items.slice(0, MAX_LINES).filter((i) => i.isSubtask).length;
+  const capped = items.slice(0, MAX_LINES);
+  const parentCount = capped.filter((i) => !i.isSubtask).length;
+  const subtaskCount = capped.filter((i) => i.isSubtask).length;
+  const hasDescriptions = capped.some((i) => i.description);
   const nounSingular = noun?.singular ?? 'task';
   const nounPlural = noun?.plural ?? 'tasks';
   const nounLabel = itemCount === 1 ? nounSingular : nounPlural;
@@ -56,23 +58,32 @@ export function MultiLinePasteDialog({
           <AlertDialogDescription>
             {subtaskCount > 0
               ? `${parentCount} ${parentCount === 1 ? nounSingular : nounPlural} and ${subtaskCount} ${subtaskCount === 1 ? 'subtask' : 'subtasks'} will be created. Indented lines become subtasks of the ${nounSingular} above them.`
-              : `Each line will become a separate ${nounSingular} with the current board, status, assignee, and date settings.`}
+              : hasDescriptions
+                ? `Each line will become a separate ${nounSingular}. Indented lines are added as descriptions.`
+                : `Each line will become a separate ${nounSingular} with the current board, status, assignee, and date settings.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="space-y-1">
+        <div className="max-h-48 overflow-y-auto space-y-1">
           {previewItems.map((item, i) => (
-            <div key={i} className="flex gap-2 text-sm py-0.5 items-center">
-              {item.isSubtask ? (
-                <CornerDownRight className="size-3.5 text-muted-foreground/60 shrink-0 ml-5" />
-              ) : (
-                <span className="text-muted-foreground/60 tabular-nums w-5 shrink-0 text-right">
-                  &bull;
+            <div key={i} className="min-w-0">
+              <div className="flex gap-2 text-sm py-0.5 items-center min-w-0">
+                {item.isSubtask ? (
+                  <CornerDownRight className="size-3.5 text-muted-foreground/60 shrink-0 ml-5" />
+                ) : (
+                  <span className="text-muted-foreground/60 tabular-nums w-5 shrink-0 text-right">
+                    &bull;
+                  </span>
+                )}
+                <span className={`truncate ${item.isSubtask ? 'text-muted-foreground' : ''}`}>
+                  {item.title}
                 </span>
+              </div>
+              {item.description && (
+                <p className="text-xs text-muted-foreground pl-7 truncate">
+                  {item.description.split('\n')[0]}
+                </p>
               )}
-              <span className={`truncate ${item.isSubtask ? 'text-muted-foreground' : ''}`}>
-                {item.title}
-              </span>
             </div>
           ))}
           {remaining > 0 && (

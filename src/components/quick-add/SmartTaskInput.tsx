@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { parseHtmlPasteItems } from '@/lib/utils/parse-pasted-items';
 import {
   TriggerPopover,
   type TriggerMode,
@@ -13,10 +14,8 @@ import {
   type SectionSelection,
 } from './TriggerPopover';
 
-export interface PasteItem {
-  title: string;
-  isSubtask: boolean;
-}
+import type { ParsedPasteItem } from '@/lib/utils/parse-pasted-items';
+export type PasteItem = ParsedPasteItem;
 
 export interface InputPill {
   type: 'board' | 'assignee' | 'date' | 'status' | 'section';
@@ -252,12 +251,25 @@ export function SmartTaskInput({
   // Intercept multi-line pastes
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
-      if (!onMultiLinePaste || !hasBoardSelected) return;
+      if (!onMultiLinePaste) return;
 
+      // Try HTML first (Google Docs, Notion, etc. preserve structure)
+      const html = e.clipboardData.getData('text/html');
+      if (html) {
+        const htmlItems = parseHtmlPasteItems(html);
+        if (htmlItems && (htmlItems.length >= 2 || (htmlItems.length === 1 && htmlItems[0].description))) {
+          e.preventDefault();
+          onMultiLinePaste(htmlItems);
+          return;
+        }
+      }
+
+      // Fall back to plain text parsing
       const text = e.clipboardData.getData('text/plain');
-      const rawLines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+      const rawLines = text.split(/\r?\n/);
+      const nonEmptyLines = rawLines.filter((line) => line.trim().length > 0);
 
-      if (rawLines.length < 2) return;
+      if (nonEmptyLines.length < 2) return;
 
       e.preventDefault();
 
@@ -265,7 +277,7 @@ export function SmartTaskInput({
 
       // Check if the list is mixed (some lines have markers, some don't).
       // In a mixed list, bare lines are parents and bulleted lines are subtasks.
-      const trimmedLines = rawLines.map((l) => l.trim());
+      const trimmedLines = nonEmptyLines.map((l) => l.trim());
       const hasBulleted = trimmedLines.some((l) => listMarkerRe.test(l));
       const hasPlain = trimmedLines.some((l) => !listMarkerRe.test(l));
       const isMixedList = hasBulleted && hasPlain;
@@ -275,6 +287,7 @@ export function SmartTaskInput({
 
       for (const raw of rawLines) {
         const trimmed = raw.trim();
+        if (!trimmed) continue;
 
         // Measure leading whitespace (tabs count as 2 spaces)
         const leadingMatch = raw.match(/^(\s*)/);
@@ -290,12 +303,19 @@ export function SmartTaskInput({
 
         if (!cleaned) continue;
 
+        // Indented line WITHOUT a list marker = description of previous item
+        if (indentLevel > 0 && !hasMarker && items.length > 0) {
+          const prev = items[items.length - 1];
+          prev.description = prev.description ? prev.description + '\n' + cleaned : cleaned;
+          continue;
+        }
+
         // A line is a subtask if:
-        // 1. It has leading whitespace (explicit indentation), OR
+        // 1. It has leading whitespace with a list marker (explicit indented bullet), OR
         // 2. It has a list marker in a mixed list (bullet under a plain parent)
         const isSubtask =
           lastParentIndex >= 0 &&
-          (indentLevel > 0 || (isMixedList && hasMarker));
+          ((indentLevel > 0 && hasMarker) || (isMixedList && hasMarker));
 
         if (!isSubtask) {
           lastParentIndex = items.length;
@@ -306,9 +326,11 @@ export function SmartTaskInput({
 
       if (items.length >= 2) {
         onMultiLinePaste(items);
+      } else if (items.length === 1 && items[0].description) {
+        onMultiLinePaste(items);
       }
     },
-    [onMultiLinePaste, hasBoardSelected]
+    [onMultiLinePaste]
   );
 
   // Insert a pill span replacing the trigger text

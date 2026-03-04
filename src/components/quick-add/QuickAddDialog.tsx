@@ -349,6 +349,16 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
     let lastParentTaskId: string | null = null;
 
     for (const item of items) {
+      const descriptionJson = item.description
+        ? JSON.stringify({
+            type: 'doc',
+            content: item.description.split('\n').map(line => ({
+              type: 'paragraph',
+              content: [{ type: 'text', text: line }],
+            })),
+          })
+        : undefined;
+
       const result = await createTaskAction({
         boardId: selectedBoard.boardId,
         title: item.title,
@@ -356,6 +366,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
         section: section ?? undefined,
         assigneeIds: assigneeIdList,
         dueDate: dueDateStr,
+        descriptionJson,
         ...(item.isSubtask && lastParentTaskId ? { parentTaskId: lastParentTaskId } : {}),
       });
 
@@ -423,6 +434,13 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
           pills={pills}
           autoFocus={open}
         />
+
+        {/* Pending paste items hint */}
+        {pasteItems && !selectedBoard && (
+          <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+            {pasteItems.length} {pasteItems.length === 1 ? 'task' : 'tasks'} ready to create — select a board first
+          </div>
+        )}
 
         {/* Description */}
         <textarea
@@ -874,7 +892,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
     </Dialog>
 
       <MultiLinePasteDialog
-        open={!!pasteItems}
+        open={!!pasteItems && !!selectedBoard}
         onOpenChange={(open) => {
           if (!open) setPasteItems(null);
         }}
