@@ -14,10 +14,9 @@ import { usePersonalRollupStore } from '@/lib/stores/personalRollupStore';
 import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
 import { useQuickActionsStore } from '@/lib/stores';
 import { useUpdateMyTask } from '@/lib/hooks/useMyTasks';
-import { useDeleteTask, useTask } from '@/lib/hooks/useTasks';
+import { useDeleteTask, useTask, useAssignableUsers } from '@/lib/hooks/useTasks';
 import type { MyTasksByClient, MyTaskWithContext, UpdateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
-import type { AssigneeUser } from './AssigneePicker';
 import { ExpandedSubtasks } from './ExpandedSubtasks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 
@@ -210,29 +209,10 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
   const selectedTask = myTask ?? fetchedTask;
 
   // Get assignable users for the selected task's board
-  const selectedTaskAssignableUsers = React.useMemo((): AssigneeUser[] => {
-    if (!selectedTaskId) return [];
-
-    // Find the client group that contains this task (or its board)
-    const boardId = myTask?.board.id ?? fetchedTask?.boardId;
-    if (!boardId) return [];
-
-    const clientGroup = tasksByClient.find((c) =>
-      c.tasks.some((t) => t.board.id === boardId)
-    );
-    if (!clientGroup) return [];
-
-    const usersMap = new Map<string, AssigneeUser>();
-    clientGroup.tasks
-      .filter((t) => t.board.id === boardId)
-      .forEach((task) => {
-        task.assignees.forEach((assignee) => {
-          usersMap.set(assignee.id, assignee);
-        });
-      });
-
-    return Array.from(usersMap.values());
-  }, [selectedTaskId, myTask, fetchedTask, tasksByClient]);
+  const selectedBoardId = myTask?.board.id ?? fetchedTask?.boardId ?? '';
+  const { data: selectedTaskAssignableUsers = [] } = useAssignableUsers(selectedBoardId, {
+    enabled: !!selectedBoardId,
+  });
 
   const handleUpdateTask = React.useCallback(
     (input: UpdateTaskInput) => {
