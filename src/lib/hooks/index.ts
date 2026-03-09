@@ -118,7 +118,7 @@ export {
   rollupSharingKeys,
 } from './useRollupSharing';
 export { useSiteSettings, useUpdateSiteSettings, siteSettingsKeys } from './useSiteSettings';
-export { useBoardActivity, boardActivityKeys } from './useBoardActivity';
+export { useBoardActivity, useTaskActivity, boardActivityKeys } from './useBoardActivity';
 export { useFavoriteHintKeys } from './useFavoriteHintKeys';
 export {
   useQuickAddUsers,

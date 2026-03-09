@@ -49,6 +49,57 @@ export async function logBoardActivity(input: LogBoardActivityInput): Promise<vo
 }
 
 /**
+ * List activity entries for a specific task (last 30 days, max 100)
+ */
+export async function listTaskActivity(taskId: string): Promise<{
+  success: boolean;
+  entries?: BoardActivityEntry[];
+  error?: string;
+}> {
+  await requireAuth();
+
+  const entries = await db
+    .select({
+      id: boardActivityLog.id,
+      boardId: boardActivityLog.boardId,
+      taskId: boardActivityLog.taskId,
+      taskTitle: boardActivityLog.taskTitle,
+      userId: boardActivityLog.userId,
+      action: boardActivityLog.action,
+      metadata: boardActivityLog.metadata,
+      createdAt: boardActivityLog.createdAt,
+      userName: users.name,
+      userEmail: users.email,
+      userAvatarUrl: users.avatarUrl,
+    })
+    .from(boardActivityLog)
+    .innerJoin(users, eq(users.id, boardActivityLog.userId))
+    .where(eq(boardActivityLog.taskId, taskId))
+    .orderBy(desc(boardActivityLog.createdAt))
+    .limit(100);
+
+  return {
+    success: true,
+    entries: entries.map((e) => ({
+      id: e.id,
+      boardId: e.boardId,
+      taskId: e.taskId,
+      taskTitle: e.taskTitle,
+      userId: e.userId,
+      action: e.action,
+      metadata: e.metadata as Record<string, unknown> | null,
+      createdAt: e.createdAt,
+      user: {
+        id: e.userId,
+        name: e.userName,
+        email: e.userEmail,
+        avatarUrl: e.userAvatarUrl,
+      },
+    })),
+  };
+}
+
+/**
  * List board activity entries (last 30 days, max 200)
  */
 export async function listBoardActivity(boardId: string): Promise<{

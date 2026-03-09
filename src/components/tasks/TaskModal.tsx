@@ -64,9 +64,11 @@ import {
   Link2,
   Hash,
   Pencil,
+  Activity,
 } from 'lucide-react';
 import { RecurringPicker, RecurringIndicator } from './RecurringPicker';
 import { SubtasksTab } from './SubtasksTab';
+import { TaskActivityLog } from './TaskActivityLog';
 import { CompleteParentDialog } from './CompleteParentDialog';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { getRecurrenceDescription } from '@/lib/utils/recurring';
@@ -583,10 +585,6 @@ export function TaskModal({
                     <ListTodo className="h-4 w-4" />
                     Details
                   </TabsTrigger>
-                  <TabsTrigger value="attachments" className="gap-1.5">
-                    <Paperclip className="h-4 w-4" />
-                    Attachments
-                  </TabsTrigger>
                   {!isNew && task && !task.parentTaskId && (
                     <TabsTrigger value="subtasks" className="gap-1.5">
                       <ListTree className="h-4 w-4" />
@@ -596,6 +594,16 @@ export function TaskModal({
                           {task.subtaskCompletedCount}/{task.subtaskCount}
                         </Badge>
                       )}
+                    </TabsTrigger>
+                  )}
+                  <TabsTrigger value="attachments" className="gap-1.5">
+                    <Paperclip className="h-4 w-4" />
+                    Attachments
+                  </TabsTrigger>
+                  {!isNew && task && (
+                    <TabsTrigger value="activity" className="gap-1.5">
+                      <Activity className="h-4 w-4" />
+                      Activity
                     </TabsTrigger>
                   )}
                 </TabsList>
@@ -1182,6 +1190,12 @@ export function TaskModal({
                     </>
                   )}
                 </TabsContent>
+
+                {!isNew && task?.id && (
+                  <TabsContent value="activity" className="mt-0">
+                    <TaskActivityLog taskId={task.id} />
+                  </TabsContent>
+                )}
 
               </ScrollArea>
             </Tabs>
