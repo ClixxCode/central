@@ -19,7 +19,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowRight } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { ArrowRight, Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useBoards, useBoard, useApplyTemplateTasksToBoard } from '@/lib/hooks';
 import type { TemplateDetail } from '@/lib/actions/templates';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
@@ -30,7 +44,7 @@ interface ApplyTemplateTasksDialogProps {
   template: TemplateDetail;
 }
 
-type Step = 'select_board' | 'map_statuses' | 'confirm';
+type Step = 'select_board' | 'map_statuses' | 'map_sections' | 'confirm';
 
 export function ApplyTemplateTasksDialog({
   open,
@@ -39,6 +53,7 @@ export function ApplyTemplateTasksDialog({
 }: ApplyTemplateTasksDialogProps) {
   const [step, setStep] = React.useState<Step>('select_board');
   const [boardId, setBoardId] = React.useState('');
+  const [boardPickerOpen, setBoardPickerOpen] = React.useState(false);
   const [statusMapping, setStatusMapping] = React.useState<Record<string, string>>({});
   const [sectionMapping, setSectionMapping] = React.useState<Record<string, string | null>>({});
 
@@ -92,38 +107,54 @@ export function ApplyTemplateTasksDialog({
     setSectionMapping(secMapping);
   }, [board, isBoardTemplate, template.statusOptions, template.sectionOptions]);
 
-  // Check if all statuses and sections already match by label — skip mapping if so
-  const allMappingsMatch = React.useMemo(() => {
-    if (!board || !isBoardTemplate) return true;
+  // Check if statuses/sections already match by label — skip their mapping steps if so
+  const { needsStatusMapping, needsSectionMapping } = React.useMemo(() => {
+    if (!board || !isBoardTemplate) return { needsStatusMapping: false, needsSectionMapping: false };
     const bs = (board.statusOptions ?? []) as StatusOption[];
     const bsec = (board.sectionOptions ?? []) as SectionOption[];
 
-    const statusesMatch = template.statusOptions.every((ts) =>
+    const statusesMatch = template.statusOptions.length === 0 || template.statusOptions.every((ts) =>
       bs.some((s) => s.label.toLowerCase() === ts.label.toLowerCase())
     );
-    const sectionsMatch = template.sectionOptions.every((ts) =>
+    const sectionsMatch = template.sectionOptions.length === 0 || template.sectionOptions.every((ts) =>
       bsec.some((s) => s.label.toLowerCase() === ts.label.toLowerCase())
     );
-    return statusesMatch && sectionsMatch;
+    return { needsStatusMapping: !statusesMatch, needsSectionMapping: !sectionsMatch };
   }, [board, isBoardTemplate, template.statusOptions, template.sectionOptions]);
 
-  const needsMapping = isBoardTemplate && template.statusOptions.length > 0 && !allMappingsMatch;
+  const needsMapping = needsStatusMapping || needsSectionMapping;
 
   const handleNext = () => {
     if (step === 'select_board') {
-      if (needsMapping) {
+      if (needsStatusMapping) {
         setStep('map_statuses');
+      } else if (needsSectionMapping) {
+        setStep('map_sections');
       } else {
         setStep('confirm');
       }
     } else if (step === 'map_statuses') {
+      if (needsSectionMapping) {
+        setStep('map_sections');
+      } else {
+        setStep('confirm');
+      }
+    } else if (step === 'map_sections') {
       setStep('confirm');
     }
   };
 
   const handleBack = () => {
     if (step === 'confirm') {
-      if (needsMapping) {
+      if (needsSectionMapping) {
+        setStep('map_sections');
+      } else if (needsStatusMapping) {
+        setStep('map_statuses');
+      } else {
+        setStep('select_board');
+      }
+    } else if (step === 'map_sections') {
+      if (needsStatusMapping) {
         setStep('map_statuses');
       } else {
         setStep('select_board');
@@ -162,7 +193,8 @@ export function ApplyTemplateTasksDialog({
           <DialogTitle>Add Tasks to Board</DialogTitle>
           <DialogDescription>
             {step === 'select_board' && 'Select the board to add tasks to.'}
-            {step === 'map_statuses' && 'Map template statuses and sections to the board.'}
+            {step === 'map_statuses' && 'Map template statuses to the board.'}
+            {step === 'map_sections' && 'Map template sections to the board.'}
             {step === 'confirm' && '\u00A0'}
           </DialogDescription>
         </DialogHeader>
@@ -171,119 +203,153 @@ export function ApplyTemplateTasksDialog({
           {/* Step 1: Select board */}
           {step === 'select_board' && (
             <div className="space-y-2">
-              <Select value={boardId} onValueChange={setBoardId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a board..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {standardBoards.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.clientName ? `${b.clientName} / ` : ''}{b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={boardPickerOpen} onOpenChange={setBoardPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={boardPickerOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {boardId
+                      ? (() => {
+                          const selected = standardBoards.find((b) => b.id === boardId);
+                          return selected
+                            ? `${selected.clientName ? `${selected.clientName} / ` : ''}${selected.name}`
+                            : 'Select a board...';
+                        })()
+                      : 'Select a board...'}
+                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search boards..." />
+                    <CommandList>
+                      <CommandEmpty>No boards found.</CommandEmpty>
+                      <CommandGroup>
+                        {standardBoards.map((b) => {
+                          const label = `${b.clientName ? `${b.clientName} / ` : ''}${b.name}`;
+                          return (
+                            <CommandItem
+                              key={b.id}
+                              value={label}
+                              onSelect={() => {
+                                setBoardId(b.id);
+                                setBoardPickerOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  'mr-2 size-4',
+                                  boardId === b.id ? 'opacity-100' : 'opacity-0'
+                                )}
+                              />
+                              {label}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 
           {/* Step 2: Map statuses */}
           {step === 'map_statuses' && (
             <ScrollArea className="max-h-80">
-              <div className="space-y-4">
-                {/* Status mapping */}
-                {template.statusOptions.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Status Mapping</h4>
-                    {template.statusOptions
-                      .sort((a, b) => a.position - b.position)
-                      .map((ts) => (
-                        <div key={ts.id} className="flex items-center gap-2">
-                          <Badge
-                            variant="secondary"
-                            className="border-0 font-medium text-xs shrink-0"
-                            style={{ backgroundColor: `${ts.color}20`, color: ts.color }}
-                          >
-                            <span
-                              className="size-2 rounded-full mr-1"
-                              style={{ backgroundColor: ts.color }}
-                            />
-                            {ts.label}
-                          </Badge>
-                          <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
-                          <Select
-                            value={statusMapping[ts.id] ?? ''}
-                            onValueChange={(val) =>
-                              setStatusMapping((prev) => ({ ...prev, [ts.id]: val }))
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {boardStatuses.map((bs) => (
-                                <SelectItem key={bs.id} value={bs.id}>
-                                  <span className="flex items-center gap-1.5">
-                                    <span
-                                      className="size-2 rounded-full"
-                                      style={{ backgroundColor: bs.color }}
-                                    />
-                                    {bs.label}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ))}
-                  </div>
-                )}
-
-                {/* Section mapping */}
-                {template.sectionOptions.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium">Section Mapping</h4>
-                    {template.sectionOptions
-                      .sort((a, b) => a.position - b.position)
-                      .map((ts) => (
-                        <div key={ts.id} className="flex items-center gap-2">
-                          <Badge
-                            variant="secondary"
-                            className="border-0 font-medium text-xs shrink-0"
-                            style={{ backgroundColor: `${ts.color}20`, color: ts.color }}
-                          >
-                            {ts.label}
-                          </Badge>
-                          <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
-                          <Select
-                            value={sectionMapping[ts.id] ?? '__none__'}
-                            onValueChange={(val) =>
-                              setSectionMapping((prev) => ({
-                                ...prev,
-                                [ts.id]: val === '__none__' ? null : val,
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">(No section)</SelectItem>
-                              {boardSections.map((bs) => (
-                                <SelectItem key={bs.id} value={bs.id}>
-                                  {bs.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      ))}
-                  </div>
-                )}
+              <div className="space-y-2">
+                {template.statusOptions
+                  .sort((a, b) => a.position - b.position)
+                  .map((ts) => (
+                    <div key={ts.id} className="flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="border-0 font-medium text-xs shrink-0"
+                        style={{ backgroundColor: `${ts.color}20`, color: ts.color }}
+                      >
+                        <span
+                          className="size-2 rounded-full mr-1"
+                          style={{ backgroundColor: ts.color }}
+                        />
+                        {ts.label}
+                      </Badge>
+                      <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
+                      <Select
+                        value={statusMapping[ts.id] ?? ''}
+                        onValueChange={(val) =>
+                          setStatusMapping((prev) => ({ ...prev, [ts.id]: val }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {boardStatuses.map((bs) => (
+                            <SelectItem key={bs.id} value={bs.id}>
+                              <span className="flex items-center gap-1.5">
+                                <span
+                                  className="size-2 rounded-full"
+                                  style={{ backgroundColor: bs.color }}
+                                />
+                                {bs.label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
               </div>
             </ScrollArea>
           )}
 
-          {/* Step 3: Confirm */}
+          {/* Step 3: Map sections */}
+          {step === 'map_sections' && (
+            <ScrollArea className="max-h-80">
+              <div className="space-y-2">
+                {template.sectionOptions
+                  .sort((a, b) => a.position - b.position)
+                  .map((ts) => (
+                    <div key={ts.id} className="flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="border-0 font-medium text-xs shrink-0"
+                        style={{ backgroundColor: `${ts.color}20`, color: ts.color }}
+                      >
+                        {ts.label}
+                      </Badge>
+                      <ArrowRight className="size-3.5 text-muted-foreground shrink-0" />
+                      <Select
+                        value={sectionMapping[ts.id] ?? '__none__'}
+                        onValueChange={(val) =>
+                          setSectionMapping((prev) => ({
+                            ...prev,
+                            [ts.id]: val === '__none__' ? null : val,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">(No section)</SelectItem>
+                          {boardSections.map((bs) => (
+                            <SelectItem key={bs.id} value={bs.id}>
+                              {bs.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+              </div>
+            </ScrollArea>
+          )}
+
+          {/* Step 4: Confirm */}
           {step === 'confirm' && (
             <div className="rounded-lg bg-muted/50 p-4 text-sm">
               <p>
