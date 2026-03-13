@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, useRef } from 'react';
+import { upload } from '@vercel/blob/client';
 import { cn } from '@/lib/utils';
 import { Upload, X, FileIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,9 @@ const ENDPOINT_ACCEPT: Record<string, Record<string, string[]>> = {
     'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
     'application/zip': ['.zip'],
     'text/csv': ['.csv'],
+    'video/mp4': ['.mp4'],
+    'video/webm': ['.webm'],
+    'video/quicktime': ['.mov'],
   },
   imageUploader: {
     'image/*': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
@@ -80,39 +84,62 @@ export function FileUpload({
       setFiles(newFiles);
 
       try {
-        const formData = new FormData();
-        filesToUpload.forEach((file) => {
-          formData.append('files', file);
-        });
+        const uploadedFiles: UploadedFile[] = [];
 
-        // Update progress to uploading
-        setFiles((prev) =>
-          prev.map((f) => ({ ...f, status: 'uploading' as const, progress: 50 }))
-        );
+        for (let i = 0; i < filesToUpload.length; i++) {
+          const file = filesToUpload[i];
 
-        const response = await fetch('/api/blob', {
-          method: 'POST',
-          body: formData,
-        });
+          // Mark current file as uploading
+          setFiles((prev) =>
+            prev.map((f, idx) =>
+              idx === i ? { ...f, status: 'uploading' as const, progress: 0 } : f
+            )
+          );
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Upload failed');
+          const timestamp = Date.now();
+          const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+          const pathname = `attachments/${timestamp}-${sanitizedName}`;
+
+          const blob = await upload(pathname, file, {
+            access: 'public',
+            handleUploadUrl: '/api/blob/upload',
+            multipart: true,
+            clientPayload: JSON.stringify({ type: file.type, size: file.size }),
+            onUploadProgress: ({ percentage }) => {
+              setFiles((prev) =>
+                prev.map((f, idx) =>
+                  idx === i ? { ...f, progress: percentage } : f
+                )
+              );
+            },
+          });
+
+          uploadedFiles.push({
+            url: blob.url,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            key: blob.pathname,
+          });
+
+          // Mark file as complete
+          setFiles((prev) =>
+            prev.map((f, idx) =>
+              idx === i ? { ...f, status: 'complete' as const, progress: 100 } : f
+            )
+          );
         }
-
-        const result = await response.json();
-        const uploadedFiles: UploadedFile[] = result.files;
 
         setFiles([]);
         onUploadComplete?.(uploadedFiles);
       } catch (error) {
         const err = error instanceof Error ? error : new Error('Upload failed');
         setFiles((prev) =>
-          prev.map((f) => ({
-            ...f,
-            status: 'error' as const,
-            error: err.message,
-          }))
+          prev.map((f) =>
+            f.status === 'uploading' || f.status === 'pending'
+              ? { ...f, status: 'error' as const, error: err.message }
+              : f
+          )
         );
         onUploadError?.(err);
       } finally {
@@ -228,7 +255,7 @@ export function FileUpload({
               Drag & drop files here, or click to select
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Images, PDFs, documents up to 32MB
+              Images, videos, PDFs, documents up to 50MB
             </p>
           </>
         )}
