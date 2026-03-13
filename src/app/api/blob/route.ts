@@ -36,12 +36,15 @@ const ALLOWED_TYPES = [
   // Archives
   'application/zip',
   'application/x-zip-compressed',
+  // CSV
+  'text/csv',
 ];
 
 function getFileCategory(type: string): keyof typeof MAX_SIZES {
   if (type.startsWith('image/')) return 'image';
   if (type === 'application/pdf') return 'pdf';
   if (type === 'text/plain') return 'text';
+  if (type === 'text/csv') return 'spreadsheet';
   if (type.includes('word')) return 'document';
   if (type.includes('excel') || type.includes('spreadsheet')) return 'spreadsheet';
   if (type.includes('powerpoint') || type.includes('presentation')) return 'presentation';

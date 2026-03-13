@@ -44,6 +44,7 @@ const ENDPOINT_ACCEPT: Record<string, Record<string, string[]>> = {
     'application/vnd.ms-powerpoint': ['.ppt'],
     'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
     'application/zip': ['.zip'],
+    'text/csv': ['.csv'],
   },
   imageUploader: {
     'image/*': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
