@@ -14,6 +14,7 @@ import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import {
   useMentions,
   useReplies,
+  useReactions,
   useMarkNotificationAsRead,
   useMarkNotificationAsUnread,
   useMarkAllNotificationsAsRead,
@@ -27,6 +28,7 @@ import {
   RefreshCw,
   AtSign,
   MessageSquare,
+  SmilePlus,
   CheckSquare,
   CalendarDays,
   LayoutList,
@@ -111,11 +113,17 @@ function NotificationItem({
       <div
         className={cn(
           'mt-1 rounded-full p-1.5 shrink-0',
-          notification.type === 'mention' ? 'bg-blue-100 dark:bg-blue-500/20' : 'bg-green-100 dark:bg-green-500/20'
+          notification.type === 'mention'
+            ? 'bg-blue-100 dark:bg-blue-500/20'
+            : notification.type === 'reaction_added'
+            ? 'bg-amber-100 dark:bg-amber-500/20'
+            : 'bg-green-100 dark:bg-green-500/20'
         )}
       >
         {notification.type === 'mention' ? (
           <AtSign className="size-3.5 text-blue-600 dark:text-blue-400" />
+        ) : notification.type === 'reaction_added' ? (
+          <SmilePlus className="size-3.5 text-amber-600 dark:text-amber-400" />
         ) : (
           <MessageSquare className="size-3.5 text-green-600 dark:text-green-400" />
         )}
@@ -179,7 +187,7 @@ function NotificationItem({
   );
 }
 
-function EmptyState({ type }: { type: 'mentions' | 'replies' | 'notifications' }) {
+function EmptyState({ type }: { type: 'mentions' | 'replies' | 'reactions' | 'notifications' }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
@@ -187,6 +195,8 @@ function EmptyState({ type }: { type: 'mentions' | 'replies' | 'notifications' }
           <AtSign className="size-8 text-muted-foreground" />
         ) : type === 'replies' ? (
           <MessageSquare className="size-8 text-muted-foreground" />
+        ) : type === 'reactions' ? (
+          <SmilePlus className="size-8 text-muted-foreground" />
         ) : (
           <Bell className="size-8 text-muted-foreground" />
         )}
@@ -199,6 +209,8 @@ function EmptyState({ type }: { type: 'mentions' | 'replies' | 'notifications' }
           ? 'When someone mentions you in a comment, it will appear here.'
           : type === 'replies'
           ? 'When someone replies to your comments, it will appear here.'
+          : type === 'reactions'
+          ? 'When someone reacts to your comment, it will appear here.'
           : 'When someone mentions you or replies to your comments, it will appear here.'}
       </p>
     </div>
@@ -313,12 +325,13 @@ function TaskQuickViewSheet({
   );
 }
 
-type NotificationFilter = 'all' | 'mentions' | 'replies';
+type NotificationFilter = 'all' | 'mentions' | 'replies' | 'reactions';
 type ReadFilter = 'unread' | 'all';
 
 function NotificationsTab() {
   const { data: mentions = [], isLoading: mentionsLoading, error: mentionsError } = useMentions();
   const { data: replies = [], isLoading: repliesLoading, error: repliesError } = useReplies();
+  const { data: reactions = [], isLoading: reactionsLoading, error: reactionsError } = useReactions();
   const [filter, setFilter] = React.useState<NotificationFilter>('all');
   const [readFilter, setReadFilter] = React.useState<ReadFilter>('unread');
   const [selectedNotification, setSelectedNotification] = React.useState<NotificationWithTask | null>(null);
@@ -329,19 +342,21 @@ function NotificationsTab() {
   const markAllAsRead = useMarkAllNotificationsAsRead();
   const markByTypeAsRead = useMarkNotificationsByTypeAsRead();
 
-  const isLoading = mentionsLoading || repliesLoading;
-  const error = mentionsError || repliesError;
+  const isLoading = mentionsLoading || repliesLoading || reactionsLoading;
+  const error = mentionsError || repliesError || reactionsError;
 
   // Combine and sort by date
   const allNotifications = React.useMemo(() => {
     let filtered: NotificationWithTask[] = [];
 
     if (filter === 'all') {
-      filtered = [...mentions, ...replies];
+      filtered = [...mentions, ...replies, ...reactions];
     } else if (filter === 'mentions') {
       filtered = mentions;
-    } else {
+    } else if (filter === 'replies') {
       filtered = replies;
+    } else {
+      filtered = reactions;
     }
 
     if (readFilter === 'unread') {
@@ -351,15 +366,17 @@ function NotificationsTab() {
     return filtered.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [mentions, replies, filter, readFilter]);
+  }, [mentions, replies, reactions, filter, readFilter]);
 
   const unreadMentions = mentions.filter((m) => !m.readAt).length;
   const unreadReplies = replies.filter((r) => !r.readAt).length;
+  const unreadReactions = reactions.filter((r) => !r.readAt).length;
   const unreadInCurrentFilter = React.useMemo(() => {
-    if (filter === 'all') return unreadMentions + unreadReplies;
+    if (filter === 'all') return unreadMentions + unreadReplies + unreadReactions;
     if (filter === 'mentions') return unreadMentions;
-    return unreadReplies;
-  }, [filter, unreadMentions, unreadReplies]);
+    if (filter === 'replies') return unreadReplies;
+    return unreadReactions;
+  }, [filter, unreadMentions, unreadReplies, unreadReactions]);
 
   const handleMarkAsRead = React.useCallback(
     (id: string) => {
@@ -380,8 +397,10 @@ function NotificationsTab() {
       markAllAsRead.mutate();
     } else if (filter === 'mentions') {
       markByTypeAsRead.mutate('mention');
-    } else {
+    } else if (filter === 'replies') {
       markByTypeAsRead.mutate('comment_added');
+    } else {
+      markByTypeAsRead.mutate('reaction_added');
     }
   }, [filter, markAllAsRead, markByTypeAsRead]);
 
@@ -427,9 +446,9 @@ function NotificationsTab() {
               )}
             >
               All
-              {unreadMentions + unreadReplies > 0 && (
+              {unreadMentions + unreadReplies + unreadReactions > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-blue-500 text-white">
-                  {unreadMentions + unreadReplies}
+                  {unreadMentions + unreadReplies + unreadReactions}
                 </span>
               )}
             </button>
@@ -462,6 +481,22 @@ function NotificationsTab() {
               {unreadReplies > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-green-500 text-white">
                   {unreadReplies}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter('reactions')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded px-3 py-1 text-sm transition-colors',
+                filter === 'reactions' ? 'bg-background shadow-sm' : 'hover:bg-background/50'
+              )}
+            >
+              <SmilePlus className="size-3.5" />
+              Reactions
+              {unreadReactions > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-amber-500 text-white">
+                  {unreadReactions}
                 </span>
               )}
             </button>
@@ -656,6 +691,7 @@ export function MyTasksPageClient() {
   });
   const { data: mentions = [] } = useMentions();
   const { data: replies = [] } = useReplies();
+  const { data: reactions = [] } = useReactions();
   const { viewMode, setViewMode, activeTab: storedTab, setActiveTab, areAllClientsCollapsed, setAllClientsCollapsed, prioritySelectionMode, setPrioritySelectionMode, priorityFilterActive, setPriorityFilterActive, togglePriorityFilter } = usePersonalRollupStore();
   const { isBoardHidden, hiddenBoards, hiddenColumns, setHiddenBoards, setHiddenColumns, myWorkFilters: filters, setMyWorkFilters: setFilters, priorityTaskIds, isPriority, togglePriority, clearPriorities } = useMyWorkPreferences();
 
@@ -677,7 +713,8 @@ export function MyTasksPageClient() {
 
   const unreadMentions = mentions.filter((m) => !m.readAt).length;
   const unreadReplies = replies.filter((r) => !r.readAt).length;
-  const totalUnread = unreadMentions + unreadReplies;
+  const unreadReactions = reactions.filter((r) => !r.readAt).length;
+  const totalUnread = unreadMentions + unreadReplies + unreadReactions;
 
   // Aggregate filter options from all boards
   const { statusOptions, sectionOptions, assignableUsers } = useMyTasksFilterOptions(tasksByClient);

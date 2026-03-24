@@ -12,6 +12,7 @@ import {
   clearReadNotifications,
   listMentions,
   listReplies,
+  listReactions,
   NotificationWithContext,
 } from '@/lib/actions/notifications';
 
@@ -25,6 +26,7 @@ export const notificationKeys = {
   count: () => [...notificationKeys.counts(), 'unread'] as const,
   mentions: () => [...notificationKeys.all, 'mentions'] as const,
   replies: () => [...notificationKeys.all, 'replies'] as const,
+  reactions: () => [...notificationKeys.all, 'reactions'] as const,
 };
 
 /**
@@ -624,6 +626,22 @@ export function useReplies(options?: { limit?: number }) {
       const result = await listReplies(options);
       if (!result.success) {
         throw new Error(result.error ?? 'Failed to fetch replies');
+      }
+      return result.notifications ?? [];
+    },
+  });
+}
+
+/**
+ * Hook to fetch reaction notifications for the current user
+ */
+export function useReactions(options?: { limit?: number }) {
+  return useQuery({
+    queryKey: notificationKeys.reactions(),
+    queryFn: async () => {
+      const result = await listReactions(options);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to fetch reactions');
       }
       return result.notifications ?? [];
     },

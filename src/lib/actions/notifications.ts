@@ -1107,3 +1107,77 @@ export async function listReplies(options?: {
 
   return { success: true, notifications: result };
 }
+
+/**
+ * List reaction notifications for the current user
+ */
+export async function listReactions(options?: {
+  limit?: number;
+}): Promise<{
+  success: boolean;
+  notifications?: NotificationWithTask[];
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const { limit = 50 } = options || {};
+
+  const reactionsList = await db.query.notifications.findMany({
+    where: and(
+      eq(notifications.userId, user.id),
+      eq(notifications.type, 'reaction_added')
+    ),
+    orderBy: [desc(notifications.createdAt)],
+    limit,
+  });
+
+  const taskIds = reactionsList
+    .map((n) => n.taskId)
+    .filter((id): id is string => id !== null);
+
+  const taskDetails = taskIds.length > 0
+    ? await db
+        .select({
+          id: tasks.id,
+          title: tasks.title,
+          boardId: tasks.boardId,
+          boardName: boards.name,
+          clientId: clients.id,
+          clientName: clients.name,
+          clientSlug: clients.slug,
+        })
+        .from(tasks)
+        .innerJoin(boards, eq(boards.id, tasks.boardId))
+        .innerJoin(clients, eq(clients.id, boards.clientId))
+        .where(inArray(tasks.id, taskIds))
+    : [];
+
+  const taskMap = new Map(taskDetails.map((t) => [t.id, {
+    id: t.id,
+    title: t.title,
+    boardId: t.boardId,
+    board: {
+      id: t.boardId,
+      name: t.boardName,
+      client: {
+        id: t.clientId,
+        name: t.clientName,
+        slug: t.clientSlug,
+      },
+    },
+  }]));
+
+  const result: NotificationWithTask[] = reactionsList.map((n) => ({
+    id: n.id,
+    userId: n.userId,
+    type: n.type as NotificationType,
+    taskId: n.taskId,
+    commentId: n.commentId,
+    title: n.title,
+    body: n.body,
+    readAt: n.readAt,
+    createdAt: n.createdAt,
+    task: n.taskId ? taskMap.get(n.taskId) || null : null,
+  }));
+
+  return { success: true, notifications: result };
+}

@@ -59,6 +59,7 @@ export {
   useUpdateInAppPreferences,
   useMentions,
   useReplies,
+  useReactions,
   notificationKeys,
 } from './useNotifications';
 export { useSearch, type SearchResult, type GlobalSearchResult, type ClientSearchResult, type BoardSearchResult, type TaskSearchResult } from './useSearch';
