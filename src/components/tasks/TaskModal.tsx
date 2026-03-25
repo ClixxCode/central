@@ -435,20 +435,18 @@ export function TaskModal({
 
   // Handle image upload for the editor
   const handleUploadImage = useCallback(async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('files', file);
+    const { upload } = await import('@vercel/blob/client');
+    const timestamp = Date.now();
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const pathname = `images/${timestamp}-${sanitizedName}`;
 
-    const response = await fetch('/api/blob', {
-      method: 'POST',
-      body: formData,
+    const blob = await upload(pathname, file, {
+      access: 'public',
+      handleUploadUrl: '/api/blob/upload',
+      clientPayload: JSON.stringify({ type: file.type, size: file.size }),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to upload image');
-    }
-
-    const data = await response.json();
-    return data.files[0].url;
+    return blob.url;
   }, []);
 
   // Handle "Upload new file" from the + attachment mention popup
