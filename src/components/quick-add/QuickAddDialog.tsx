@@ -643,7 +643,7 @@ export function QuickAddDialog({ open, onOpenChange, onTaskCreatedAndEdit }: Qui
                 )}
               >
                 <CalendarIcon className="h-3.5 w-3.5" />
-                {dueDate ? dueDate.label : 'Date'}
+                {dueDate ? dueDate.label : 'Due Date'}
               </Button>
 
               {dateDropdownOpen && (
