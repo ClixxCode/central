@@ -14,6 +14,7 @@ import {
   sendMentionSlackNotification,
   sendAssignmentSlackNotification,
   sendDueDateSlackNotification,
+  generateOnboardingTasks,
 } from '@/lib/inngest/functions';
 
 // Create an API that serves Inngest functions
@@ -36,5 +37,6 @@ export const { GET, POST, PUT } = serve({
     scheduleDailyDigests,
     createNextRecurringTask,
     autoArchiveTasks,
+    generateOnboardingTasks,
   ],
 });

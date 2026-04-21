@@ -96,10 +96,29 @@ export interface RecurringTaskCompletedEvent {
   };
 }
 
+// Pulse → Central onboarding task generation request
+export interface PulseOnboardingTasksRequestedEvent {
+  name: 'pulse/onboarding.tasks.requested';
+  data: {
+    centralClientId: string;
+    centralBoardId: string;
+    pulseAccountId: string;
+    accountName: string;
+    targetWebsite: string | null;
+    services: Array<{
+      name: string;
+      catalog_id: string | null;
+      onboarding_scope: string | null;
+      accesses_required: string | null;
+    }>;
+  };
+}
+
 // Union type for all events
 export type NotificationEvent =
   | MentionNotificationEvent
   | AssignmentNotificationEvent
   | DueReminderEvent
   | DailyDigestEvent
-  | RecurringTaskCompletedEvent;
+  | RecurringTaskCompletedEvent
+  | PulseOnboardingTasksRequestedEvent;
