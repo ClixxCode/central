@@ -1,0 +1,74 @@
+name: Auto-merge claude/* branches
+
+on:
+  push:
+    branches:
+      - 'claude/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get default branch
+        id: default-branch
+        run: |
+          DEFAULT=$(gh api repos/${{ github.repository }} --jq '.default_branch')
+          echo "branch=$DEFAULT" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge into default branch
+        run: |
+          CURRENT_BRANCH="${GITHUB_REF#refs/heads/}"
+          DEFAULT_BRANCH="${{ steps.default-branch.outputs.branch }}"
+          echo "Merging $CURRENT_BRANCH into $DEFAULT_BRANCH"
+
+          # Check if there are differences
+          if git diff --quiet "origin/$DEFAULT_BRANCH"..."origin/$CURRENT_BRANCH"; then
+            echo "No differences to merge."
+            exit 0
+          fi
+
+          # Configure git for the merge commit
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Try direct merge + push first
+          git checkout "$DEFAULT_BRANCH"
+          git merge "origin/$CURRENT_BRANCH" --no-edit -m "Auto-merge $CURRENT_BRANCH into $DEFAULT_BRANCH"
+
+          if git push origin "$DEFAULT_BRANCH" 2>&1; then
+            echo "Direct merge successful"
+          else
+            echo "Direct push failed (likely branch protection). Falling back to PR..."
+            git checkout "origin/$CURRENT_BRANCH"
+
+            EXISTING_PR=$(gh pr list --head "$CURRENT_BRANCH" --base "$DEFAULT_BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null)
+
+            if [ -n "$EXISTING_PR" ]; then
+              echo "Found existing PR #$EXISTING_PR — merging..."
+              gh pr merge "$EXISTING_PR" --merge --delete-branch=false || true
+            else
+              echo "Creating PR..."
+              gh pr create \
+                --title "Auto-merge: $CURRENT_BRANCH" \
+                --body "Automated merge of \`$CURRENT_BRANCH\` into \`$DEFAULT_BRANCH\`." \
+                --base "$DEFAULT_BRANCH" \
+                --head "$CURRENT_BRANCH"
+
+              PR_NUM=$(gh pr list --head "$CURRENT_BRANCH" --base "$DEFAULT_BRANCH" --state open --json number --jq '.[0].number')
+              echo "Created PR #$PR_NUM — merging..."
+              gh pr merge "$PR_NUM" --merge --delete-branch=false || true
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
