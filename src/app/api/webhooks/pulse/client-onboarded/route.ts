@@ -20,6 +20,18 @@ import type {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Health probe so we can verify deployment without sending a signed payload.
+// curl https://central.clix.co/api/webhooks/pulse/client-onboarded
+// → 200 { ok: true } when the route is live; 405 from Vercel otherwise.
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    route: 'pulse/client-onboarded',
+    method: 'POST',
+    secret_configured: !!process.env.CENTRAL_WEBHOOK_SECRET,
+  });
+}
+
 const ONBOARDING_TEMPLATE_NAME = 'New Client Onboarding';
 const MAX_SKEW_SECONDS = 5 * 60;
 
