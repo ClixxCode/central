@@ -20,6 +20,18 @@ import type {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Health probe so we can verify deployment without sending a signed payload.
+// curl https://central.clix.co/api/webhooks/pulse/client-onboarded
+// → 200 { ok: true } when the route is live; 405 from Vercel otherwise.
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    route: 'pulse/client-onboarded',
+    method: 'POST',
+    secret_configured: !!process.env.CENTRAL_WEBHOOK_SECRET,
+  });
+}
+
 const ONBOARDING_TEMPLATE_NAME = 'New Client Onboarding';
 const MAX_SKEW_SECONDS = 5 * 60;
 
@@ -51,6 +63,11 @@ interface PulseClientOnboardedPayload {
     email: string | null;
   } | null;
   pod: { id: string; name: string } | null;
+}
+
+interface UpsertResult {
+  id: string;
+  defaultBoardId: string | null;
 }
 
 function shortId(): string {
@@ -102,16 +119,20 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const clientId = await upsertClient(payload);
-    const boardId = await createOnboardingBoard(clientId, payload);
+    const client = await upsertClient(payload);
+    const boardId = await provisionOnboardingBoard(client.id, client.defaultBoardId, payload);
 
-    await db
-      .update(clients)
-      .set({ defaultBoardId: boardId })
-      .where(eq(clients.id, clientId));
+    // Only set defaultBoardId when the client didn't already have one. Manual
+    // setups have a board already — don't clobber it.
+    if (!client.defaultBoardId) {
+      await db
+        .update(clients)
+        .set({ defaultBoardId: boardId })
+        .where(eq(clients.id, client.id));
+    }
 
     return NextResponse.json({
-      central_client_id: clientId,
+      central_client_id: client.id,
       central_board_id: boardId,
     });
   } catch (error) {
@@ -120,10 +141,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function upsertClient(payload: PulseClientOnboardedPayload): Promise<string> {
+async function upsertClient(payload: PulseClientOnboardedPayload): Promise<UpsertResult> {
   const existing = await db.query.clients.findFirst({
     where: eq(clients.slug, payload.account_slug),
-    columns: { id: true, metadata: true },
+    columns: { id: true, metadata: true, defaultBoardId: true },
   });
 
   const metadata: ClientMetadata = {
@@ -149,7 +170,7 @@ async function upsertClient(payload: PulseClientOnboardedPayload): Promise<strin
 
   if (existing) {
     await db.update(clients).set({ metadata }).where(eq(clients.id, existing.id));
-    return existing.id;
+    return { id: existing.id, defaultBoardId: existing.defaultBoardId ?? null };
   }
 
   const [created] = await db
@@ -160,17 +181,58 @@ async function upsertClient(payload: PulseClientOnboardedPayload): Promise<strin
       metadata,
     })
     .returning({ id: clients.id });
-  return created.id;
+  return { id: created.id, defaultBoardId: null };
 }
 
-async function createOnboardingBoard(
+/**
+ * Central is a one-board-per-client model — onboarding/ongoing/offboarding all
+ * live on the same client board. So: if the client already has any board, we
+ * append the onboarding tasks to it (merging section options and skipping any
+ * titles already present, so resync is idempotent). Only create a brand-new
+ * board when the client has none.
+ */
+async function provisionOnboardingBoard(
   clientId: string,
+  existingDefaultBoardId: string | null,
   payload: PulseClientOnboardedPayload,
 ): Promise<string> {
   const template = await db.query.boardTemplates.findFirst({
     where: eq(boardTemplates.name, ONBOARDING_TEMPLATE_NAME),
   });
 
+  const clientBoards = await db.query.boards.findMany({
+    where: eq(boards.clientId, clientId),
+    columns: { id: true, statusOptions: true, sectionOptions: true },
+    orderBy: [asc(boards.createdAt)],
+  });
+
+  const target =
+    clientBoards.find((b) => b.id === existingDefaultBoardId) ?? clientBoards[0] ?? null;
+
+  if (target) {
+    if (template) {
+      const merged = mergeSectionOptions(
+        (target.sectionOptions as SectionOption[] | null) ?? [],
+        (template.sectionOptions as SectionOption[] | null) ?? [],
+      );
+      if (merged.changed) {
+        await db.update(boards).set({ sectionOptions: merged.options }).where(eq(boards.id, target.id));
+      }
+      await materializeTemplateTasks(
+        target.id,
+        template.id,
+        target.statusOptions as StatusOption[],
+        { dedupe: true },
+      );
+    } else {
+      await seedFallbackTasks(target.id, target.statusOptions as StatusOption[], payload, {
+        dedupe: true,
+      });
+    }
+    return target.id;
+  }
+
+  // No existing boards for this client — create one.
   const boardName = payload.sow_number
     ? `Onboarding — ${payload.sow_number}`
     : `Onboarding — ${payload.account_name}`;
@@ -193,18 +255,50 @@ async function createOnboardingBoard(
     .returning({ id: boards.id, statusOptions: boards.statusOptions });
 
   if (template) {
-    await materializeTemplateTasks(newBoard.id, template.id, newBoard.statusOptions as StatusOption[]);
+    await materializeTemplateTasks(
+      newBoard.id,
+      template.id,
+      newBoard.statusOptions as StatusOption[],
+      { dedupe: false },
+    );
   } else {
-    await seedFallbackTasks(newBoard.id, newBoard.statusOptions as StatusOption[], payload);
+    await seedFallbackTasks(newBoard.id, newBoard.statusOptions as StatusOption[], payload, {
+      dedupe: false,
+    });
   }
 
   return newBoard.id;
+}
+
+function mergeSectionOptions(
+  current: SectionOption[],
+  incoming: SectionOption[],
+): { options: SectionOption[]; changed: boolean } {
+  if (incoming.length === 0) return { options: current, changed: false };
+  const byId = new Map(current.map((s) => [s.id, s]));
+  let nextPosition = current.reduce((max, s) => Math.max(max, s.position), -1) + 1;
+  let changed = false;
+  for (const section of incoming) {
+    if (byId.has(section.id)) continue;
+    byId.set(section.id, { ...section, position: nextPosition++ });
+    changed = true;
+  }
+  return { options: Array.from(byId.values()), changed };
+}
+
+async function existingTitlesOnBoard(boardId: string): Promise<Set<string>> {
+  const rows = await db.query.tasks.findMany({
+    where: eq(tasks.boardId, boardId),
+    columns: { title: true },
+  });
+  return new Set(rows.map((r) => r.title));
 }
 
 async function materializeTemplateTasks(
   boardId: string,
   templateId: string,
   statusOptions: StatusOption[],
+  opts: { dedupe: boolean },
 ): Promise<void> {
   const templateRows = await db.query.templateTasks.findMany({
     where: eq(templateTasks.templateId, templateId),
@@ -212,6 +306,7 @@ async function materializeTemplateTasks(
   });
   if (templateRows.length === 0) return;
 
+  const validStatusIds = new Set(statusOptions.map((s) => s.id));
   const defaultStatus = statusOptions[0]?.id ?? 'todo';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -221,7 +316,11 @@ async function materializeTemplateTasks(
       ? new Date(today.getTime() + relativeDays * 86_400_000).toISOString().split('T')[0]
       : undefined;
 
-  const topLevel = templateRows.filter((t) => !t.parentTemplateTaskId);
+  const existingTitles = opts.dedupe ? await existingTitlesOnBoard(boardId) : new Set<string>();
+
+  const topLevel = templateRows
+    .filter((t) => !t.parentTemplateTaskId)
+    .filter((t) => !existingTitles.has(t.title));
   const mapping = new Map<string, string>();
 
   if (topLevel.length > 0) {
@@ -233,7 +332,7 @@ async function materializeTemplateTasks(
           shortId: shortId(),
           title: t.title,
           description: t.description as TiptapContent | undefined,
-          status: t.status ?? defaultStatus,
+          status: t.status && validStatusIds.has(t.status) ? t.status : defaultStatus,
           section: t.section,
           dueDate: toDueDate(t.relativeDueDays),
           recurringConfig: t.recurringConfig as RecurringConfig | undefined,
@@ -244,22 +343,23 @@ async function materializeTemplateTasks(
     topLevel.forEach((t, i) => mapping.set(t.id, inserted[i].id));
   }
 
-  const subs = templateRows.filter((t) => t.parentTemplateTaskId);
+  const subs = templateRows
+    .filter((t) => t.parentTemplateTaskId)
+    .filter((t) => mapping.has(t.parentTemplateTaskId!))
+    .filter((t) => !existingTitles.has(t.title));
   if (subs.length > 0) {
     await db.insert(tasks).values(
-      subs
-        .filter((t) => mapping.has(t.parentTemplateTaskId!))
-        .map((t) => ({
-          boardId,
-          shortId: shortId(),
-          title: t.title,
-          description: t.description as TiptapContent | undefined,
-          status: t.status ?? defaultStatus,
-          section: t.section,
-          dueDate: toDueDate(t.relativeDueDays),
-          position: t.position,
-          parentTaskId: mapping.get(t.parentTemplateTaskId!)!,
-        })),
+      subs.map((t) => ({
+        boardId,
+        shortId: shortId(),
+        title: t.title,
+        description: t.description as TiptapContent | undefined,
+        status: t.status && validStatusIds.has(t.status) ? t.status : defaultStatus,
+        section: t.section,
+        dueDate: toDueDate(t.relativeDueDays),
+        position: t.position,
+        parentTaskId: mapping.get(t.parentTemplateTaskId!)!,
+      })),
     );
   }
 }
@@ -268,8 +368,10 @@ async function seedFallbackTasks(
   boardId: string,
   statusOptions: StatusOption[],
   payload: PulseClientOnboardedPayload,
+  opts: { dedupe: boolean },
 ): Promise<void> {
   const defaultStatus = statusOptions[0]?.id ?? 'todo';
+  const existingTitles = opts.dedupe ? await existingTitlesOnBoard(boardId) : new Set<string>();
   const rows = [
     { title: 'Kickoff meeting', position: 0 },
     { title: 'Collect access credentials', position: 1 },
@@ -277,7 +379,9 @@ async function seedFallbackTasks(
       title: `Set up: ${service.name}`,
       position: 2 + i,
     })),
-  ];
+  ].filter((r) => !existingTitles.has(r.title));
+
+  if (rows.length === 0) return;
 
   await db.insert(tasks).values(
     rows.map((r) => ({
