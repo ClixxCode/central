@@ -232,10 +232,11 @@ async function provisionOnboardingBoard(
     return target.id;
   }
 
-  // No existing boards for this client — create one.
-  const boardName = payload.sow_number
-    ? `Onboarding — ${payload.sow_number}`
-    : `Onboarding — ${payload.account_name}`;
+  // No existing boards for this client — create one named after the client.
+  // The board is the client's home in Central (one-board-per-client model);
+  // it carries onboarding, ongoing, and offboarding work over its lifetime,
+  // so prefixing with "Onboarding — " is wrong as soon as onboarding ends.
+  const boardName = payload.account_name;
 
   const [newBoard] = await db
     .insert(boards)
