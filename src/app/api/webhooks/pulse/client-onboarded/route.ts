@@ -35,11 +35,23 @@ export async function GET() {
 const ONBOARDING_TEMPLATE_NAME = 'New Client Onboarding';
 const MAX_SKEW_SECONDS = 5 * 60;
 
+type ScopeSource = 'catalog' | 'sow' | 'merged';
+
+interface ServiceTask {
+  phase: string | null;
+  title: string;
+}
+
 interface Service {
   name: string;
   catalog_id: string | null;
   onboarding_scope: string | null;
   accesses_required: string | null;
+  // New fields landed by Pulse — may be absent on older payloads, so always
+  // optional + defensive defaults below.
+  onboarding_tasks?: ServiceTask[];
+  task_source?: ScopeSource;
+  task_source_reasoning?: string;
 }
 
 interface PulseClientOnboardedPayload {
@@ -83,6 +95,28 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   }
 }
 
+function serviceSectionId(serviceName: string): string {
+  return (
+    'service-' +
+    serviceName
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+  );
+}
+
+const SERVICE_SECTION_COLORS = [
+  '#6366f1',
+  '#10b981',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#06b6d4',
+  '#ec4899',
+  '#84cc16',
+];
+
 export async function POST(request: NextRequest) {
   const secret = process.env.CENTRAL_WEBHOOK_SECRET;
   if (!secret) {
@@ -122,8 +156,6 @@ export async function POST(request: NextRequest) {
     const client = await upsertClient(payload);
     const boardId = await provisionOnboardingBoard(client.id, client.defaultBoardId, payload);
 
-    // Only set defaultBoardId when the client didn't already have one. Manual
-    // setups have a board already — don't clobber it.
     if (!client.defaultBoardId) {
       await db
         .update(clients)
@@ -185,11 +217,10 @@ async function upsertClient(payload: PulseClientOnboardedPayload): Promise<Upser
 }
 
 /**
- * Central is a one-board-per-client model — onboarding/ongoing/offboarding all
- * live on the same client board. So: if the client already has any board, we
- * append the onboarding tasks to it (merging section options and skipping any
- * titles already present, so resync is idempotent). Only create a brand-new
- * board when the client has none.
+ * One-board-per-client model. If the client already has a board, append
+ * (idempotent dedupe). Otherwise create a new one named after the client.
+ * In both paths we now also materialize a per-service section + the
+ * reconciled per-service task list that Pulse sends.
  */
 async function provisionOnboardingBoard(
   clientId: string,
@@ -209,34 +240,53 @@ async function provisionOnboardingBoard(
   const target =
     clientBoards.find((b) => b.id === existingDefaultBoardId) ?? clientBoards[0] ?? null;
 
+  // Per-service section list built once and merged in both branches.
+  const serviceSections: SectionOption[] = payload.services.map((s, i) => ({
+    id: serviceSectionId(s.name),
+    label: s.name,
+    color: SERVICE_SECTION_COLORS[i % SERVICE_SECTION_COLORS.length],
+    position: i,
+  }));
+
   if (target) {
+    const merged = mergeSectionOptions(
+      (target.sectionOptions as SectionOption[] | null) ?? [],
+      [
+        ...((template?.sectionOptions as SectionOption[] | null) ?? []),
+        ...serviceSections,
+      ],
+    );
+    if (merged.changed) {
+      await db
+        .update(boards)
+        .set({ sectionOptions: merged.options })
+        .where(eq(boards.id, target.id));
+    }
+
     if (template) {
-      const merged = mergeSectionOptions(
-        (target.sectionOptions as SectionOption[] | null) ?? [],
-        (template.sectionOptions as SectionOption[] | null) ?? [],
-      );
-      if (merged.changed) {
-        await db.update(boards).set({ sectionOptions: merged.options }).where(eq(boards.id, target.id));
-      }
       await materializeTemplateTasks(
         target.id,
         template.id,
         target.statusOptions as StatusOption[],
         { dedupe: true },
       );
-    } else {
-      await seedFallbackTasks(target.id, target.statusOptions as StatusOption[], payload, {
-        dedupe: true,
-      });
     }
+    await materializePerServiceTasks(
+      target.id,
+      target.statusOptions as StatusOption[],
+      payload,
+      { dedupe: true },
+    );
     return target.id;
   }
 
-  // No existing boards for this client — create one named after the client.
-  // The board is the client's home in Central (one-board-per-client model);
-  // it carries onboarding, ongoing, and offboarding work over its lifetime,
-  // so prefixing with "Onboarding — " is wrong as soon as onboarding ends.
   const boardName = payload.account_name;
+  const initialSections: SectionOption[] = template
+    ? mergeSectionOptions(
+        (template.sectionOptions as SectionOption[] | null) ?? [],
+        serviceSections,
+      ).options
+    : serviceSections;
 
   const [newBoard] = await db
     .insert(boards)
@@ -247,11 +297,11 @@ async function provisionOnboardingBoard(
       ...(template
         ? {
             statusOptions: template.statusOptions as StatusOption[],
-            sectionOptions: template.sectionOptions as SectionOption[],
+            sectionOptions: initialSections,
             icon: template.icon,
             color: template.color,
           }
-        : {}),
+        : { sectionOptions: initialSections }),
     })
     .returning({ id: boards.id, statusOptions: boards.statusOptions });
 
@@ -262,11 +312,13 @@ async function provisionOnboardingBoard(
       newBoard.statusOptions as StatusOption[],
       { dedupe: false },
     );
-  } else {
-    await seedFallbackTasks(newBoard.id, newBoard.statusOptions as StatusOption[], payload, {
-      dedupe: false,
-    });
   }
+  await materializePerServiceTasks(
+    newBoard.id,
+    newBoard.statusOptions as StatusOption[],
+    payload,
+    { dedupe: false },
+  );
 
   return newBoard.id;
 }
@@ -293,6 +345,14 @@ async function existingTitlesOnBoard(boardId: string): Promise<Set<string>> {
     columns: { title: true },
   });
   return new Set(rows.map((r) => r.title));
+}
+
+async function maxPositionOnBoard(boardId: string): Promise<number> {
+  const rows = await db.query.tasks.findMany({
+    where: eq(tasks.boardId, boardId),
+    columns: { position: true },
+  });
+  return rows.reduce((max, r) => Math.max(max, r.position ?? -1), -1);
 }
 
 async function materializeTemplateTasks(
@@ -365,7 +425,18 @@ async function materializeTemplateTasks(
   }
 }
 
-async function seedFallbackTasks(
+/**
+ * Per-service tasks driven by the catalog-vs-SOW reconciled plan Pulse
+ * sends. One section per service, one task per reconciled bullet. The
+ * service's task_source + task_source_reasoning lands in each task's
+ * description so AMs can see WHY the task is there (catalog default vs
+ * SOW override vs merge).
+ *
+ * Fallback: if a service has no onboarding_tasks (catalog row is empty
+ * or older Pulse payload), emit a single "Set up: {service.name}"
+ * placeholder — the service still appears on the board.
+ */
+async function materializePerServiceTasks(
   boardId: string,
   statusOptions: StatusOption[],
   payload: PulseClientOnboardedPayload,
@@ -373,14 +444,43 @@ async function seedFallbackTasks(
 ): Promise<void> {
   const defaultStatus = statusOptions[0]?.id ?? 'todo';
   const existingTitles = opts.dedupe ? await existingTitlesOnBoard(boardId) : new Set<string>();
-  const rows = [
-    { title: 'Kickoff meeting', position: 0 },
-    { title: 'Collect access credentials', position: 1 },
-    ...payload.services.map((service, i) => ({
-      title: `Set up: ${service.name}`,
-      position: 2 + i,
-    })),
-  ].filter((r) => !existingTitles.has(r.title));
+  let nextPosition = (await maxPositionOnBoard(boardId)) + 1;
+
+  const rows: Array<{
+    title: string;
+    description: TiptapContent | undefined;
+    section: string;
+    position: number;
+  }> = [];
+
+  for (const service of payload.services) {
+    const sectionId = serviceSectionId(service.name);
+    const sourceLabel =
+      service.task_source === 'sow'
+        ? 'SOW-bespoke scope'
+        : service.task_source === 'merged'
+          ? 'Catalog default + SOW additions'
+          : 'Catalog default';
+    const reasoning = service.task_source_reasoning?.trim() ?? '';
+    const description = buildServiceTaskDescription(sourceLabel, reasoning);
+
+    const serviceTasks = service.onboarding_tasks ?? [];
+    if (serviceTasks.length === 0) {
+      const title = `Set up: ${service.name}`;
+      if (!existingTitles.has(title)) {
+        rows.push({ title, description, section: sectionId, position: nextPosition++ });
+        existingTitles.add(title);
+      }
+      continue;
+    }
+
+    for (const task of serviceTasks) {
+      const title = task.phase ? `${task.phase}: ${task.title}` : task.title;
+      if (existingTitles.has(title)) continue;
+      rows.push({ title, description, section: sectionId, position: nextPosition++ });
+      existingTitles.add(title);
+    }
+  }
 
   if (rows.length === 0) return;
 
@@ -389,8 +489,32 @@ async function seedFallbackTasks(
       boardId,
       shortId: shortId(),
       title: r.title,
+      description: r.description,
       status: defaultStatus,
+      section: r.section,
       position: r.position,
     })),
   );
+}
+
+function buildServiceTaskDescription(
+  sourceLabel: string,
+  reasoning: string,
+): TiptapContent {
+  const content: TiptapContent['content'] = [
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', marks: [{ type: 'bold' }], text: 'Source: ' },
+        { type: 'text', text: sourceLabel },
+      ],
+    },
+  ];
+  if (reasoning) {
+    content.push({
+      type: 'paragraph',
+      content: [{ type: 'text', text: reasoning }],
+    });
+  }
+  return { type: 'doc', content };
 }
