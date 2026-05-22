@@ -20,9 +20,6 @@ import type {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Health probe so we can verify deployment without sending a signed payload.
-// curl https://central.clix.co/api/webhooks/pulse/client-onboarded
-// → 200 { ok: true } when the route is live; 405 from Vercel otherwise.
 export async function GET() {
   return NextResponse.json({
     ok: true,
@@ -47,8 +44,6 @@ interface Service {
   catalog_id: string | null;
   onboarding_scope: string | null;
   accesses_required: string | null;
-  // New fields landed by Pulse — may be absent on older payloads, so always
-  // optional + defensive defaults below.
   onboarding_tasks?: ServiceTask[];
   task_source?: ScopeSource;
   task_source_reasoning?: string;
@@ -174,10 +169,28 @@ export async function POST(request: NextRequest) {
 }
 
 async function upsertClient(payload: PulseClientOnboardedPayload): Promise<UpsertResult> {
-  const existing = await db.query.clients.findFirst({
+  // Lookup by slug first; fall back to lookup by pulse_account_id stored on
+  // metadata. The fallback catches the case where Pulse's slug derivation
+  // changed (e.g. earlier conversions wrote slug = account UUID due to the
+  // business_name bug, then later conversions started sending the real
+  // slug). Without the fallback we'd create a duplicate client every time
+  // the slug shifts; with it, we update the existing row in place.
+  let existing = await db.query.clients.findFirst({
     where: eq(clients.slug, payload.account_slug),
-    columns: { id: true, metadata: true, defaultBoardId: true },
+    columns: { id: true, name: true, slug: true, metadata: true, defaultBoardId: true },
   });
+
+  if (!existing) {
+    const candidates = await db.query.clients.findMany({
+      columns: { id: true, name: true, slug: true, metadata: true, defaultBoardId: true },
+    });
+    existing =
+      candidates.find(
+        (c) =>
+          (c.metadata as ClientMetadata | null)?.customFields?.pulse_account_id ===
+          payload.pulse_account_id,
+      ) ?? undefined;
+  }
 
   const metadata: ClientMetadata = {
     ...(existing?.metadata ?? {}),
@@ -201,7 +214,18 @@ async function upsertClient(payload: PulseClientOnboardedPayload): Promise<Upser
   };
 
   if (existing) {
-    await db.update(clients).set({ metadata }).where(eq(clients.id, existing.id));
+    // Sync name + slug from Pulse on every push so renames propagate. Pulse
+    // is the source of truth for client identity; AMs who rename in Central
+    // will see their edit reverted on the next sync, which is the intended
+    // direction — changes should happen upstream.
+    await db
+      .update(clients)
+      .set({
+        name: payload.account_name,
+        slug: payload.account_slug,
+        metadata,
+      })
+      .where(eq(clients.id, existing.id));
     return { id: existing.id, defaultBoardId: existing.defaultBoardId ?? null };
   }
 
@@ -216,12 +240,6 @@ async function upsertClient(payload: PulseClientOnboardedPayload): Promise<Upser
   return { id: created.id, defaultBoardId: null };
 }
 
-/**
- * One-board-per-client model. If the client already has a board, append
- * (idempotent dedupe). Otherwise create a new one named after the client.
- * In both paths we now also materialize a per-service section + the
- * reconciled per-service task list that Pulse sends.
- */
 async function provisionOnboardingBoard(
   clientId: string,
   existingDefaultBoardId: string | null,
@@ -233,14 +251,18 @@ async function provisionOnboardingBoard(
 
   const clientBoards = await db.query.boards.findMany({
     where: eq(boards.clientId, clientId),
-    columns: { id: true, statusOptions: true, sectionOptions: true },
+    columns: {
+      id: true,
+      name: true,
+      statusOptions: true,
+      sectionOptions: true,
+    },
     orderBy: [asc(boards.createdAt)],
   });
 
   const target =
     clientBoards.find((b) => b.id === existingDefaultBoardId) ?? clientBoards[0] ?? null;
 
-  // Per-service section list built once and merged in both branches.
   const serviceSections: SectionOption[] = payload.services.map((s, i) => ({
     id: serviceSectionId(s.name),
     label: s.name,
@@ -256,11 +278,15 @@ async function provisionOnboardingBoard(
         ...serviceSections,
       ],
     );
-    if (merged.changed) {
-      await db
-        .update(boards)
-        .set({ sectionOptions: merged.options })
-        .where(eq(boards.id, target.id));
+
+    // Update the board: rename if Pulse's account_name is now different,
+    // and merge in any new sections. Single round-trip when either changed.
+    const nameChanged = target.name !== payload.account_name;
+    if (nameChanged || merged.changed) {
+      const updates: Record<string, unknown> = {};
+      if (nameChanged) updates.name = payload.account_name;
+      if (merged.changed) updates.sectionOptions = merged.options;
+      await db.update(boards).set(updates).where(eq(boards.id, target.id));
     }
 
     if (template) {
@@ -425,17 +451,6 @@ async function materializeTemplateTasks(
   }
 }
 
-/**
- * Per-service tasks driven by the catalog-vs-SOW reconciled plan Pulse
- * sends. One section per service, one task per reconciled bullet. The
- * service's task_source + task_source_reasoning lands in each task's
- * description so AMs can see WHY the task is there (catalog default vs
- * SOW override vs merge).
- *
- * Fallback: if a service has no onboarding_tasks (catalog row is empty
- * or older Pulse payload), emit a single "Set up: {service.name}"
- * placeholder — the service still appears on the board.
- */
 async function materializePerServiceTasks(
   boardId: string,
   statusOptions: StatusOption[],
