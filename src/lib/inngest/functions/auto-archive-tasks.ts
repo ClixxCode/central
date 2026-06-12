@@ -1,9 +1,12 @@
 import { inngest } from '../client';
 import { db } from '@/lib/db';
-import { tasks, boards, siteSettings } from '@/lib/db/schema';
+import { tasks, siteSettings } from '@/lib/db/schema';
 import { eq, and, inArray, isNull, lte } from 'drizzle-orm';
 import { getCompleteStatusIds } from '@/lib/utils/status';
-import type { SiteSettings } from '@/lib/db/schema/site-settings';
+import {
+  applySiteSettingsDefaults,
+  type SiteSettings,
+} from '@/lib/db/schema/site-settings';
 import { getOrgCutoffDate } from '@/lib/utils/timezone';
 
 /**
@@ -20,15 +23,15 @@ export const autoArchiveTasks = inngest.createFunction(
     // Step 1: Get site settings and check if auto-archive is enabled
     const settings = await step.run('get-settings', async () => {
       const rows = await db.select().from(siteSettings).limit(1);
-      if (rows.length === 0) return null;
-      return rows[0].settings as SiteSettings;
+      if (rows.length === 0) return applySiteSettingsDefaults(null);
+      return applySiteSettingsDefaults(rows[0].settings as SiteSettings);
     });
 
-    if (!settings?.autoArchiveDays) {
-      return { skipped: true, reason: 'Auto-archive not configured' };
+    const days = settings.autoArchiveDays;
+    if (days === null || days === undefined || days <= 0) {
+      return { skipped: true, reason: 'Auto-archive disabled' };
     }
 
-    const days = settings.autoArchiveDays;
     const cutoffDate = getOrgCutoffDate(settings.timezone, days);
 
     // Step 2: Get all boards with their status options

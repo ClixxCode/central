@@ -1,7 +1,12 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { siteSettings, type SiteSettings } from '@/lib/db/schema';
+import {
+  DEFAULT_SITE_SETTINGS,
+  applySiteSettingsDefaults,
+  siteSettings,
+  type SiteSettings,
+} from '@/lib/db/schema';
 import { requireAuth } from '@/lib/auth/session';
 import { eq } from 'drizzle-orm';
 
@@ -19,11 +24,11 @@ export async function getSiteSettings(): Promise<{
 
   if (rows.length === 0) {
     // Create default row
-    const [row] = await db.insert(siteSettings).values({ settings: {} }).returning();
+    const [row] = await db.insert(siteSettings).values({ settings: DEFAULT_SITE_SETTINGS }).returning();
     return { success: true, data: row.settings };
   }
 
-  return { success: true, data: rows[0].settings };
+  return { success: true, data: applySiteSettingsDefaults(rows[0].settings) };
 }
 
 /**
@@ -46,14 +51,14 @@ export async function updateSiteSettings(input: Partial<SiteSettings>): Promise<
     // Create with provided settings
     const [row] = await db
       .insert(siteSettings)
-      .values({ settings: input })
+      .values({ settings: applySiteSettingsDefaults(input) })
       .returning();
     return { success: true, data: row.settings };
   }
 
   // Merge with existing settings
   const current = rows[0];
-  const merged: SiteSettings = { ...current.settings, ...input };
+  const merged: SiteSettings = { ...applySiteSettingsDefaults(current.settings), ...input };
 
   const [updated] = await db
     .update(siteSettings)

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { DEFAULT_AUTO_ARCHIVE_DAYS } from '@/lib/db/schema';
 import { useSiteSettings, useUpdateSiteSettings } from '@/lib/hooks/useSiteSettings';
 
 export function ArchiveSettingsPageClient() {
@@ -15,21 +16,21 @@ export function ArchiveSettingsPageClient() {
   const updateSettings = useUpdateSiteSettings();
 
   const [enabled, setEnabled] = React.useState(false);
-  const [days, setDays] = React.useState(30);
+  const [days, setDays] = React.useState(DEFAULT_AUTO_ARCHIVE_DAYS);
 
   // Sync state when settings load
   React.useEffect(() => {
     if (settings) {
       const d = settings.autoArchiveDays;
       setEnabled(d != null && d > 0);
-      setDays(d && d > 0 ? d : 30);
+      setDays(d && d > 0 ? d : DEFAULT_AUTO_ARCHIVE_DAYS);
     }
   }, [settings]);
 
   const hasChanges = React.useMemo(() => {
     if (!settings) return false;
     const currentEnabled = settings.autoArchiveDays != null && settings.autoArchiveDays > 0;
-    const currentDays = settings.autoArchiveDays ?? 30;
+    const currentDays = settings.autoArchiveDays ?? DEFAULT_AUTO_ARCHIVE_DAYS;
     return enabled !== currentEnabled || (enabled && days !== currentDays);
   }, [settings, enabled, days]);
 
