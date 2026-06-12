@@ -20,6 +20,7 @@ import { ViewToggleButtons } from './ViewToggle';
 import { TaskFilterBar } from './TaskFilterBar';
 import { TaskModal } from './TaskModal';
 import { MultiSelectFloatingBar, type BulkEditPayload } from './MultiSelectFloatingBar';
+import { SubtaskOnlyFloatingBar } from './SubtaskOnlyFloatingBar';
 import { MoveTasksDialog } from './MoveTasksDialog';
 import { useBoardViewStore, type GroupBy } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
@@ -130,6 +131,10 @@ export function BoardPageClient({
   const lastSelectedIdRef = React.useRef<string | null>(null);
   const isMultiSelectMode = selectedTaskIds.size > 0;
 
+  // ─── Subtask-only mode ────────────────────────────────────
+  const [subtaskOnlyParentId, setSubtaskOnlyParentId] = React.useState<string | null>(null);
+  const isSubtaskOnlyMode = subtaskOnlyParentId !== null;
+
   // Move tasks dialog state
   const [moveDialog, setMoveDialog] = React.useState<{
     open: boolean;
@@ -141,14 +146,47 @@ export function BoardPageClient({
     lastSelectedIdRef.current = null;
   }, []);
 
+  const exitSubtaskOnlyMode = React.useCallback(() => {
+    setSubtaskOnlyParentId(null);
+  }, []);
+
+  const enterSubtaskOnlyMode = React.useCallback(
+    (parentTaskId: string) => {
+      const parentTask = tasks.find((task) => task.id === parentTaskId);
+
+      // "Combine" mode keeps subtasks nested under the parent, so there is
+      // no board-level subtask set to isolate.
+      if (!parentTask?.subtasksBreakoutEnabled || parentTask.subtaskCount === 0) {
+        return;
+      }
+
+      clearSelection();
+      setSubtaskOnlyParentId(parentTaskId);
+    },
+    [clearSelection, tasks]
+  );
+
   // Clear selection when boardId changes
   const prevBoardIdRef = React.useRef(boardId);
   React.useEffect(() => {
     if (prevBoardIdRef.current !== boardId) {
       clearSelection();
+      exitSubtaskOnlyMode();
       prevBoardIdRef.current = boardId;
     }
-  }, [boardId, clearSelection]);
+  }, [boardId, clearSelection, exitSubtaskOnlyMode]);
+
+  React.useEffect(() => {
+    if (!subtaskOnlyParentId) return;
+
+    const parentTask = tasks.find((task) => task.id === subtaskOnlyParentId);
+    if (
+      (!isLoadingTasks && !parentTask) ||
+      (parentTask && (!parentTask.subtasksBreakoutEnabled || parentTask.subtaskCount === 0))
+    ) {
+      exitSubtaskOnlyMode();
+    }
+  }, [exitSubtaskOnlyMode, isLoadingTasks, subtaskOnlyParentId, tasks]);
 
   // Escape key listener
   React.useEffect(() => {
@@ -454,6 +492,8 @@ export function BoardPageClient({
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
+          subtaskOnlyParentId={subtaskOnlyParentId}
+          onEnterSubtaskOnlyMode={enterSubtaskOnlyMode}
         />
       ) : viewMode === 'swimlane' ? (
         <SwimlaneBoardView
@@ -471,6 +511,8 @@ export function BoardPageClient({
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
           groupBy={groupBy}
+          subtaskOnlyParentId={subtaskOnlyParentId}
+          onEnterSubtaskOnlyMode={enterSubtaskOnlyMode}
         />
       ) : (
         <KanbanBoardView
@@ -489,6 +531,8 @@ export function BoardPageClient({
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
           groupBy={groupBy}
+          subtaskOnlyParentId={subtaskOnlyParentId}
+          onEnterSubtaskOnlyMode={enterSubtaskOnlyMode}
         />
       )}
 
@@ -541,6 +585,9 @@ export function BoardPageClient({
           isDeleting={bulkDelete.isPending}
           selectedTasksHaveAssignees={selectedTasksHaveAssignees}
         />
+      )}
+      {isSubtaskOnlyMode && !isMultiSelectMode && (
+        <SubtaskOnlyFloatingBar onExit={exitSubtaskOnlyMode} />
       )}
 
       {/* Move tasks confirmation dialog */}

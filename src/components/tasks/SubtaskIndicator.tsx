@@ -11,6 +11,7 @@ interface SubtaskIndicatorProps {
   isExpanded?: boolean;
   onClick?: (e: React.MouseEvent) => void;
   onToggle?: (e: React.MouseEvent) => void;
+  onLongPress?: () => void;
 }
 
 export function SubtaskIndicator({
@@ -19,18 +20,32 @@ export function SubtaskIndicator({
   className,
   onClick,
   onToggle,
+  onLongPress,
 }: SubtaskIndicatorProps) {
+  const longPressTimerRef = React.useRef<number | null>(null);
+  const longPressFiredRef = React.useRef(false);
+
+  const clearLongPressTimer = React.useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => clearLongPressTimer, [clearLongPressTimer]);
+
   if (subtaskCount === 0) return null;
 
   const handleClick = onClick ?? onToggle;
+  const isInteractive = handleClick || onLongPress;
   const label = `${subtaskCompletedCount}/${subtaskCount} subtasks`;
   const sharedClassName = cn(
     'inline-flex items-center gap-1 text-xs text-muted-foreground',
-    handleClick && 'hover:text-foreground transition-colors',
+    isInteractive && 'hover:text-foreground transition-colors',
     className
   );
 
-  if (!handleClick) {
+  if (!isInteractive) {
     return (
       <span className={sharedClassName} aria-label={label}>
         <ListTree className="size-3" />
@@ -44,10 +59,34 @@ export function SubtaskIndicator({
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        handleClick(e);
+        if (longPressFiredRef.current) {
+          e.preventDefault();
+          longPressFiredRef.current = false;
+          return;
+        }
+        handleClick?.(e);
+      }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (!onLongPress) return;
+
+        clearLongPressTimer();
+        longPressFiredRef.current = false;
+        longPressTimerRef.current = window.setTimeout(() => {
+          longPressTimerRef.current = null;
+          longPressFiredRef.current = true;
+          onLongPress();
+        }, 550);
+      }}
+      onPointerUp={clearLongPressTimer}
+      onPointerLeave={clearLongPressTimer}
+      onPointerCancel={clearLongPressTimer}
+      onContextMenu={(e) => {
+        if (!onLongPress) return;
+        e.preventDefault();
       }}
       className={sharedClassName}
-      aria-label={`Open ${label}`}
+      aria-label={onLongPress ? `Open ${label}. Long press to show only these subtasks.` : `Open ${label}`}
     >
       <ListTree className="size-3" />
       <span>{label}</span>

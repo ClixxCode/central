@@ -17,6 +17,7 @@ interface ExpandedSubtasksProps {
   onTaskClick?: (taskId: string) => void;
   hiddenItems?: Set<string>;
   dependenciesEnabled?: boolean;
+  subtaskOnlyParentId?: string | null;
 }
 
 export function ExpandedSubtasks({
@@ -26,6 +27,7 @@ export function ExpandedSubtasks({
   onTaskClick,
   hiddenItems,
   dependenciesEnabled = false,
+  subtaskOnlyParentId,
 }: ExpandedSubtasksProps) {
   const { data: subtasks, isLoading } = useSubtasks(parentTaskId);
 
@@ -70,11 +72,17 @@ export function ExpandedSubtasks({
             : subtask.id === activeSubtaskId
               ? 'active'
               : 'waiting';
+        const isFadedBySubtaskOnlyMode =
+          !!subtaskOnlyParentId && subtask.parentTaskId !== subtaskOnlyParentId;
 
         return (
           <div
             key={subtask.id}
-            className="flex gap-2"
+            className={cn(
+              'flex gap-2 transition-opacity',
+              isFadedBySubtaskOnlyMode && 'pointer-events-none opacity-25'
+            )}
+            aria-disabled={isFadedBySubtaskOnlyMode || undefined}
           >
             {/* Nesting indicator */}
             <div className="flex items-start pt-3.5 pl-1 shrink-0">

@@ -44,6 +44,10 @@ interface TaskRowProps {
   isSelected?: boolean;
   isMultiSelectMode?: boolean;
   onMultiSelectClick?: (e: React.MouseEvent) => void;
+  isFaded?: boolean;
+  isSubtaskOnlyParent?: boolean;
+  subtaskOnlyHighlightColor?: string;
+  onEnterSubtaskOnlyMode?: (parentTaskId: string) => void;
   columns: {
     title: boolean;
     status: boolean;
@@ -69,6 +73,10 @@ export function TaskRow({
   isSelected,
   isMultiSelectMode,
   onMultiSelectClick,
+  isFaded,
+  isSubtaskOnlyParent,
+  subtaskOnlyHighlightColor,
+  onEnterSubtaskOnlyMode,
   columns,
 }: TaskRowProps) {
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
@@ -79,6 +87,14 @@ export function TaskRow({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const clickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const openSubtasks = onOpenSubtasks ?? onToggleSubtasks;
+  const subtaskOnlyHighlightStyle: React.CSSProperties | undefined =
+    isSubtaskOnlyParent && subtaskOnlyHighlightColor
+      ? {
+          borderColor: subtaskOnlyHighlightColor,
+          backgroundColor: `color-mix(in srgb, ${subtaskOnlyHighlightColor} 10%, transparent)`,
+          boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${subtaskOnlyHighlightColor} 55%, transparent)`,
+        }
+      : undefined;
 
   // Focus input when entering edit mode
   React.useEffect(() => {
@@ -170,9 +186,13 @@ export function TaskRow({
         'group border-b transition-colors',
         'hover:bg-muted/50',
         isUpdating && 'opacity-50',
-        isSelected && 'bg-primary/10 hover:bg-primary/15'
+        isSelected && 'bg-primary/10 hover:bg-primary/15',
+        isFaded && 'pointer-events-none opacity-25'
       )}
+      style={subtaskOnlyHighlightStyle}
+      aria-disabled={isFaded || undefined}
       onClick={(e) => {
+        if (isFaded) return;
         if (isMultiSelectMode || e.shiftKey) {
           // Only handle selection from title cell clicks, not from interactive controls
           const target = e.target as HTMLElement;
@@ -245,11 +265,32 @@ export function TaskRow({
                   subtaskCompletedCount={task.subtaskCompletedCount}
                   isExpanded={isExpanded}
                   onClick={openSubtasks ? () => openSubtasks() : undefined}
+                  onLongPress={
+                    task.subtasksBreakoutEnabled && onEnterSubtaskOnlyMode
+                      ? () => onEnterSubtaskOnlyMode(task.id)
+                      : undefined
+                  }
                   className="shrink-0"
                 />
               )}
             </div>
-            {task.parentTaskId && task.parentTaskTitle && (
+            {task.parentTaskId && task.parentTaskTitle && onEnterSubtaskOnlyMode && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEnterSubtaskOnlyMode?.(task.parentTaskId!);
+                }}
+                className="flex min-w-0 items-center gap-1 rounded text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Show only subtasks for ${task.parentTaskTitle}`}
+              >
+                <CornerDownRight className="size-3 shrink-0" />
+                <span className="truncate" title={task.parentTaskTitle}>
+                  {task.parentTaskTitle}
+                </span>
+              </button>
+            )}
+            {task.parentTaskId && task.parentTaskTitle && !onEnterSubtaskOnlyMode && (
               <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
                 <CornerDownRight className="size-3 shrink-0" />
                 <span className="truncate" title={task.parentTaskTitle}>

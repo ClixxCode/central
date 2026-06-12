@@ -32,6 +32,8 @@ interface SwimlaneBoardViewProps {
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
   isMultiSelectMode?: boolean;
+  subtaskOnlyParentId?: string | null;
+  onEnterSubtaskOnlyMode?: (parentTaskId: string) => void;
   /** Group by status (default), date buckets, or sections */
   groupBy?: 'status' | 'date' | 'section';
 }
@@ -50,6 +52,8 @@ export function SwimlaneBoardView({
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
+  subtaskOnlyParentId,
+  onEnterSubtaskOnlyMode,
   groupBy = 'status',
 }: SwimlaneBoardViewProps) {
   const { isSwimlaneCollapsed, toggleSwimlane, getBoardTableColumns, getSwimlaneSortConfig, setSwimlaneSortConfig } = useBoardViewStore();
@@ -297,6 +301,8 @@ export function SwimlaneBoardView({
                 selectedTaskIds={selectedTaskIds}
                 onTaskMultiSelect={onTaskMultiSelect}
                 isMultiSelectMode={isMultiSelectMode}
+                subtaskOnlyParentId={subtaskOnlyParentId}
+                onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
               />
             </Swimlane>
           );

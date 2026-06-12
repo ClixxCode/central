@@ -38,6 +38,8 @@ interface KanbanBoardViewProps {
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
   isMultiSelectMode?: boolean;
+  subtaskOnlyParentId?: string | null;
+  onEnterSubtaskOnlyMode?: (parentTaskId: string) => void;
   /** Group by status (default), date buckets, or sections */
   groupBy?: 'status' | 'date' | 'section';
 }
@@ -57,6 +59,8 @@ export function KanbanBoardView({
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
+  subtaskOnlyParentId,
+  onEnterSubtaskOnlyMode,
   groupBy = 'status',
 }: KanbanBoardViewProps) {
   const updateTaskPositions = useUpdateTaskPositions();
@@ -379,6 +383,11 @@ export function KanbanBoardView({
                 {columnTasks.map((task) => {
                   const showInlineSubtasks = task.subtaskCount > 0 && !task.subtasksBreakoutEnabled;
                   const openSubtasksSheet = task.subtaskCount > 0 && task.subtasksBreakoutEnabled;
+                  const isSubtaskOnlyParent = task.id === subtaskOnlyParentId;
+                  const isFadedBySubtaskOnlyMode =
+                    !!subtaskOnlyParentId &&
+                    task.id !== subtaskOnlyParentId &&
+                    task.parentTaskId !== subtaskOnlyParentId;
 
                   return (
                     <React.Fragment key={task.id}>
@@ -387,6 +396,7 @@ export function KanbanBoardView({
                         sectionOptions={sectionOptions}
                         assignableUsers={assignableUsers}
                         onClick={(e) => {
+                          if (isFadedBySubtaskOnlyMode) return;
                           if (isMultiSelectMode || e.shiftKey) {
                             const columnTaskIds = columnTasks.map((t) => t.id);
                             onTaskMultiSelect?.(task.id, e.shiftKey, columnTaskIds);
@@ -399,6 +409,10 @@ export function KanbanBoardView({
                         isExpanded={showInlineSubtasks ? expandedParents.has(task.id) : undefined}
                         hiddenItems={hiddenItems}
                         isSelected={selectedTaskIds?.has(task.id)}
+                        isFaded={isFadedBySubtaskOnlyMode}
+                        isSubtaskOnlyParent={isSubtaskOnlyParent}
+                        subtaskOnlyHighlightColor={status.color}
+                        onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
                       />
                       {showInlineSubtasks && expandedParents.has(task.id) && (
                         <ExpandedSubtasks
@@ -408,6 +422,7 @@ export function KanbanBoardView({
                           onTaskClick={(taskId) => openTaskModal(taskId)}
                           hiddenItems={hiddenItems}
                           dependenciesEnabled={task.subtasksSequentialEnabled}
+                          subtaskOnlyParentId={subtaskOnlyParentId}
                         />
                       )}
                     </React.Fragment>

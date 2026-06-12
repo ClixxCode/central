@@ -186,4 +186,98 @@ describe('KanbanTaskCard', () => {
     // Just verify the task renders correctly
     expect(screen.getByText('Kanban Test Task')).toBeInTheDocument();
   });
+
+  it('starts subtask-only mode on long press when subtasks are broken out', () => {
+    vi.useFakeTimers();
+    const onEnterSubtaskOnlyMode = vi.fn();
+    const parentTask = {
+      ...mockTask,
+      subtaskCount: 2,
+      subtaskCompletedCount: 1,
+      subtasksBreakoutEnabled: true,
+    };
+
+    try {
+      render(
+        <KanbanTaskCard
+          {...defaultProps}
+          task={parentTask}
+          onOpenSubtasks={vi.fn()}
+          onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
+        />
+      );
+
+      fireEvent.pointerDown(screen.getByRole('button', { name: /long press/i }));
+      vi.advanceTimersByTime(550);
+
+      expect(onEnterSubtaskOnlyMode).toHaveBeenCalledWith(parentTask.id);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not start subtask-only mode on long press when subtasks are combined', () => {
+    vi.useFakeTimers();
+    const onEnterSubtaskOnlyMode = vi.fn();
+    const parentTask = {
+      ...mockTask,
+      subtaskCount: 2,
+      subtaskCompletedCount: 1,
+      subtasksBreakoutEnabled: false,
+    };
+
+    try {
+      render(
+        <KanbanTaskCard
+          {...defaultProps}
+          task={parentTask}
+          onToggleSubtasks={vi.fn()}
+          onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
+        />
+      );
+
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Open 1/2 subtasks' }));
+      vi.advanceTimersByTime(550);
+
+      expect(onEnterSubtaskOnlyMode).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('highlights the parent task in subtask-only mode', () => {
+    const { container } = render(
+      <KanbanTaskCard
+        {...defaultProps}
+        task={mockTask}
+        isSubtaskOnlyParent
+        subtaskOnlyHighlightColor="#3B82F6"
+      />
+    );
+
+    expect(container.querySelector('article')).toHaveStyle({ borderColor: '#3B82F6' });
+  });
+
+  it('starts subtask-only mode from a subtask parent breadcrumb', () => {
+    const onEnterSubtaskOnlyMode = vi.fn();
+    const subtask = {
+      ...mockTask,
+      id: 'subtask-1',
+      title: 'Child task',
+      parentTaskId: 'parent-1',
+      parentTaskTitle: 'Parent task',
+    };
+
+    render(
+      <KanbanTaskCard
+        {...defaultProps}
+        task={subtask}
+        onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show only subtasks for Parent task' }));
+
+    expect(onEnterSubtaskOnlyMode).toHaveBeenCalledWith('parent-1');
+  });
 });

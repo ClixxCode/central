@@ -47,6 +47,8 @@ interface BoardTableProps {
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
   isMultiSelectMode?: boolean;
+  subtaskOnlyParentId?: string | null;
+  onEnterSubtaskOnlyMode?: (parentTaskId: string) => void;
 }
 
 export function BoardTable({
@@ -67,6 +69,8 @@ export function BoardTable({
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
+  subtaskOnlyParentId,
+  onEnterSubtaskOnlyMode,
 }: BoardTableProps) {
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
 
@@ -220,6 +224,12 @@ export function BoardTable({
             tasks.map((task) => {
               const showInlineSubtasks = task.subtaskCount > 0 && !task.subtasksBreakoutEnabled;
               const openSubtasksSheet = task.subtaskCount > 0 && task.subtasksBreakoutEnabled;
+              const isSubtaskOnlyParent = task.id === subtaskOnlyParentId;
+              const statusColor = statusOptions.find((status) => status.id === task.status)?.color;
+              const isFadedBySubtaskOnlyMode =
+                !!subtaskOnlyParentId &&
+                task.id !== subtaskOnlyParentId &&
+                task.parentTaskId !== subtaskOnlyParentId;
 
               return (
                 <React.Fragment key={task.id}>
@@ -239,6 +249,10 @@ export function BoardTable({
                     isSelected={selectedTaskIds?.has(task.id)}
                     isMultiSelectMode={isMultiSelectMode}
                     onMultiSelectClick={(e) => onTaskMultiSelect?.(task.id, e.shiftKey, tasks.map((t) => t.id))}
+                    isFaded={isFadedBySubtaskOnlyMode}
+                    isSubtaskOnlyParent={isSubtaskOnlyParent}
+                    subtaskOnlyHighlightColor={statusColor}
+                    onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
                   />
                   {showInlineSubtasks && expandedParents.has(task.id) && (
                     <SubtaskRows
@@ -251,6 +265,8 @@ export function BoardTable({
                       onOpenModal={onOpenTaskModal}
                       updatingTaskIds={updatingTaskIds}
                       columns={columns}
+                      subtaskOnlyParentId={subtaskOnlyParentId}
+                      onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
                     />
                   )}
                 </React.Fragment>
@@ -273,6 +289,8 @@ function SubtaskRows({
   onOpenModal,
   updatingTaskIds,
   columns,
+  subtaskOnlyParentId,
+  onEnterSubtaskOnlyMode,
 }: {
   parentTaskId: string;
   statusOptions: StatusOption[];
@@ -283,6 +301,8 @@ function SubtaskRows({
   onOpenModal?: (taskId: string) => void;
   updatingTaskIds: string[];
   columns: ColumnConfig;
+  subtaskOnlyParentId?: string | null;
+  onEnterSubtaskOnlyMode?: (parentTaskId: string) => void;
 }) {
   const { data: subtasks, isLoading } = useSubtasks(parentTaskId);
 
@@ -307,6 +327,8 @@ function SubtaskRows({
           isUpdating={updatingTaskIds.includes(subtask.id)}
           columns={columns}
           isSubtask
+          isFaded={!!subtaskOnlyParentId && subtask.parentTaskId !== subtaskOnlyParentId}
+          onEnterSubtaskOnlyMode={onEnterSubtaskOnlyMode}
         />
       ))}
     </>
