@@ -267,6 +267,12 @@ export function BoardPageClient({
 
   // Task modal state for table view
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
+  const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
+
+  const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    setSelectedTaskInitialTab(initialTab);
+    setSelectedTaskId(taskId);
+  }, []);
 
   // Sync selectedTaskId to URL so links are shareable (table view)
   React.useEffect(() => {
@@ -297,6 +303,7 @@ export function BoardPageClient({
   // Handle closing the task modal - clear both states and URL
   const handleCloseTaskModal = React.useCallback(() => {
     setSelectedTaskId(null);
+    setSelectedTaskInitialTab('details');
     clearUrlParams();
   }, [clearUrlParams]);
 
@@ -314,7 +321,7 @@ export function BoardPageClient({
       onSuccess: (createdTask) => {
         setIsCreateModalOpen(false);
         // Open the task details after creation
-        setSelectedTaskId(createdTask.id);
+        openTaskModal(createdTask.id);
       },
     });
   };
@@ -438,7 +445,8 @@ export function BoardPageClient({
           assignableUsers={assignableUsers}
           onUpdateTask={(input) => updateTask.mutate(input)}
           onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
-          onOpenTaskModal={setSelectedTaskId}
+          onOpenTaskModal={openTaskModal}
+          onOpenSubtasks={(taskId) => openTaskModal(taskId, 'subtasks')}
           updatingTaskIds={updatingTaskIds}
           sort={sort}
           onSortChange={setSort}
@@ -511,7 +519,8 @@ export function BoardPageClient({
         mode="view"
         highlightedCommentId={urlCommentId ?? undefined}
         taskBasePath={`/clients/${clientSlug}/boards/${boardId}`}
-        onOpenSubtask={setSelectedTaskId}
+        onOpenSubtask={(taskId) => openTaskModal(taskId)}
+        initialTab={viewMode === 'table' && urlTaskId ? 'details' : selectedTaskInitialTab}
       />
 
       {/* Multi-select floating bar */}

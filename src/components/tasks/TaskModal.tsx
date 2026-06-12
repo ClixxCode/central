@@ -99,6 +99,7 @@ export interface TaskUser {
 }
 
 export type DateFlexibility = 'not_set' | 'flexible' | 'semi_flexible' | 'not_flexible';
+type TaskModalTab = 'details' | 'subtasks' | 'attachments' | 'activity';
 
 const DATE_FLEXIBILITY_OPTIONS: { value: DateFlexibility; label: string; color: string; hex: string }[] = [
   { value: 'not_set', label: 'Not set', color: 'bg-muted', hex: '' },
@@ -145,6 +146,8 @@ interface TaskModalProps {
   taskBasePath?: string;
   /** Called when a subtask is clicked in the Subtasks tab */
   onOpenSubtask?: (taskId: string) => void;
+  /** Tab to select when the sheet opens or navigates to a task */
+  initialTab?: TaskModalTab;
 }
 
 export function TaskModal({
@@ -161,6 +164,7 @@ export function TaskModal({
   highlightedCommentId,
   taskBasePath,
   onOpenSubtask,
+  initialTab = 'details',
 }: TaskModalProps) {
   const ignoreWeekends = useIgnoreWeekends();
   const editorRef = useRef<TaskEditorRef>(null);
@@ -201,7 +205,7 @@ export function TaskModal({
   const [isAssigneePickerOpen, setIsAssigneePickerOpen] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [assigneeHighlight, setAssigneeHighlight] = useState(0);
-  const [activeTab, setActiveTab] = useState('details');
+  const [activeTab, setActiveTab] = useState<TaskModalTab>('details');
   const [isSaving, setIsSaving] = useState(false);
   const [highlightedAttachmentId, setHighlightedAttachmentId] = useState<string | null>(null);
   const [completeParentOpen, setCompleteParentOpen] = useState(false);
@@ -368,12 +372,18 @@ export function TaskModal({
       // Reset activeTab when the modal first opens OR when navigating
       // to a different task (e.g. clicking a subtask from the subtasks tab)
       if (!prevOpenRef.current || prevTaskIdRef.current !== task?.id) {
-        setActiveTab('details');
+        const requestedTab =
+          initialTab === 'subtasks' && (!task || task.parentTaskId || isNew)
+            ? 'details'
+            : initialTab === 'activity' && (!task || isNew)
+              ? 'details'
+              : initialTab;
+        setActiveTab(requestedTab);
       }
       prevTaskIdRef.current = task?.id ?? null;
     }
     prevOpenRef.current = open;
-  }, [open, task, statusOptions, highlightedCommentId]);
+  }, [open, task, statusOptions, highlightedCommentId, initialTab, isNew]);
 
   // Get selected assignees
   const selectedAssignees = assignableUsers.filter((user) => assigneeIds.includes(user.id));
@@ -528,10 +538,13 @@ export function TaskModal({
             <button
               type="button"
               onClick={() => onOpenSubtask(task.parentTaskId!)}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors mb-1 -ml-2"
+              className="mb-1 -ml-2 inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title={task.parentTaskTitle ?? 'View parent task'}
             >
               <CornerDownRight className="size-3" />
-              <span>This is a subtask — view parent task</span>
+              <span className="truncate">
+                {task.parentTaskTitle ?? 'View parent task'}
+              </span>
             </button>
           )}
           <div className="flex items-center gap-3 pr-8">
@@ -576,7 +589,11 @@ export function TaskModal({
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Main content area */}
           <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-1 flex-col overflow-hidden">
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => setActiveTab(value as TaskModalTab)}
+              className="flex flex-1 flex-col overflow-hidden"
+            >
               <div className="mx-6 mt-4 flex items-center shrink-0">
                 <TabsList>
                   <TabsTrigger value="details" className="gap-1.5">

@@ -51,6 +51,12 @@ export function PersonalListTab() {
   // Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
+  const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
+
+  const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    setSelectedTaskInitialTab(initialTab);
+    setSelectedTaskId(taskId);
+  }, []);
 
   // Fetch individually if not found in board tasks (e.g. subtask)
   const boardTask = React.useMemo(
@@ -84,12 +90,13 @@ export function PersonalListTab() {
     createTask.mutate(input, {
       onSuccess: (createdTask) => {
         setIsCreateModalOpen(false);
-        setSelectedTaskId(createdTask.id);
+        openTaskModal(createdTask.id);
       },
     });
   };
 
   const handleCloseTaskModal = React.useCallback(() => {
+    setSelectedTaskInitialTab('details');
     setSelectedTaskId(null);
   }, []);
 
@@ -196,7 +203,8 @@ export function PersonalListTab() {
           assignableUsers={[]}
           onUpdateTask={(input) => updateTask.mutate(input)}
           onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
-          onOpenTaskModal={setSelectedTaskId}
+          onOpenTaskModal={openTaskModal}
+          onOpenSubtasks={(taskId) => openTaskModal(taskId, 'subtasks')}
           updatingTaskIds={updatingTaskIds}
           sort={sort}
           onSortChange={setSort}
@@ -239,7 +247,8 @@ export function PersonalListTab() {
           handleCloseTaskModal();
         }}
         mode="view"
-        onOpenSubtask={setSelectedTaskId}
+        onOpenSubtask={(taskId) => openTaskModal(taskId)}
+        initialTab={selectedTaskInitialTab}
       />
     </div>
   );

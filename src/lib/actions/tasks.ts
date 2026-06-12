@@ -46,6 +46,7 @@ export interface TaskWithAssignees {
   recurringConfig: RecurringConfig | null;
   recurringGroupId: string | null;
   parentTaskId: string | null;
+  parentTaskTitle?: string | null;
   position: number;
   createdBy: string | null;
   createdAt: Date;
@@ -266,8 +267,8 @@ export async function listTasks(
     return { success: false, error: 'Access denied to this board' };
   }
 
-  // Build query conditions - exclude subtasks and archived tasks from board views
-  const conditions = [eq(tasks.boardId, boardId), isNull(tasks.parentTaskId), isNull(tasks.archivedAt)];
+  // Build query conditions - include subtasks so each task appears in its own workflow stage.
+  const conditions = [eq(tasks.boardId, boardId), isNull(tasks.archivedAt)];
 
   // Apply filters
   if (filters?.status) {
@@ -322,9 +323,6 @@ export async function listTasks(
       }
     }
   }
-
-  // Get tasks based on access level
-  let taskList: typeof tasks.$inferSelect[];
 
   if (accessLevel === 'assigned_only') {
     // Get only tasks assigned to this user
@@ -420,7 +418,7 @@ export async function listTasks(
     }
   })();
 
-  taskList = await db
+  const taskList = await db
     .select()
     .from(tasks)
     .where(and(...conditions))
@@ -428,6 +426,22 @@ export async function listTasks(
 
   // Get assignees for all tasks
   const taskIds = taskList.map((t) => t.id);
+  const parentTaskIds = Array.from(
+    new Set(taskList.map((t) => t.parentTaskId).filter((id): id is string => !!id))
+  );
+
+  const parentTasksData =
+    parentTaskIds.length > 0
+      ? await db
+          .select({
+            id: tasks.id,
+            title: tasks.title,
+          })
+          .from(tasks)
+          .where(inArray(tasks.id, parentTaskIds))
+      : [];
+
+  const parentTitleById = new Map(parentTasksData.map((parent) => [parent.id, parent.title]));
 
   const assigneesData =
     taskIds.length > 0
@@ -619,6 +633,7 @@ export async function listTasks(
       recurringConfig: task.recurringConfig,
       recurringGroupId: task.recurringGroupId,
       parentTaskId: task.parentTaskId,
+      parentTaskTitle: task.parentTaskId ? parentTitleById.get(task.parentTaskId) ?? null : null,
       position: task.position,
       createdBy: task.createdBy,
       createdAt: task.createdAt,
@@ -737,6 +752,13 @@ export async function getTask(taskId: string): Promise<{
     }
   }
 
+  const parentTaskTitle = task.parentTaskId
+    ? (await db.query.tasks.findFirst({
+        where: eq(tasks.id, task.parentTaskId),
+        columns: { title: true },
+      }))?.title ?? null
+    : null;
+
   const taskWithAssignees: TaskWithAssignees = {
     id: task.id,
     shortId: task.shortId,
@@ -750,6 +772,7 @@ export async function getTask(taskId: string): Promise<{
     recurringConfig: task.recurringConfig,
     recurringGroupId: task.recurringGroupId,
     parentTaskId: task.parentTaskId,
+    parentTaskTitle,
     position: task.position,
     createdBy: task.createdBy,
     createdAt: task.createdAt,

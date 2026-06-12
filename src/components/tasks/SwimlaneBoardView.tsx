@@ -65,10 +65,17 @@ export function SwimlaneBoardView({
 
   // Modal state - use initialTaskId if provided
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(initialTaskId ?? null);
+  const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
+
+  const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    setSelectedTaskInitialTab(initialTab);
+    setSelectedTaskId(taskId);
+  }, []);
 
   // Sync with initialTaskId prop changes
   React.useEffect(() => {
     if (initialTaskId) {
+      setSelectedTaskInitialTab('details');
       setSelectedTaskId(initialTaskId);
     }
   }, [initialTaskId]);
@@ -88,6 +95,7 @@ export function SwimlaneBoardView({
   // Handle modal close
   const handleCloseModal = React.useCallback(() => {
     setSelectedTaskId(null);
+    setSelectedTaskInitialTab('details');
     onTaskModalClose?.();
   }, [onTaskModalClose]);
 
@@ -279,7 +287,8 @@ export function SwimlaneBoardView({
                 assignableUsers={assignableUsers}
                 onUpdateTask={handleUpdateTask}
                 onDeleteTask={handleDeleteTask}
-                onOpenTaskModal={setSelectedTaskId}
+                onOpenTaskModal={openTaskModal}
+                onOpenSubtasks={(taskId) => openTaskModal(taskId, 'subtasks')}
                 updatingTaskIds={updatingTaskIds}
                 sort={swimlaneSort}
                 onSortChange={(sort) => setSwimlaneSortConfig(boardId, sort)}
@@ -310,7 +319,8 @@ export function SwimlaneBoardView({
         mode="view"
         highlightedCommentId={highlightedCommentId ?? undefined}
         taskBasePath={clientSlug ? `/clients/${clientSlug}/boards/${boardId}` : undefined}
-        onOpenSubtask={setSelectedTaskId}
+        onOpenSubtask={(taskId) => openTaskModal(taskId)}
+        initialTab={selectedTaskInitialTab}
       />
     </>
   );

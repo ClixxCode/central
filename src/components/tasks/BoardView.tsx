@@ -47,7 +47,13 @@ export function BoardView({
 
   // Modal state
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
+  const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+
+  const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    setSelectedTaskInitialTab(initialTab);
+    setSelectedTaskId(taskId);
+  }, []);
 
   // Fetch data
   const { data: tasks = [], isLoading: isLoadingTasks } = useTasks(boardId, filters, sort);
@@ -81,10 +87,15 @@ export function BoardView({
     createTask.mutate(input, {
       onSuccess: (createdTask) => {
         // Open the task modal after creation
-        setSelectedTaskId(createdTask.id);
+        openTaskModal(createdTask.id);
       },
     });
   };
+
+  const handleCloseTaskModal = React.useCallback(() => {
+    setSelectedTaskInitialTab('details');
+    setSelectedTaskId(null);
+  }, []);
 
   const handleOpenCreateModal = () => {
     setIsCreateModalOpen(true);
@@ -134,7 +145,8 @@ export function BoardView({
         assignableUsers={assignableUsers}
         onUpdateTask={(input) => updateTask.mutate(input)}
         onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
-        onOpenTaskModal={setSelectedTaskId}
+        onOpenTaskModal={openTaskModal}
+        onOpenSubtasks={(taskId) => openTaskModal(taskId, 'subtasks')}
         updatingTaskIds={updatingTaskIds}
         isLoading={isLoading}
         sort={sort}
@@ -163,7 +175,7 @@ export function BoardView({
       {/* Task Detail Modal */}
       <TaskModal
         open={!!selectedTaskId}
-        onOpenChange={(open) => !open && setSelectedTaskId(null)}
+        onOpenChange={(open) => !open && handleCloseTaskModal()}
         task={selectedTask}
         statusOptions={statusOptions}
         sectionOptions={sectionOptions}
@@ -171,10 +183,11 @@ export function BoardView({
         onUpdate={(input) => updateTask.mutate(input)}
         onDelete={(taskId) => {
           deleteTask.mutate(taskId);
-          setSelectedTaskId(null);
+          handleCloseTaskModal();
         }}
         mode="view"
-        onOpenSubtask={setSelectedTaskId}
+        onOpenSubtask={(taskId) => openTaskModal(taskId)}
+        initialTab={selectedTaskInitialTab}
       />
 
       {/* Create Task Modal */}

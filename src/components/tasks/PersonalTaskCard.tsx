@@ -60,7 +60,9 @@ export function PersonalTaskCard({
               style={{ backgroundColor: status.color }}
             />
           )}
-          <p className="font-medium text-sm leading-tight flex-1">{task.title}</p>
+          <p className="min-w-0 flex-1 truncate font-medium text-sm leading-tight" title={task.title}>
+            {task.title}
+          </p>
           {task.subtaskCount > 0 && (
             <SubtaskIndicator
               subtaskCount={task.subtaskCount}
@@ -71,9 +73,11 @@ export function PersonalTaskCard({
 
         {/* Parent task context for subtasks */}
         {task.parentTask && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground ml-4">
+          <div className="ml-4 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
             <CornerDownRight className="size-3 shrink-0" />
-            <span className="truncate">subtask of: {task.parentTask.title}</span>
+            <span className="truncate" title={task.parentTask.title}>
+              {task.parentTask.title}
+            </span>
           </div>
         )}
 

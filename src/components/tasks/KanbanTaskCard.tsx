@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Calendar, Repeat } from 'lucide-react';
+import { Calendar, CornerDownRight, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SortableTask } from '@/components/dnd';
 import { AssigneeAvatars, type AssigneeUser } from './AssigneePicker';
@@ -19,6 +19,7 @@ interface KanbanTaskCardProps {
   isDragging?: boolean;
   isOverlay?: boolean;
   onToggleSubtasks?: () => void;
+  onOpenSubtasks?: () => void;
   isExpanded?: boolean;
   hiddenItems?: Set<string>;
   isSelected?: boolean;
@@ -32,6 +33,7 @@ export function KanbanTaskCard({
   isDragging = false,
   isOverlay = false,
   onToggleSubtasks,
+  onOpenSubtasks,
   isExpanded,
   hiddenItems,
   isSelected,
@@ -40,6 +42,7 @@ export function KanbanTaskCard({
   const showSection = !hiddenItems?.has('section');
   const showDueDate = !hiddenItems?.has('dueDate');
   const showAssignees = !hiddenItems?.has('assignees');
+  const openSubtasks = onOpenSubtasks ?? onToggleSubtasks;
 
   const cardContent = (
     <article
@@ -76,7 +79,17 @@ export function KanbanTaskCard({
       )}
 
       {/* Title */}
-      <p className="font-medium text-sm leading-tight">{task.title}</p>
+      <p className="truncate font-medium text-sm leading-tight" title={task.title}>
+        {task.title}
+      </p>
+      {task.parentTaskId && task.parentTaskTitle && (
+        <div className="mt-2 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+          <CornerDownRight className="size-3 shrink-0" />
+          <span className="truncate" title={task.parentTaskTitle}>
+            {task.parentTaskTitle}
+          </span>
+        </div>
+      )}
 
       {/* Meta Row */}
       <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -104,7 +117,7 @@ export function KanbanTaskCard({
               subtaskCount={task.subtaskCount}
               subtaskCompletedCount={task.subtaskCompletedCount}
               isExpanded={isExpanded}
-              onToggle={onToggleSubtasks ? () => onToggleSubtasks() : undefined}
+              onClick={openSubtasks ? () => openSubtasks() : undefined}
             />
           )}
           <TaskActivityIndicators

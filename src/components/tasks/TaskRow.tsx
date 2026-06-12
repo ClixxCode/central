@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { MoreHorizontal, Trash2, ExternalLink, Repeat, ChevronRight, ChevronDown } from 'lucide-react';
+import { MoreHorizontal, Trash2, ExternalLink, Repeat, CornerDownRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { CompleteParentDialog } from './CompleteParentDialog';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { isCompleteStatus } from '@/lib/utils/status';
+import { SubtaskIndicator } from './SubtaskIndicator';
 import type { TaskWithAssignees, UpdateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 
@@ -37,6 +38,7 @@ interface TaskRowProps {
   onOpenModal?: (taskId: string) => void;
   isUpdating?: boolean;
   onToggleSubtasks?: () => void;
+  onOpenSubtasks?: () => void;
   isExpanded?: boolean;
   isSubtask?: boolean;
   isSelected?: boolean;
@@ -61,6 +63,7 @@ export function TaskRow({
   onOpenModal,
   isUpdating = false,
   onToggleSubtasks,
+  onOpenSubtasks,
   isExpanded,
   isSubtask,
   isSelected,
@@ -75,6 +78,7 @@ export function TaskRow({
   const [pendingStatus, setPendingStatus] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const clickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openSubtasks = onOpenSubtasks ?? onToggleSubtasks;
 
   // Focus input when entering edit mode
   React.useEffect(() => {
@@ -181,69 +185,77 @@ export function TaskRow({
       {/* Title Column */}
       {columns.title && (
         <td className="px-3 py-2" data-task-title-cell>
-          <div className={cn('flex items-center gap-1.5', isSubtask && 'pl-6')}>
-            {task.subtaskCount > 0 && onToggleSubtasks && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleSubtasks();
-                }}
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-              >
-                {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-              </button>
-            )}
-            {task.recurringConfig && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="shrink-0">
-                    <RecurringIndicator />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {getRecurrenceDescription(task.recurringConfig)}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {isEditingTitle ? (
-              <Input
-                ref={inputRef}
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                onBlur={handleTitleSubmit}
-                onKeyDown={handleTitleKeyDown}
-                className="h-7 text-sm flex-1"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={(e) => {
-                  // In multi-select mode, let the row onClick handle it
-                  if (isMultiSelectMode || e.shiftKey) return;
-                  // Cancel any existing timeout first
-                  if (clickTimeoutRef.current) {
-                    clearTimeout(clickTimeoutRef.current);
-                  }
-                  // Use timeout to distinguish single click from double click
-                  clickTimeoutRef.current = setTimeout(() => {
-                    clickTimeoutRef.current = null;
-                    onOpenModal?.(task.id);
-                  }, 250);
-                }}
-                onDoubleClick={(e) => {
-                  e.preventDefault();
-                  // Cancel the single click timeout
-                  if (clickTimeoutRef.current) {
-                    clearTimeout(clickTimeoutRef.current);
-                    clickTimeoutRef.current = null;
-                  }
-                  setIsEditingTitle(true);
-                }}
-                className="flex-1 text-left text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-              >
-                {task.title}
-              </button>
+          <div className={cn('space-y-1', isSubtask && 'pl-6')}>
+            <div className="flex min-w-0 items-center gap-1.5">
+              {task.recurringConfig && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="shrink-0">
+                      <RecurringIndicator />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {getRecurrenceDescription(task.recurringConfig)}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {isEditingTitle ? (
+                <Input
+                  ref={inputRef}
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  onBlur={handleTitleSubmit}
+                  onKeyDown={handleTitleKeyDown}
+                  className="h-7 flex-1 text-sm"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    // In multi-select mode, let the row onClick handle it
+                    if (isMultiSelectMode || e.shiftKey) return;
+                    // Cancel any existing timeout first
+                    if (clickTimeoutRef.current) {
+                      clearTimeout(clickTimeoutRef.current);
+                    }
+                    // Use timeout to distinguish single click from double click
+                    clickTimeoutRef.current = setTimeout(() => {
+                      clickTimeoutRef.current = null;
+                      onOpenModal?.(task.id);
+                    }, 250);
+                  }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    // Cancel the single click timeout
+                    if (clickTimeoutRef.current) {
+                      clearTimeout(clickTimeoutRef.current);
+                      clickTimeoutRef.current = null;
+                    }
+                    setIsEditingTitle(true);
+                  }}
+                  className="min-w-0 flex-1 truncate rounded text-left text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  title={task.title}
+                >
+                  {task.title}
+                </button>
+              )}
+              {task.subtaskCount > 0 && (
+                <SubtaskIndicator
+                  subtaskCount={task.subtaskCount}
+                  subtaskCompletedCount={task.subtaskCompletedCount}
+                  isExpanded={isExpanded}
+                  onClick={openSubtasks ? () => openSubtasks() : undefined}
+                  className="shrink-0"
+                />
+              )}
+            </div>
+            {task.parentTaskId && task.parentTaskTitle && (
+              <div className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                <CornerDownRight className="size-3 shrink-0" />
+                <span className="truncate" title={task.parentTaskTitle}>
+                  {task.parentTaskTitle}
+                </span>
+              </div>
             )}
           </div>
         </td>

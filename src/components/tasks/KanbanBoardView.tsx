@@ -5,7 +5,6 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { DndProvider, type DragEndEvent, type UniqueIdentifier } from '@/components/dnd';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanTaskCard } from './KanbanTaskCard';
-import { ExpandedSubtasks } from './ExpandedSubtasks';
 import { CompleteParentDialog } from './CompleteParentDialog';
 import { TaskModal } from './TaskModal';
 import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
@@ -69,32 +68,28 @@ export function KanbanBoardView({
   // Drag-to-scroll for mouse users without trackpads
   const scrollRef = useDragToScroll();
 
-  // Expanded subtasks state
-  const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
-
   // Complete parent dialog state for DnD
   const [completeParentOpen, setCompleteParentOpen] = React.useState(false);
+  const [pendingIncompleteCount, setPendingIncompleteCount] = React.useState(0);
   const pendingDnDRef = React.useRef<{
     taskId: string;
     updates: { id: string; position: number; status?: string }[];
     incompleteCount: number;
   } | null>(null);
 
-  const toggleExpanded = React.useCallback((taskId: string) => {
-    setExpandedParents((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
-  }, []);
-
   // Modal state - use initialTaskId if provided
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(initialTaskId ?? null);
+  const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
+
+  const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    setSelectedTaskInitialTab(initialTab);
+    setSelectedTaskId(taskId);
+  }, []);
 
   // Sync with initialTaskId prop changes
   React.useEffect(() => {
     if (initialTaskId) {
+      setSelectedTaskInitialTab('details');
       setSelectedTaskId(initialTaskId);
     }
   }, [initialTaskId]);
@@ -114,6 +109,7 @@ export function KanbanBoardView({
   // Handle modal close
   const handleCloseModal = React.useCallback(() => {
     setSelectedTaskId(null);
+    setSelectedTaskInitialTab('details');
     onTaskModalClose?.();
   }, [onTaskModalClose]);
 
@@ -246,6 +242,7 @@ export function KanbanBoardView({
             updates,
             incompleteCount: activeTask.subtaskCount - activeTask.subtaskCompletedCount,
           };
+          setPendingIncompleteCount(activeTask.subtaskCount - activeTask.subtaskCompletedCount);
           setCompleteParentOpen(true);
           return;
         }
@@ -377,23 +374,13 @@ export function KanbanBoardView({
                           const columnTaskIds = columnTasks.map((t) => t.id);
                           onTaskMultiSelect?.(task.id, e.shiftKey, columnTaskIds);
                         } else {
-                          setSelectedTaskId(task.id);
+                          openTaskModal(task.id);
                         }
                       }}
-                      onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
-                      isExpanded={expandedParents.has(task.id)}
+                      onOpenSubtasks={task.subtaskCount > 0 ? () => openTaskModal(task.id, 'subtasks') : undefined}
                       hiddenItems={hiddenItems}
                       isSelected={selectedTaskIds?.has(task.id)}
                     />
-                    {expandedParents.has(task.id) && (
-                      <ExpandedSubtasks
-                        parentTaskId={task.id}
-                        statusOptions={statusOptions}
-                        sectionOptions={sectionOptions}
-                        onTaskClick={setSelectedTaskId}
-                        hiddenItems={hiddenItems}
-                      />
-                    )}
                   </React.Fragment>
                 ))}
               </KanbanColumn>
@@ -418,7 +405,8 @@ export function KanbanBoardView({
         mode="view"
         highlightedCommentId={highlightedCommentId ?? undefined}
         taskBasePath={clientSlug ? `/clients/${clientSlug}/boards/${boardId}` : undefined}
-        onOpenSubtask={setSelectedTaskId}
+        onOpenSubtask={(taskId) => openTaskModal(taskId)}
+        initialTab={selectedTaskInitialTab}
       />
 
       {/* Confirmation dialog for DnD to complete column with incomplete subtasks */}
@@ -427,10 +415,11 @@ export function KanbanBoardView({
         onOpenChange={(open) => {
           if (!open) {
             setCompleteParentOpen(false);
+            setPendingIncompleteCount(0);
             pendingDnDRef.current = null;
           }
         }}
-        incompleteCount={pendingDnDRef.current?.incompleteCount ?? 0}
+        incompleteCount={pendingIncompleteCount}
         onConfirm={(completeSubtasks) => {
           const pending = pendingDnDRef.current;
           if (pending) {
@@ -439,6 +428,7 @@ export function KanbanBoardView({
               updateTask.mutate({ id: pending.taskId, completeSubtasks: true });
             }
             pendingDnDRef.current = null;
+            setPendingIncompleteCount(0);
           }
         }}
       />
