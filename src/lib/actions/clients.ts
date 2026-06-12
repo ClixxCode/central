@@ -6,6 +6,7 @@ import { eq, and, inArray, or, isNotNull, asc } from 'drizzle-orm';
 import { getCurrentUser, requireAuth, requireAdmin, isAdmin } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createClientSchema, updateClientSchema, type CreateClientInput, type UpdateClientInput } from '@/lib/validations/client';
+import { mapClientForSummit, notifySummitClientChange } from '@/lib/clients/summit-sync';
 
 import type { ClientMetadata } from '@/lib/db/schema';
 
@@ -461,6 +462,12 @@ export async function createClient(input: CreateClientInput): Promise<ActionResu
     revalidatePath('/clients');
     revalidatePath('/', 'layout');
 
+    const summitClientPayload = mapClientForSummit({
+      ...newClient,
+      defaultBoardId: defaultBoard.id,
+    });
+    await notifySummitClientChange('client.upserted', summitClientPayload);
+
     return {
       success: true,
       data: {
@@ -542,6 +549,8 @@ export async function updateClient(id: string, input: UpdateClientInput): Promis
     revalidatePath(`/clients/${updatedClient.slug}`);
     revalidatePath('/', 'layout');
 
+    await notifySummitClientChange('client.upserted', mapClientForSummit(updatedClient));
+
     return {
       success: true,
       data: {
@@ -589,6 +598,8 @@ export async function deleteClient(id: string): Promise<ActionResult> {
 
     revalidatePath('/clients');
     revalidatePath('/', 'layout');
+
+    await notifySummitClientChange('client.deleted', mapClientForSummit(existingClient));
 
     return { success: true };
   } catch (error) {
