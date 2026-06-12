@@ -62,6 +62,8 @@ const mockTask: TaskWithAssignees = {
   attachmentCount: 0,
   hasNewComments: false,
   parentTaskId: null,
+  subtasksBreakoutEnabled: false,
+  subtasksSequentialEnabled: false,
   subtaskCount: 0,
   subtaskCompletedCount: 0,
   archivedAt: null,

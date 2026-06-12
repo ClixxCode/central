@@ -1158,6 +1158,8 @@ export function TaskModal({
                       statusOptions={statusOptions}
                       sectionOptions={sectionOptions}
                       onOpenSubtask={onOpenSubtask}
+                      parentTask={task}
+                      onUpdateParent={autoSave}
                     />
                   </TabsContent>
                 )}

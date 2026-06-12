@@ -26,6 +26,27 @@ vi.mock('@/lib/hooks/useCurrentUser', () => ({
   }),
 }));
 
+vi.mock('@/lib/hooks/useIgnoreWeekends', () => ({
+  useIgnoreWeekends: () => false,
+}));
+
+vi.mock('@/lib/hooks/useClients', () => ({
+  useClient: () => ({ data: null }),
+}));
+
+vi.mock('@/lib/hooks/useNotifications', () => ({
+  useNotificationPreferences: () => ({ data: null }),
+}));
+
+vi.mock('@/lib/hooks/useTasks', () => ({
+  useArchiveTask: () => ({ mutate: vi.fn(), isPending: false }),
+  useUnarchiveTask: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock('@/lib/hooks/useRealtimeInvalidation', () => ({
+  useRealtimeInvalidation: vi.fn(),
+}));
+
 // Mock mentionable users hook
 vi.mock('@/lib/hooks/useQuickAdd', () => ({
   useMentionableUsers: () => ({ data: [] }),
@@ -106,6 +127,8 @@ const mockTask: TaskWithAssignees = {
   attachmentCount: 0,
   hasNewComments: false,
   parentTaskId: null,
+  subtasksBreakoutEnabled: false,
+  subtasksSequentialEnabled: false,
   subtaskCount: 0,
   subtaskCompletedCount: 0,
   archivedAt: null,
@@ -139,7 +162,7 @@ describe('TaskModal - Copy Link', () => {
     render(
       <TaskModal
         {...defaultProps}
-        task={mockTask}
+        task={{ ...mockTask, shortId: null }}
         taskBasePath="/clients/test-client/boards/board-1"
       />
     );
@@ -175,7 +198,7 @@ describe('TaskModal - Copy Link', () => {
     render(
       <TaskModal
         {...defaultProps}
-        task={mockTask}
+        task={{ ...mockTask, shortId: null }}
         taskBasePath="/clients/test-client/boards/board-1"
       />
     );
@@ -193,7 +216,7 @@ describe('TaskModal - Copy Link', () => {
     render(
       <TaskModal
         {...defaultProps}
-        task={mockTask}
+        task={{ ...mockTask, shortId: null }}
         taskBasePath="/clients/acme-corp/boards/board-1"
       />
     );

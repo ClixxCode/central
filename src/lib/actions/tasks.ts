@@ -47,6 +47,8 @@ export interface TaskWithAssignees {
   recurringGroupId: string | null;
   parentTaskId: string | null;
   parentTaskTitle?: string | null;
+  subtasksBreakoutEnabled: boolean;
+  subtasksSequentialEnabled: boolean;
   position: number;
   createdBy: string | null;
   createdAt: Date;
@@ -100,6 +102,10 @@ export interface UpdateTaskInput {
   recurringConfig?: RecurringConfig | null;
   assigneeIds?: string[];
   position?: number;
+  /** When true, subtasks show as their own board/list cards. Defaults on for existing first-class behavior. */
+  subtasksBreakoutEnabled?: boolean;
+  /** When true, only the first incomplete subtask is active as a breakout card. */
+  subtasksSequentialEnabled?: boolean;
   /** When completing a parent task, also mark all subtasks as complete */
   completeSubtasks?: boolean;
 }
@@ -122,6 +128,18 @@ export interface TaskSortOptions {
 }
 
 type AccessLevel = 'full' | 'assigned_only' | null;
+
+function getCompleteStatusIds(statusOptions: StatusOption[]): string[] {
+  return statusOptions
+    .filter(
+      (s) =>
+        s.id === 'complete' ||
+        s.id === 'done' ||
+        s.label.toLowerCase().includes('complete') ||
+        s.label.toLowerCase().includes('done')
+    )
+    .map((s) => s.id);
+}
 
 /**
  * Check if user is in a contractor team (excludeFromPublic = true)
@@ -418,16 +436,20 @@ export async function listTasks(
     }
   })();
 
-  const taskList = await db
+  const queriedTaskList = await db
     .select()
     .from(tasks)
     .where(and(...conditions))
     .orderBy(orderBy);
 
-  // Get assignees for all tasks
-  const taskIds = taskList.map((t) => t.id);
+  const board = await db.query.boards.findFirst({
+    where: eq(boards.id, boardId),
+    columns: { statusOptions: true },
+  });
+  const completeStatusIds = getCompleteStatusIds(board?.statusOptions ?? []);
+
   const parentTaskIds = Array.from(
-    new Set(taskList.map((t) => t.parentTaskId).filter((id): id is string => !!id))
+    new Set(queriedTaskList.map((t) => t.parentTaskId).filter((id): id is string => !!id))
   );
 
   const parentTasksData =
@@ -436,12 +458,56 @@ export async function listTasks(
           .select({
             id: tasks.id,
             title: tasks.title,
+            subtasksBreakoutEnabled: tasks.subtasksBreakoutEnabled,
+            subtasksSequentialEnabled: tasks.subtasksSequentialEnabled,
           })
           .from(tasks)
           .where(inArray(tasks.id, parentTaskIds))
       : [];
 
-  const parentTitleById = new Map(parentTasksData.map((parent) => [parent.id, parent.title]));
+  const parentTaskById = new Map(parentTasksData.map((parent) => [parent.id, parent]));
+  const sequentialParentIds = parentTasksData
+    .filter((parent) => parent.subtasksSequentialEnabled)
+    .map((parent) => parent.id);
+  const firstIncompleteSubtaskByParent = new Map<string, string>();
+
+  if (sequentialParentIds.length > 0) {
+    const sequentialSubtasks = await db
+      .select({
+        id: tasks.id,
+        parentTaskId: tasks.parentTaskId,
+        status: tasks.status,
+      })
+      .from(tasks)
+      .where(and(inArray(tasks.parentTaskId, sequentialParentIds), isNull(tasks.archivedAt)))
+      .orderBy(asc(tasks.parentTaskId), asc(tasks.position));
+
+    for (const subtask of sequentialSubtasks) {
+      if (
+        subtask.parentTaskId &&
+        !completeStatusIds.includes(subtask.status) &&
+        !firstIncompleteSubtaskByParent.has(subtask.parentTaskId)
+      ) {
+        firstIncompleteSubtaskByParent.set(subtask.parentTaskId, subtask.id);
+      }
+    }
+  }
+
+  const taskList = queriedTaskList.filter((task) => {
+    if (!task.parentTaskId) return true;
+
+    const parentTask = parentTaskById.get(task.parentTaskId);
+    if (!parentTask?.subtasksBreakoutEnabled) return false;
+    if (!parentTask.subtasksSequentialEnabled) return true;
+
+    return (
+      completeStatusIds.includes(task.status) ||
+      firstIncompleteSubtaskByParent.get(task.parentTaskId) === task.id
+    );
+  });
+
+  // Get assignees for all visible tasks
+  const taskIds = taskList.map((t) => t.id);
 
   const assigneesData =
     taskIds.length > 0
@@ -575,21 +641,6 @@ export async function listTasks(
     if (s.parentId) subtaskCountByParent.set(s.parentId, s.count);
   }
 
-  // Get completed subtask counts using board's complete statuses
-  const board = await db.query.boards.findFirst({
-    where: eq(boards.id, boardId),
-    columns: { statusOptions: true },
-  });
-  const completeStatusIds = (board?.statusOptions ?? [])
-    .filter(
-      (s) =>
-        s.id === 'complete' ||
-        s.id === 'done' ||
-        s.label.toLowerCase().includes('complete') ||
-        s.label.toLowerCase().includes('done')
-    )
-    .map((s) => s.id);
-
   const completedSubtaskCountsData =
     taskIds.length > 0 && completeStatusIds.length > 0
       ? await db
@@ -633,7 +684,9 @@ export async function listTasks(
       recurringConfig: task.recurringConfig,
       recurringGroupId: task.recurringGroupId,
       parentTaskId: task.parentTaskId,
-      parentTaskTitle: task.parentTaskId ? parentTitleById.get(task.parentTaskId) ?? null : null,
+      parentTaskTitle: task.parentTaskId ? parentTaskById.get(task.parentTaskId)?.title ?? null : null,
+      subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
+      subtasksSequentialEnabled: task.subtasksSequentialEnabled,
       position: task.position,
       createdBy: task.createdBy,
       createdAt: task.createdAt,
@@ -773,6 +826,8 @@ export async function getTask(taskId: string): Promise<{
     recurringGroupId: task.recurringGroupId,
     parentTaskId: task.parentTaskId,
     parentTaskTitle,
+    subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
+    subtasksSequentialEnabled: task.subtasksSequentialEnabled,
     position: task.position,
     createdBy: task.createdBy,
     createdAt: task.createdAt,
@@ -918,6 +973,8 @@ export async function createTask(input: CreateTaskInput): Promise<{
     recurringConfig: newTask.recurringConfig,
     recurringGroupId: newTask.recurringGroupId,
     parentTaskId: newTask.parentTaskId,
+    subtasksBreakoutEnabled: newTask.subtasksBreakoutEnabled,
+    subtasksSequentialEnabled: newTask.subtasksSequentialEnabled,
     position: newTask.position,
     createdBy: newTask.createdBy,
     createdAt: newTask.createdAt,
@@ -1008,6 +1065,12 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
   if (input.dateFlexibility !== undefined) updateData.dateFlexibility = input.dateFlexibility;
   if (input.recurringConfig !== undefined) updateData.recurringConfig = input.recurringConfig;
   if (input.position !== undefined) updateData.position = input.position;
+  if (input.subtasksBreakoutEnabled !== undefined) {
+    updateData.subtasksBreakoutEnabled = input.subtasksBreakoutEnabled;
+  }
+  if (input.subtasksSequentialEnabled !== undefined) {
+    updateData.subtasksSequentialEnabled = input.subtasksSequentialEnabled;
+  }
 
   // Update task
   const [updatedTask] = await db
@@ -1081,6 +1144,8 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
           description: existingTask.description,
           section: existingTask.section,
           dateFlexibility: existingTask.dateFlexibility,
+          subtasksBreakoutEnabled: existingTask.subtasksBreakoutEnabled,
+          subtasksSequentialEnabled: existingTask.subtasksSequentialEnabled,
           assigneeIds: currentAssignees.map((a) => a.userId),
         },
       });
@@ -1258,6 +1323,8 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
     recurringConfig: updatedTask.recurringConfig,
     recurringGroupId: updatedTask.recurringGroupId,
     parentTaskId: updatedTask.parentTaskId,
+    subtasksBreakoutEnabled: updatedTask.subtasksBreakoutEnabled,
+    subtasksSequentialEnabled: updatedTask.subtasksSequentialEnabled,
     position: updatedTask.position,
     createdBy: updatedTask.createdBy,
     createdAt: updatedTask.createdAt,
@@ -1528,6 +1595,8 @@ export async function listSubtasks(parentTaskId: string): Promise<{
       recurringConfig: task.recurringConfig,
       recurringGroupId: task.recurringGroupId,
       parentTaskId: task.parentTaskId,
+      subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
+      subtasksSequentialEnabled: task.subtasksSequentialEnabled,
       position: task.position,
       createdBy: task.createdBy,
       createdAt: task.createdAt,
@@ -1572,6 +1641,7 @@ export async function updateTaskPositions(
     recurringConfig: RecurringConfig | null; dueDate: string | null;
     recurringGroupId: string | null; description: TiptapContent | null;
     section: string | null; dateFlexibility: string; parentTaskId: string | null;
+    subtasksBreakoutEnabled: boolean; subtasksSequentialEnabled: boolean;
   }> = new Map();
   if (statusUpdates.length > 0) {
     const oldTasks = await db
@@ -1581,6 +1651,8 @@ export async function updateTaskPositions(
         recurringGroupId: tasks.recurringGroupId, description: tasks.description,
         section: tasks.section, dateFlexibility: tasks.dateFlexibility,
         parentTaskId: tasks.parentTaskId,
+        subtasksBreakoutEnabled: tasks.subtasksBreakoutEnabled,
+        subtasksSequentialEnabled: tasks.subtasksSequentialEnabled,
       })
       .from(tasks)
       .where(inArray(tasks.id, statusUpdates.map((u) => u.id)));
@@ -1662,6 +1734,8 @@ export async function updateTaskPositions(
               description: old.description,
               section: old.section,
               dateFlexibility: old.dateFlexibility,
+              subtasksBreakoutEnabled: old.subtasksBreakoutEnabled,
+              subtasksSequentialEnabled: old.subtasksSequentialEnabled,
               assigneeIds: currentAssignees.map((a) => a.userId),
             },
           }).catch((err) => console.error('Failed to send recurring task event:', err));
@@ -1839,6 +1913,8 @@ export async function listMyTasks(): Promise<{
       taskRecurringGroupId: tasks.recurringGroupId,
       taskShortId: tasks.shortId,
       taskParentTaskId: tasks.parentTaskId,
+      taskSubtasksBreakoutEnabled: tasks.subtasksBreakoutEnabled,
+      taskSubtasksSequentialEnabled: tasks.subtasksSequentialEnabled,
       taskPosition: tasks.position,
       taskCreatedBy: tasks.createdBy,
       taskCreatedAt: tasks.createdAt,
@@ -2082,6 +2158,8 @@ export async function listMyTasks(): Promise<{
       recurringConfig: row.taskRecurringConfig,
       recurringGroupId: row.taskRecurringGroupId,
       parentTaskId: row.taskParentTaskId,
+      subtasksBreakoutEnabled: row.taskSubtasksBreakoutEnabled,
+      subtasksSequentialEnabled: row.taskSubtasksSequentialEnabled,
       position: row.taskPosition,
       createdBy: row.taskCreatedBy,
       createdAt: row.taskCreatedAt,
@@ -2973,6 +3051,8 @@ export async function bulkDuplicateTasks(taskIds: string[]): Promise<{
         dueDate: source.dueDate,
         dateFlexibility: source.dateFlexibility,
         parentTaskId: null,
+        subtasksBreakoutEnabled: source.subtasksBreakoutEnabled,
+        subtasksSequentialEnabled: source.subtasksSequentialEnabled,
         position: newPosition,
         createdBy: user.id,
       })

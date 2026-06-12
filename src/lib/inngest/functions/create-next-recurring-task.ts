@@ -95,6 +95,8 @@ export const createNextRecurringTask = inngest.createFunction(
           dateFlexibility: data.dateFlexibility as 'not_set' | 'flexible' | 'semi_flexible' | 'not_flexible',
           recurringConfig: data.recurringConfig as RecurringConfig,
           recurringGroupId: data.recurringGroupId,
+          subtasksBreakoutEnabled: data.subtasksBreakoutEnabled ?? false,
+          subtasksSequentialEnabled: data.subtasksSequentialEnabled ?? false,
           position,
           createdBy: data.completedByUserId,
         })

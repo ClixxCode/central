@@ -1,0 +1,4 @@
+ALTER TABLE "comments" ADD CONSTRAINT "comments_short_id_unique" UNIQUE USING INDEX "comments_short_id_unique";--> statement-breakpoint
+ALTER TABLE "users" ALTER COLUMN "preferences" SET DEFAULT '{"hiddenBoards":[],"hiddenColumns":[],"defaultView":"table","notifications":{"email":{"enabled":true,"mentions":true,"assignments":true,"dueDates":true,"newComments":true,"replies":true,"reactions":true,"digest":"instant"},"slack":{"enabled":false,"mentions":true,"assignments":true,"dueDates":true,"newComments":true,"replies":true,"reactions":true},"inApp":{"enabled":true,"mentions":true,"assignments":true,"dueDates":true,"newComments":true,"replies":true,"reactions":true}}}'::jsonb;--> statement-breakpoint
+ALTER TABLE "tasks" ADD COLUMN "subtasks_breakout_enabled" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "tasks" ADD COLUMN "subtasks_sequential_enabled" boolean DEFAULT false NOT NULL;

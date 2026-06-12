@@ -5,6 +5,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { DndProvider, type DragEndEvent, type UniqueIdentifier } from '@/components/dnd';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanTaskCard } from './KanbanTaskCard';
+import { ExpandedSubtasks } from './ExpandedSubtasks';
 import { CompleteParentDialog } from './CompleteParentDialog';
 import { TaskModal } from './TaskModal';
 import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
@@ -67,6 +68,18 @@ export function KanbanBoardView({
 
   // Drag-to-scroll for mouse users without trackpads
   const scrollRef = useDragToScroll();
+
+  // Expanded subtasks state for parents that keep subtasks nested.
+  const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
+
+  const toggleExpanded = React.useCallback((taskId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
 
   // Complete parent dialog state for DnD
   const [completeParentOpen, setCompleteParentOpen] = React.useState(false);
@@ -363,26 +376,43 @@ export function KanbanBoardView({
                 onAddTask={groupBy === 'status' ? () => openQuickAddWithContext(boardId, status.id) : undefined}
                 onArchiveAll={groupBy === 'status' && isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
               >
-                {columnTasks.map((task) => (
-                  <React.Fragment key={task.id}>
-                    <KanbanTaskCard
-                      task={task}
-                      sectionOptions={sectionOptions}
-                      assignableUsers={assignableUsers}
-                      onClick={(e) => {
-                        if (isMultiSelectMode || e.shiftKey) {
-                          const columnTaskIds = columnTasks.map((t) => t.id);
-                          onTaskMultiSelect?.(task.id, e.shiftKey, columnTaskIds);
-                        } else {
-                          openTaskModal(task.id);
-                        }
-                      }}
-                      onOpenSubtasks={task.subtaskCount > 0 ? () => openTaskModal(task.id, 'subtasks') : undefined}
-                      hiddenItems={hiddenItems}
-                      isSelected={selectedTaskIds?.has(task.id)}
-                    />
-                  </React.Fragment>
-                ))}
+                {columnTasks.map((task) => {
+                  const showInlineSubtasks = task.subtaskCount > 0 && !task.subtasksBreakoutEnabled;
+                  const openSubtasksSheet = task.subtaskCount > 0 && task.subtasksBreakoutEnabled;
+
+                  return (
+                    <React.Fragment key={task.id}>
+                      <KanbanTaskCard
+                        task={task}
+                        sectionOptions={sectionOptions}
+                        assignableUsers={assignableUsers}
+                        onClick={(e) => {
+                          if (isMultiSelectMode || e.shiftKey) {
+                            const columnTaskIds = columnTasks.map((t) => t.id);
+                            onTaskMultiSelect?.(task.id, e.shiftKey, columnTaskIds);
+                          } else {
+                            openTaskModal(task.id);
+                          }
+                        }}
+                        onOpenSubtasks={openSubtasksSheet ? () => openTaskModal(task.id, 'subtasks') : undefined}
+                        onToggleSubtasks={showInlineSubtasks ? () => toggleExpanded(task.id) : undefined}
+                        isExpanded={showInlineSubtasks ? expandedParents.has(task.id) : undefined}
+                        hiddenItems={hiddenItems}
+                        isSelected={selectedTaskIds?.has(task.id)}
+                      />
+                      {showInlineSubtasks && expandedParents.has(task.id) && (
+                        <ExpandedSubtasks
+                          parentTaskId={task.id}
+                          statusOptions={statusOptions}
+                          sectionOptions={sectionOptions}
+                          onTaskClick={(taskId) => openTaskModal(taskId)}
+                          hiddenItems={hiddenItems}
+                          dependenciesEnabled={task.subtasksSequentialEnabled}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </KanbanColumn>
             );
           })}

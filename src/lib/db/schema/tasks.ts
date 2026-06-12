@@ -2,12 +2,13 @@ import {
   pgTable,
   uuid,
   varchar,
-  text,
   timestamp,
   date,
   integer,
   jsonb,
   primaryKey,
+  boolean,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
@@ -62,7 +63,9 @@ export const tasks = pgTable('tasks', {
   dateFlexibility: dateFlexibilityEnum('date_flexibility').notNull().default('not_set'),
   recurringConfig: jsonb('recurring_config').$type<RecurringConfig>(),
   recurringGroupId: uuid('recurring_group_id'),
-  parentTaskId: uuid('parent_task_id').references((): any => tasks.id, { onDelete: 'cascade' }),
+  parentTaskId: uuid('parent_task_id').references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
+  subtasksBreakoutEnabled: boolean('subtasks_breakout_enabled').notNull().default(false),
+  subtasksSequentialEnabled: boolean('subtasks_sequential_enabled').notNull().default(false),
   position: integer('position').notNull().default(0),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),

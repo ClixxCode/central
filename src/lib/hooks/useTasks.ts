@@ -30,6 +30,13 @@ import {
 import posthog from 'posthog-js';
 import { trackEvent } from '@/lib/analytics';
 
+type RollupTaskCacheItem = {
+  id: string;
+  status?: string;
+  position?: number;
+  [key: string]: unknown;
+};
+
 // Query key factory
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -144,6 +151,8 @@ export function useCreateTask(boardId: string) {
             recurringConfig: newTask.recurringConfig ?? null,
             recurringGroupId: null,
             parentTaskId: newTask.parentTaskId ?? null,
+            subtasksBreakoutEnabled: false,
+            subtasksSequentialEnabled: false,
             position: newTask.position ?? old.length,
             createdBy: null,
             createdAt: new Date(),
@@ -252,13 +261,13 @@ export function useUpdateTask() {
       );
 
       // Optimistically update rollup task lists
-      queryClient.setQueriesData<{ tasks: unknown[]; statusOptions: unknown[]; sectionOptions: unknown[] }>(
+      queryClient.setQueriesData<{ tasks: RollupTaskCacheItem[]; statusOptions: unknown[]; sectionOptions: unknown[] }>(
         { queryKey: ['rollups', 'tasks'] },
         (old) => {
           if (!old?.tasks) return old;
           return {
             ...old,
-            tasks: old.tasks.map((task: any) =>
+            tasks: old.tasks.map((task) =>
               task.id === updatedTask.id
                 ? { ...task, ...optimisticUpdate }
                 : task
@@ -512,13 +521,13 @@ export function useUpdateTaskPositions() {
       );
 
       // Optimistically update rollup task lists
-      queryClient.setQueriesData<{ tasks: unknown[]; statusOptions: unknown[]; sectionOptions: unknown[] }>(
+      queryClient.setQueriesData<{ tasks: RollupTaskCacheItem[]; statusOptions: unknown[]; sectionOptions: unknown[] }>(
         { queryKey: ['rollups', 'tasks'] },
         (old) => {
           if (!old?.tasks) return old;
           return {
             ...old,
-            tasks: old.tasks.map((task: any) => {
+            tasks: old.tasks.map((task) => {
               const update = updateMap.get(task.id);
               if (update) {
                 return {

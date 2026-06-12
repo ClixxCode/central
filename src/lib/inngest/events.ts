@@ -92,6 +92,8 @@ export interface RecurringTaskCompletedEvent {
     description: unknown | null;
     section: string | null;
     dateFlexibility: string;
+    subtasksBreakoutEnabled?: boolean;
+    subtasksSequentialEnabled?: boolean;
     assigneeIds: string[];
   };
 }

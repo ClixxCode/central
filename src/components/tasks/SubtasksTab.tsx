@@ -1,13 +1,28 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, Trash2, Loader2, Calendar, GripVertical } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleDot,
+  Lock,
+  Plus,
+  Trash2,
+  Loader2,
+  Calendar,
+  GripVertical,
+  Combine,
+  Split,
+  ListChecks,
+  ListTree,
+} from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AssigneeAvatars } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { TaskActivityIndicators } from './TaskActivityIndicators';
@@ -19,7 +34,7 @@ import { createTask as createTaskAction } from '@/lib/actions/tasks';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
-import type { TaskWithAssignees } from '@/lib/actions/tasks';
+import type { TaskWithAssignees, UpdateTaskInput } from '@/lib/actions/tasks';
 
 interface SubtasksTabProps {
   parentTaskId: string;
@@ -27,6 +42,105 @@ interface SubtasksTabProps {
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   onOpenSubtask?: (taskId: string) => void;
+  parentTask?: Pick<TaskWithAssignees, 'subtasksBreakoutEnabled' | 'subtasksSequentialEnabled'>;
+  onUpdateParent?: (updates: Partial<Pick<UpdateTaskInput, 'subtasksBreakoutEnabled' | 'subtasksSequentialEnabled'>>) => void;
+}
+
+type DependencyState = 'complete' | 'active' | 'waiting' | null;
+type SubtaskFlowMode = 'subtasks' | 'task-list';
+type SubtaskDisplayMode = 'combine' | 'individual';
+
+interface SegmentedToggleOption<T extends string> {
+  value: T;
+  label: string;
+  icon: React.ElementType;
+  tooltip: string;
+}
+
+interface SegmentedToggleProps<T extends string> {
+  value: T;
+  options: SegmentedToggleOption<T>[];
+  ariaLabel: string;
+  onValueChange: (value: T) => void;
+  disabled?: boolean;
+}
+
+const flowModeOptions: SegmentedToggleOption<SubtaskFlowMode>[] = [
+  {
+    value: 'subtasks',
+    label: 'Subtasks',
+    icon: ListTree,
+    tooltip: 'All subtasks can be active at once.',
+  },
+  {
+    value: 'task-list',
+    label: 'Task List',
+    icon: ListChecks,
+    tooltip: 'Only the first incomplete subtask is active.',
+  },
+];
+
+const displayModeOptions: SegmentedToggleOption<SubtaskDisplayMode>[] = [
+  {
+    value: 'combine',
+    label: 'Combine',
+    icon: Combine,
+    tooltip: 'Keep subtasks grouped under their parent on the board.',
+  },
+  {
+    value: 'individual',
+    label: 'Individual',
+    icon: Split,
+    tooltip: 'Show subtasks as their own board cards.',
+  },
+];
+
+function SegmentedToggle<T extends string>({
+  value,
+  options,
+  ariaLabel,
+  onValueChange,
+  disabled,
+}: SegmentedToggleProps<T>) {
+  return (
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="inline-flex rounded-md border bg-muted p-0.5"
+    >
+      {options.map((option) => {
+        const Icon = option.icon;
+        const isActive = value === option.value;
+
+        return (
+          <Tooltip key={option.value}>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={isActive ? 'secondary' : 'ghost'}
+                size="sm"
+                aria-pressed={isActive}
+                disabled={disabled}
+                onClick={() => {
+                  if (!isActive) {
+                    onValueChange(option.value);
+                  }
+                }}
+                className={cn(
+                  'h-7 min-w-24 gap-1.5 px-2.5',
+                  isActive && 'bg-background shadow-sm'
+                )}
+              >
+                <Icon className="size-4" />
+                <span>{option.label}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{option.tooltip}</TooltipContent>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
 }
 
 interface SortableSubtaskCardProps {
@@ -35,6 +149,7 @@ interface SortableSubtaskCardProps {
   sectionOptions: SectionOption[];
   onOpenSubtask?: (taskId: string) => void;
   onDelete: (taskId: string) => void;
+  dependencyState?: DependencyState;
 }
 
 function SortableSubtaskCard({
@@ -43,6 +158,7 @@ function SortableSubtaskCard({
   sectionOptions,
   onOpenSubtask,
   onDelete,
+  dependencyState,
 }: SortableSubtaskCardProps) {
   const {
     attributes,
@@ -60,6 +176,7 @@ function SortableSubtaskCard({
 
   const status = statusOptions.find((s) => s.id === subtask.status);
   const section = sectionOptions.find((s) => s.id === subtask.section);
+  const isWaiting = dependencyState === 'waiting';
 
   return (
     <div
@@ -70,6 +187,8 @@ function SortableSubtaskCard({
         'group relative flex items-start gap-2 rounded-lg border bg-background p-3 transition-all',
         'hover:border-primary/50 hover:shadow-sm',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        dependencyState === 'active' && 'border-primary/50 bg-primary/5',
+        isWaiting && 'border-dashed bg-muted/40 opacity-75',
         isDragging && 'opacity-50 shadow-lg z-50'
       )}
     >
@@ -109,7 +228,27 @@ function SortableSubtaskCard({
         )}
 
         {/* Title */}
-        <p className="font-medium text-sm leading-tight pr-6">{subtask.title}</p>
+        <div className="flex min-w-0 items-center gap-2 pr-6">
+          <p className="min-w-0 flex-1 font-medium text-sm leading-tight">{subtask.title}</p>
+          {dependencyState === 'active' && (
+            <Badge variant="secondary" className="h-5 gap-1 px-1.5 text-[10px]">
+              <CircleDot className="size-3" />
+              Active
+            </Badge>
+          )}
+          {dependencyState === 'waiting' && (
+            <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground">
+              <Lock className="size-3" />
+              Waiting
+            </Badge>
+          )}
+          {dependencyState === 'complete' && (
+            <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground">
+              <CircleCheck className="size-3" />
+              Done
+            </Badge>
+          )}
+        </div>
 
         {/* Meta Row */}
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -176,6 +315,8 @@ export function SubtasksTab({
   statusOptions,
   sectionOptions,
   onOpenSubtask,
+  parentTask,
+  onUpdateParent,
 }: SubtasksTabProps) {
   const { data: subtasks, isLoading } = useSubtasks(parentTaskId);
   const createSubtask = useCreateSubtask(parentTaskId, boardId);
@@ -229,6 +370,24 @@ export function SubtasksTab({
     const map = new Map(subtasks.map((s) => [s.id, s]));
     return orderedIds.map((id) => map.get(id)).filter(Boolean) as TaskWithAssignees[];
   }, [subtasks, orderedIds]);
+
+  const breakoutEnabled = parentTask?.subtasksBreakoutEnabled ?? false;
+  const dependenciesEnabled = parentTask?.subtasksSequentialEnabled ?? false;
+  const flowMode: SubtaskFlowMode = dependenciesEnabled ? 'task-list' : 'subtasks';
+  const displayMode: SubtaskDisplayMode = breakoutEnabled ? 'individual' : 'combine';
+  const activeSubtaskId = React.useMemo(
+    () => orderedSubtasks.find((subtask) => !completeStatusIds.includes(subtask.status))?.id ?? null,
+    [orderedSubtasks, completeStatusIds]
+  );
+
+  const getDependencyState = React.useCallback(
+    (subtask: TaskWithAssignees): DependencyState => {
+      if (!dependenciesEnabled) return null;
+      if (completeStatusIds.includes(subtask.status)) return 'complete';
+      return subtask.id === activeSubtaskId ? 'active' : 'waiting';
+    },
+    [activeSubtaskId, completeStatusIds, dependenciesEnabled]
+  );
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -350,6 +509,28 @@ export function SubtasksTab({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <SegmentedToggle<SubtaskFlowMode>
+          ariaLabel="Subtask flow mode"
+          value={flowMode}
+          disabled={!onUpdateParent}
+          options={flowModeOptions}
+          onValueChange={(value) => {
+            onUpdateParent?.({ subtasksSequentialEnabled: value === 'task-list' });
+          }}
+        />
+
+        <SegmentedToggle<SubtaskDisplayMode>
+          ariaLabel="Subtask board display mode"
+          value={displayMode}
+          disabled={!onUpdateParent}
+          options={displayModeOptions}
+          onValueChange={(value) => {
+            onUpdateParent?.({ subtasksBreakoutEnabled: value === 'individual' });
+          }}
+        />
+      </div>
+
       {/* Progress bar */}
       {totalCount > 0 && (
         <div className="space-y-1.5">
@@ -383,6 +564,7 @@ export function SubtasksTab({
                   sectionOptions={sectionOptions}
                   onOpenSubtask={onOpenSubtask}
                   onDelete={setDeleteSubtaskId}
+                  dependencyState={getDependencyState(subtask)}
                 />
               ))}
             </div>

@@ -5,6 +5,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TaskRow, TaskRowSkeleton } from './TaskRow';
 import { useColumnResize } from '@/lib/hooks/useColumnResize';
+import { useSubtasks } from '@/lib/hooks/useTasks';
 import type { TaskWithAssignees, UpdateTaskInput, TaskSortOptions } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from './AssigneePicker';
@@ -67,6 +68,17 @@ export function BoardTable({
   onTaskMultiSelect,
   isMultiSelectMode,
 }: BoardTableProps) {
+  const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
+
+  const toggleExpanded = React.useCallback((taskId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
+
   const handleSort = (field: SortField) => {
     if (!onSortChange) return;
 
@@ -205,28 +217,99 @@ export function BoardTable({
               </td>
             </tr>
           ) : (
-            tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                statusOptions={statusOptions}
-                sectionOptions={sectionOptions}
-                assignableUsers={assignableUsers}
-                onUpdate={onUpdateTask}
-                onDelete={onDeleteTask}
-                onOpenModal={onOpenTaskModal}
-                onOpenSubtasks={task.subtaskCount > 0 ? () => onOpenSubtasks?.(task.id) : undefined}
-                isUpdating={updatingTaskIds.includes(task.id)}
-                columns={columns}
-                isSelected={selectedTaskIds?.has(task.id)}
-                isMultiSelectMode={isMultiSelectMode}
-                onMultiSelectClick={(e) => onTaskMultiSelect?.(task.id, e.shiftKey, tasks.map((t) => t.id))}
-              />
-            ))
+            tasks.map((task) => {
+              const showInlineSubtasks = task.subtaskCount > 0 && !task.subtasksBreakoutEnabled;
+              const openSubtasksSheet = task.subtaskCount > 0 && task.subtasksBreakoutEnabled;
+
+              return (
+                <React.Fragment key={task.id}>
+                  <TaskRow
+                    task={task}
+                    statusOptions={statusOptions}
+                    sectionOptions={sectionOptions}
+                    assignableUsers={assignableUsers}
+                    onUpdate={onUpdateTask}
+                    onDelete={onDeleteTask}
+                    onOpenModal={onOpenTaskModal}
+                    onOpenSubtasks={openSubtasksSheet ? () => onOpenSubtasks?.(task.id) : undefined}
+                    onToggleSubtasks={showInlineSubtasks ? () => toggleExpanded(task.id) : undefined}
+                    isExpanded={showInlineSubtasks ? expandedParents.has(task.id) : undefined}
+                    isUpdating={updatingTaskIds.includes(task.id)}
+                    columns={columns}
+                    isSelected={selectedTaskIds?.has(task.id)}
+                    isMultiSelectMode={isMultiSelectMode}
+                    onMultiSelectClick={(e) => onTaskMultiSelect?.(task.id, e.shiftKey, tasks.map((t) => t.id))}
+                  />
+                  {showInlineSubtasks && expandedParents.has(task.id) && (
+                    <SubtaskRows
+                      parentTaskId={task.id}
+                      statusOptions={statusOptions}
+                      sectionOptions={sectionOptions}
+                      assignableUsers={assignableUsers}
+                      onUpdate={onUpdateTask}
+                      onDelete={onDeleteTask}
+                      onOpenModal={onOpenTaskModal}
+                      updatingTaskIds={updatingTaskIds}
+                      columns={columns}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })
           )}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SubtaskRows({
+  parentTaskId,
+  statusOptions,
+  sectionOptions,
+  assignableUsers,
+  onUpdate,
+  onDelete,
+  onOpenModal,
+  updatingTaskIds,
+  columns,
+}: {
+  parentTaskId: string;
+  statusOptions: StatusOption[];
+  sectionOptions: SectionOption[];
+  assignableUsers: AssigneeUser[];
+  onUpdate: (input: UpdateTaskInput) => void;
+  onDelete: (taskId: string) => void;
+  onOpenModal?: (taskId: string) => void;
+  updatingTaskIds: string[];
+  columns: ColumnConfig;
+}) {
+  const { data: subtasks, isLoading } = useSubtasks(parentTaskId);
+
+  if (isLoading) {
+    return <TaskRowSkeleton columns={columns} />;
+  }
+
+  if (!subtasks || subtasks.length === 0) return null;
+
+  return (
+    <>
+      {subtasks.map((subtask) => (
+        <TaskRow
+          key={subtask.id}
+          task={subtask}
+          statusOptions={statusOptions}
+          sectionOptions={sectionOptions}
+          assignableUsers={assignableUsers}
+          onUpdate={onUpdate}
+          onDelete={onDelete}
+          onOpenModal={onOpenModal}
+          isUpdating={updatingTaskIds.includes(subtask.id)}
+          columns={columns}
+          isSubtask
+        />
+      ))}
+    </>
   );
 }
 

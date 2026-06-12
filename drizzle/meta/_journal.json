@@ -176,6 +176,41 @@
       "when": 1771365782287,
       "tag": "0024_dark_captain_america",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1771370442000,
+      "tag": "0025_comment_short_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1772213964000,
+      "tag": "0026_comment_reactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1772214572000,
+      "tag": "0027_expand_comment_reaction_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1772221601000,
+      "tag": "0028_reaction_added_notification",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1781286352000,
+      "tag": "0029_subtask_display_controls",
+      "breakpoints": true
     }
   ]
 }

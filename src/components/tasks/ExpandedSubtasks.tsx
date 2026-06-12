@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { Calendar, Loader2, CornerDownRight } from 'lucide-react';
+import { Calendar, CircleCheck, CircleDot, Loader2, Lock, CornerDownRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSubtasks } from '@/lib/hooks/useTasks';
+import { Badge } from '@/components/ui/badge';
 import { AssigneeAvatars } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { TaskActivityIndicators } from './TaskActivityIndicators';
@@ -15,6 +16,7 @@ interface ExpandedSubtasksProps {
   sectionOptions: SectionOption[];
   onTaskClick?: (taskId: string) => void;
   hiddenItems?: Set<string>;
+  dependenciesEnabled?: boolean;
 }
 
 export function ExpandedSubtasks({
@@ -23,8 +25,23 @@ export function ExpandedSubtasks({
   sectionOptions,
   onTaskClick,
   hiddenItems,
+  dependenciesEnabled = false,
 }: ExpandedSubtasksProps) {
   const { data: subtasks, isLoading } = useSubtasks(parentTaskId);
+
+  const completeStatusIds = React.useMemo(
+    () =>
+      statusOptions
+        .filter(
+          (s) =>
+            s.id === 'complete' ||
+            s.id === 'done' ||
+            s.label.toLowerCase().includes('complete') ||
+            s.label.toLowerCase().includes('done')
+        )
+        .map((s) => s.id),
+    [statusOptions]
+  );
 
   if (isLoading) {
     return (
@@ -37,11 +54,22 @@ export function ExpandedSubtasks({
 
   if (!subtasks || subtasks.length === 0) return null;
 
+  const activeSubtaskId = dependenciesEnabled
+    ? subtasks.find((subtask) => !completeStatusIds.includes(subtask.status))?.id ?? null
+    : null;
+
   return (
     <>
       {subtasks.map((subtask) => {
         const status = statusOptions.find((s) => s.id === subtask.status);
         const section = sectionOptions.find((s) => s.id === subtask.section);
+        const dependencyState = !dependenciesEnabled
+          ? null
+          : completeStatusIds.includes(subtask.status)
+            ? 'complete'
+            : subtask.id === activeSubtaskId
+              ? 'active'
+              : 'waiting';
 
         return (
           <div
@@ -60,7 +88,9 @@ export function ExpandedSubtasks({
               className={cn(
                 'flex-1 rounded-lg border bg-background p-3 shadow-sm transition-all',
                 'hover:border-primary/50 hover:shadow-md cursor-pointer',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                dependencyState === 'active' && 'border-primary/50 bg-primary/5',
+                dependencyState === 'waiting' && 'border-dashed bg-muted/40 opacity-75'
               )}
               onClick={() => onTaskClick?.(subtask.id)}
               onKeyDown={(e) => {
@@ -84,7 +114,27 @@ export function ExpandedSubtasks({
               )}
 
               {/* Title */}
-              <p className="font-medium text-sm leading-tight">{subtask.title}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="min-w-0 flex-1 font-medium text-sm leading-tight">{subtask.title}</p>
+                {dependencyState === 'active' && (
+                  <Badge variant="secondary" className="h-5 gap-1 px-1.5 text-[10px]">
+                    <CircleDot className="size-3" />
+                    Active
+                  </Badge>
+                )}
+                {dependencyState === 'waiting' && (
+                  <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground">
+                    <Lock className="size-3" />
+                    Waiting
+                  </Badge>
+                )}
+                {dependencyState === 'complete' && (
+                  <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px] text-muted-foreground">
+                    <CircleCheck className="size-3" />
+                    Done
+                  </Badge>
+                )}
+              </div>
 
               {/* Meta Row — always visible with status badge */}
               <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">

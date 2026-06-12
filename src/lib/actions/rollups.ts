@@ -91,6 +91,8 @@ export interface RollupTaskWithAssignees {
   attachmentCount: number;
   hasNewComments: boolean;
   parentTaskId: string | null;
+  subtasksBreakoutEnabled: boolean;
+  subtasksSequentialEnabled: boolean;
   subtaskCount: number;
   subtaskCompletedCount: number;
   archivedAt: Date | null;
@@ -1219,6 +1221,8 @@ export async function getRollupTasks(
         attachmentCount,
         hasNewComments,
         parentTaskId: task.parentTaskId ?? null,
+        subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
+        subtasksSequentialEnabled: task.subtasksSequentialEnabled,
         subtaskCount: subtaskCountByParent.get(task.id) ?? 0,
         subtaskCompletedCount: completedSubtaskCountByParent.get(task.id) ?? 0,
         archivedAt: task.archivedAt ?? null,
