@@ -84,6 +84,7 @@ export function MultiSelectFloatingBar({
   const [boardSearch, setBoardSearch] = React.useState('');
   const [sectionOpen, setSectionOpen] = React.useState(false);
   const [assigneeOpen, setAssigneeOpen] = React.useState(false);
+  const [assigneeSearch, setAssigneeSearch] = React.useState('');
   const [dateOpen, setDateOpen] = React.useState(false);
   const [statusOpen, setStatusOpen] = React.useState(false);
   const [calendarMonth, setCalendarMonth] = React.useState<Date>(new Date());
@@ -103,6 +104,7 @@ export function MultiSelectFloatingBar({
     setBoardSearch('');
     setSectionOpen(false);
     setAssigneeOpen(false);
+    setAssigneeSearch('');
     setDateOpen(false);
     setStatusOpen(false);
   };
@@ -147,6 +149,15 @@ export function MultiSelectFloatingBar({
 
   const currentStatus = sortedStatuses.find((s) => s.id === pendingStatus);
   const currentSection = sectionOptions.find((s) => s.id === pendingSection);
+  const filteredAssignableUsers = React.useMemo(() => {
+    const query = assigneeSearch.trim().toLowerCase();
+    if (!query) return assignableUsers;
+
+    return assignableUsers.filter((user) =>
+      (user.name ?? '').toLowerCase().includes(query) ||
+      user.email.toLowerCase().includes(query)
+    );
+  }, [assignableUsers, assigneeSearch]);
 
   return createPortal(
     <div style={{ position: 'fixed', bottom: bottomOffset ?? '48px', left: '50%', transform: 'translateX(-50%)', zIndex: 100 }}>
@@ -171,17 +182,7 @@ export function MultiSelectFloatingBar({
 
           {boardOpen && clients && (
             <div style={{ width: 310, maxHeight: 300 }} className="absolute bottom-full left-0 z-50 mb-1 rounded-md border bg-popover shadow-lg flex flex-col">
-              <div className="p-2 border-b">
-                <input
-                  type="text"
-                  placeholder="Search boards..."
-                  value={boardSearch}
-                  onChange={(e) => setBoardSearch(e.target.value)}
-                  className="w-full rounded-md border bg-transparent px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  autoFocus
-                />
-              </div>
-              <div className="overflow-y-auto py-1">
+              <div className="min-h-0 overflow-y-auto py-1">
                 {clients
                   .filter((client) => {
                     if (!boardSearch) return true;
@@ -235,6 +236,16 @@ export function MultiSelectFloatingBar({
                       </React.Fragment>
                     );
                   })}
+              </div>
+              <div className="border-t p-2">
+                <input
+                  type="text"
+                  placeholder="Search boards..."
+                  value={boardSearch}
+                  onChange={(e) => setBoardSearch(e.target.value)}
+                  className="w-full rounded-md border bg-transparent px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  autoFocus
+                />
               </div>
             </div>
           )}
@@ -343,46 +354,63 @@ export function MultiSelectFloatingBar({
           </div>
 
           {assigneeOpen && (
-            <div className="absolute bottom-full left-0 z-50 mb-1 max-h-[240px] w-[220px] overflow-y-auto rounded-md border bg-popover shadow-lg py-1">
+            <div className="absolute bottom-full left-0 z-50 mb-1 flex w-[240px] flex-col overflow-hidden rounded-md border bg-popover shadow-lg">
               {assignableUsers.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-muted-foreground">
                   No users available
                 </div>
+              ) : filteredAssignableUsers.length === 0 ? (
+                <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+                  No assignees found
+                </div>
               ) : (
-                assignableUsers.map((user) => {
-                  const isSelected = pendingAssigneeIds.includes(user.id);
-                  const initials = user.name
-                    ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-                    : user.email.slice(0, 2).toUpperCase();
+                <div className="max-h-[240px] overflow-y-auto py-1">
+                  {filteredAssignableUsers.map((user) => {
+                    const isSelected = pendingAssigneeIds.includes(user.id);
+                    const initials = user.name
+                      ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+                      : user.email.slice(0, 2).toUpperCase();
 
-                  return (
-                    <button
-                      key={user.id}
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
-                        isSelected && 'bg-purple-50 dark:bg-purple-500/20'
-                      )}
-                      onClick={() => {
-                        if (isSelected) {
-                          setPendingAssigneeIds((prev) => prev.filter((id) => id !== user.id));
-                        } else {
-                          setPendingAssigneeIds((prev) => [...prev, user.id]);
-                        }
-                      }}
-                    >
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name ?? ''} />
-                        <AvatarFallback className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[8px]">
-                          {initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="truncate">{user.name ?? user.email}</span>
-                      {isSelected && <span className="ml-auto text-purple-600 dark:text-purple-400 text-xs">✓</span>}
-                    </button>
-                  );
-                })
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        className={cn(
+                          'flex w-full items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent',
+                          isSelected && 'bg-purple-50 dark:bg-purple-500/20'
+                        )}
+                        onClick={() => {
+                          if (isSelected) {
+                            setPendingAssigneeIds((prev) => prev.filter((id) => id !== user.id));
+                          } else {
+                            setPendingAssigneeIds((prev) => [...prev, user.id]);
+                          }
+                        }}
+                      >
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name ?? ''} />
+                          <AvatarFallback className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[8px]">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="truncate">{user.name ?? user.email}</span>
+                        {isSelected && <span className="ml-auto text-purple-600 dark:text-purple-400 text-xs">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
+              <div className="border-t p-2">
+                <input
+                  type="text"
+                  placeholder="Search assignees..."
+                  aria-label="Search assignees"
+                  value={assigneeSearch}
+                  onChange={(e) => setAssigneeSearch(e.target.value)}
+                  className="w-full rounded-md border bg-transparent px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  autoFocus
+                />
+              </div>
             </div>
           )}
         </div>
