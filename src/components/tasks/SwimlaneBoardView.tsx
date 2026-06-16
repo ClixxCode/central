@@ -28,6 +28,8 @@ interface SwimlaneBoardViewProps {
   highlightedCommentId?: string | null;
   /** Called when the task modal closes (to clear URL params) */
   onTaskModalClose?: () => void;
+  /** Called immediately before opening the task modal */
+  onTaskModalOpen?: () => void;
   /** Multi-select state */
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
@@ -49,6 +51,7 @@ export function SwimlaneBoardView({
   initialTaskId,
   highlightedCommentId,
   onTaskModalClose,
+  onTaskModalOpen,
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
@@ -72,17 +75,19 @@ export function SwimlaneBoardView({
   const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
 
   const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    onTaskModalOpen?.();
     setSelectedTaskInitialTab(initialTab);
     setSelectedTaskId(taskId);
-  }, []);
+  }, [onTaskModalOpen]);
 
   // Sync with initialTaskId prop changes
   React.useEffect(() => {
     if (initialTaskId) {
+      onTaskModalOpen?.();
       setSelectedTaskInitialTab('details');
       setSelectedTaskId(initialTaskId);
     }
-  }, [initialTaskId]);
+  }, [initialTaskId, onTaskModalOpen]);
 
   // Sync selectedTaskId to URL so links are shareable
   React.useEffect(() => {

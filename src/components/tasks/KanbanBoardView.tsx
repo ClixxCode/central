@@ -32,6 +32,8 @@ interface KanbanBoardViewProps {
   highlightedCommentId?: string | null;
   /** Called when the task modal closes (to clear URL params) */
   onTaskModalClose?: () => void;
+  /** Called immediately before opening the task modal */
+  onTaskModalOpen?: () => void;
   /** Set of card item IDs to hide (e.g. 'section', 'dueDate', 'assignees') */
   hiddenItems?: Set<string>;
   /** Multi-select state */
@@ -55,6 +57,7 @@ export function KanbanBoardView({
   initialTaskId,
   highlightedCommentId,
   onTaskModalClose,
+  onTaskModalOpen,
   hiddenItems,
   selectedTaskIds,
   onTaskMultiSelect,
@@ -99,17 +102,19 @@ export function KanbanBoardView({
   const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
 
   const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    onTaskModalOpen?.();
     setSelectedTaskInitialTab(initialTab);
     setSelectedTaskId(taskId);
-  }, []);
+  }, [onTaskModalOpen]);
 
   // Sync with initialTaskId prop changes
   React.useEffect(() => {
     if (initialTaskId) {
+      onTaskModalOpen?.();
       setSelectedTaskInitialTab('details');
       setSelectedTaskId(initialTaskId);
     }
-  }, [initialTaskId]);
+  }, [initialTaskId, onTaskModalOpen]);
 
   // Sync selectedTaskId to URL so links are shareable
   React.useEffect(() => {

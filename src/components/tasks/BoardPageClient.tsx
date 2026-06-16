@@ -308,9 +308,16 @@ export function BoardPageClient({
   const [selectedTaskInitialTab, setSelectedTaskInitialTab] = React.useState<'details' | 'subtasks'>('details');
 
   const openTaskModal = React.useCallback((taskId: string, initialTab: 'details' | 'subtasks' = 'details') => {
+    exitSubtaskOnlyMode();
     setSelectedTaskInitialTab(initialTab);
     setSelectedTaskId(taskId);
-  }, []);
+  }, [exitSubtaskOnlyMode]);
+
+  React.useEffect(() => {
+    if (viewMode === 'table' && urlTaskId) {
+      exitSubtaskOnlyMode();
+    }
+  }, [exitSubtaskOnlyMode, urlTaskId, viewMode]);
 
   // Sync selectedTaskId to URL so links are shareable (table view)
   React.useEffect(() => {
@@ -507,6 +514,7 @@ export function BoardPageClient({
           initialTaskId={urlTaskId}
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
+          onTaskModalOpen={exitSubtaskOnlyMode}
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
@@ -526,6 +534,7 @@ export function BoardPageClient({
           initialTaskId={urlTaskId}
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
+          onTaskModalOpen={exitSubtaskOnlyMode}
           hiddenItems={swimlaneHiddenItems}
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
