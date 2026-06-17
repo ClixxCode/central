@@ -4,6 +4,7 @@ import {
   sendMentionEmail,
   sendAssignmentEmail,
   sendDueReminder,
+  flushNotificationEmailBatch,
   sendDailyDigest,
   checkDueDates,
   scheduleDailyDigests,
@@ -24,6 +25,7 @@ export const { GET, POST, PUT } = serve({
     sendMentionEmail,
     sendAssignmentEmail,
     sendDueReminder,
+    flushNotificationEmailBatch,
     sendDailyDigest,
     sendCommentAddedEmail,
     // Slack notifications
