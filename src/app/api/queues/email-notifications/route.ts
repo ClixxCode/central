@@ -1,4 +1,4 @@
-import { handleCallback, type RetryHandler } from '@vercel/queue';
+import { QueueClient, type RetryHandler } from '@vercel/queue';
 import {
   flushNotificationEmailBatch,
   queueNotificationEmail,
@@ -25,7 +25,9 @@ const retry: RetryHandler = (error, metadata) => {
   return { afterSeconds: Math.min(300, 2 ** metadata.deliveryCount * 5) };
 };
 
-export const POST = handleCallback<EmailNotificationQueueMessage>(
+const queue = new QueueClient({ region: process.env.VERCEL_REGION ?? 'iad1' });
+
+const handleEmailNotificationQueueCallback = queue.handleCallback<EmailNotificationQueueMessage>(
   async (message, metadata) => {
     if (!isEmailNotificationQueueMessage(message)) {
       console.warn('[email-queue] ignoring invalid message', {
@@ -57,3 +59,7 @@ export const POST = handleCallback<EmailNotificationQueueMessage>(
     retry,
   }
 );
+
+export async function POST(request: Request): Promise<Response> {
+  return handleEmailNotificationQueueCallback(request);
+}
