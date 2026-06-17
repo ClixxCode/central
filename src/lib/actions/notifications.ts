@@ -705,10 +705,18 @@ export async function createCommentAddedNotification(input: {
       });
 
       if (isEmailQueuePilotEnabled()) {
-        await enqueueCommentAddedNotificationEmail({
-          notificationId: notification.id,
-          recipientId: recipient.id,
-        });
+        try {
+          await enqueueCommentAddedNotificationEmail({
+            notificationId: notification.id,
+            recipientId: recipient.id,
+          });
+        } catch (error) {
+          console.error('Failed to enqueue Vercel Queue comment notification email:', {
+            notificationId: notification.id,
+            recipientId: recipient.id,
+            error,
+          });
+        }
       }
     }
   }
