@@ -441,31 +441,43 @@ export async function createComment(input: CreateCommentInput): Promise<{
     reactions: [],
   };
 
-  // Send mention notifications (fire and forget)
+  const notificationJobs: Promise<void>[] = [];
+
+  // Send mention notifications
   const mentionedUserIds = extractMentionedUserIds(content);
   for (const mentionedUserId of mentionedUserIds) {
     // Don't notify yourself
     if (mentionedUserId === user.id) continue;
 
-    createMentionNotification({
-      mentionedUserId,
-      mentionerUserId: user.id,
-      taskId: input.taskId,
-      commentId: newComment.id,
-      commentContent: content,
-    }).catch((err) => console.error('Failed to create mention notification:', err));
+    notificationJobs.push(
+      createMentionNotification({
+        mentionedUserId,
+        mentionerUserId: user.id,
+        taskId: input.taskId,
+        commentId: newComment.id,
+        commentContent: content,
+      })
+        .then(() => undefined)
+        .catch((err) => console.error('Failed to create mention notification:', err))
+    );
   }
 
   // Send comment_added notifications to assignees, previous commenters, and previously mentioned users
   // Exclude users who already received a mention notification above to avoid duplicates
-  createCommentAddedNotification({
-    commenterId: user.id,
-    taskId: input.taskId,
-    commentId: newComment.id,
-    commentContent: content,
-    excludeUserIds: mentionedUserIds,
-    parentCommentAuthorId,
-  }).catch((err) => console.error('Failed to create comment_added notifications:', err));
+  notificationJobs.push(
+    createCommentAddedNotification({
+      commenterId: user.id,
+      taskId: input.taskId,
+      commentId: newComment.id,
+      commentContent: content,
+      excludeUserIds: mentionedUserIds,
+      parentCommentAuthorId,
+    })
+      .then(() => undefined)
+      .catch((err) => console.error('Failed to create comment_added notifications:', err))
+  );
+
+  await Promise.all(notificationJobs);
 
   revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
 
