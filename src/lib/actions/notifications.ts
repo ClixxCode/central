@@ -21,6 +21,10 @@ import { getStatusBackgroundColor, normalizeStatusColor } from '@/lib/email/stat
 import type { UserPreferences } from '@/lib/db/schema/users';
 import type { CommentReactionType } from '@/lib/comments/reactions';
 import type { StatusOption } from '@/lib/db/schema';
+import {
+  enqueueCommentAddedNotificationEmail,
+  isEmailQueuePilotEnabled,
+} from '@/lib/queues/email-notifications';
 
 // Helper to get parent task title for subtask notifications
 async function getParentTaskTitle(parentTaskId: string | null): Promise<string | null> {
@@ -677,7 +681,7 @@ export async function createCommentAddedNotification(input: {
     notificationIds.push(notification.id);
 
     if (recipient) {
-      // Trigger notification via Inngest (email/Slack based on preferences)
+      // Trigger notification via Inngest so Slack keeps using the existing path.
       await inngest.send({
         name: 'notification/comment.added',
         data: {
@@ -699,6 +703,13 @@ export async function createCommentAddedNotification(input: {
           commentPreview,
         },
       });
+
+      if (isEmailQueuePilotEnabled()) {
+        await enqueueCommentAddedNotificationEmail({
+          notificationId: notification.id,
+          recipientId: recipient.id,
+        });
+      }
     }
   }
 

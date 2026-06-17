@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   userFindFirst: vi.fn(),
   dbTransaction: vi.fn(),
   inngestSend: vi.fn(),
+  enqueueEmailBatchFlush: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -30,6 +31,10 @@ vi.mock('@/lib/inngest/client', () => ({
   inngest: {
     send: mocks.inngestSend,
   },
+}));
+
+vi.mock('@/lib/queues/email-notifications', () => ({
+  enqueueEmailBatchFlush: mocks.enqueueEmailBatchFlush,
 }));
 
 function prefs(overrides: Partial<UserPreferences['notifications']['email']> = {}): UserPreferences {
@@ -116,6 +121,7 @@ describe('email notification batches', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.inngestSend.mockResolvedValue({ ids: ['event-1'] });
+    mocks.enqueueEmailBatchFlush.mockResolvedValue({ messageId: 'msg-1' });
   });
 
   it('creates a pending batch and schedules a flush for the first batchable notification', async () => {
@@ -143,6 +149,35 @@ describe('email notification batches', () => {
     expect(mocks.inngestSend).toHaveBeenCalledWith({
       name: 'notification/email-batch.flush',
       data: { batchId: 'batch-1' },
+    });
+  });
+
+  it('can schedule the first batch flush through Vercel Queues', async () => {
+    const { queueNotificationEmail } = await import('@/lib/email/notification-batches');
+    const tx = createTx({ insertedBatchId: 'batch-1' });
+
+    mocks.notificationFindFirst.mockResolvedValue({
+      id: 'notification-queue-1',
+      userId: 'user-1',
+      type: 'comment_added',
+      emailSentAt: null,
+      emailBatchId: null,
+    });
+    mocks.userFindFirst.mockResolvedValue({ preferences: prefs() });
+    mocks.dbTransaction.mockImplementation(async (callback: (txArg: typeof tx.tx) => unknown) => callback(tx.tx));
+
+    const result = await queueNotificationEmail({
+      notificationId: 'notification-queue-1',
+      recipientId: 'user-1',
+      type: 'comment_added',
+      flushScheduler: 'vercel-queue',
+    });
+
+    expect(result).toEqual({ queued: true, batchId: 'batch-1', scheduledFlush: true });
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+    expect(mocks.enqueueEmailBatchFlush).toHaveBeenCalledWith({
+      batchId: 'batch-1',
+      sendAfter: expect.any(Date),
     });
   });
 

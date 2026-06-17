@@ -10,6 +10,12 @@ import {
 } from '@/lib/db/schema';
 import type { UserPreferences } from '@/lib/db/schema/users';
 import { inngest } from '@/lib/inngest/client';
+import { resend, EMAIL_CONFIG } from '@/lib/email/client';
+import {
+  batchedNotificationsEmailHtml,
+  batchedNotificationsEmailSubject,
+} from '@/lib/email/templates/batched-notifications';
+import { enqueueEmailBatchFlush } from '@/lib/queues/email-notifications';
 
 export const EMAIL_BATCH_WINDOW_MS = 5 * 60 * 1000;
 export const EMAIL_BATCH_CHANNEL = 'email';
@@ -29,11 +35,18 @@ type QueueNotificationEmailInput = {
   notificationId: string;
   recipientId: string;
   type: NotificationEmailType;
+  flushScheduler?: EmailBatchFlushScheduler;
 };
 
 export type QueueNotificationEmailResult =
   | { queued: true; batchId: string; scheduledFlush: boolean }
   | { queued: false; reason: string };
+
+export type EmailBatchFlushScheduler = 'inngest' | 'vercel-queue';
+
+export type FlushNotificationEmailBatchResult =
+  | { success: true; emailId: string | undefined; notificationCount: number }
+  | { skipped: true; reason: string; retryAt?: Date };
 
 export function isEmailBatchableNotificationType(
   type: NotificationEmailType
@@ -105,11 +118,11 @@ export async function queueNotificationEmail(
   if (notification.emailBatchId) {
     const batch = await db.query.notificationEmailBatches.findFirst({
       where: eq(notificationEmailBatches.id, notification.emailBatchId),
-      columns: { id: true, status: true },
+      columns: { id: true, status: true, sendAfter: true },
     });
 
     if (batch?.status === 'pending') {
-      await scheduleEmailBatchFlush(batch.id);
+      await scheduleEmailBatchFlush(batch.id, batch.sendAfter, input.flushScheduler);
       return { queued: true, batchId: batch.id, scheduledFlush: true };
     }
 
@@ -134,10 +147,11 @@ export async function queueNotificationEmail(
         eq(notificationEmailBatches.channel, EMAIL_BATCH_CHANNEL),
         eq(notificationEmailBatches.status, 'pending')
       ),
-      columns: { id: true },
+      columns: { id: true, sendAfter: true },
     });
 
     let batchId = existingBatch?.id ?? null;
+    let batchSendAfter = existingBatch?.sendAfter ?? sendAfter;
     let createdBatch = false;
 
     if (!batchId) {
@@ -165,9 +179,10 @@ export async function queueNotificationEmail(
             eq(notificationEmailBatches.channel, EMAIL_BATCH_CHANNEL),
             eq(notificationEmailBatches.status, 'pending')
           ),
-          columns: { id: true },
+          columns: { id: true, sendAfter: true },
         });
         batchId = racedBatch?.id ?? null;
+        batchSendAfter = racedBatch?.sendAfter ?? sendAfter;
       }
     }
 
@@ -187,11 +202,15 @@ export async function queueNotificationEmail(
         .where(eq(notificationEmailBatches.id, batchId));
     }
 
-    return { batchId, createdBatch };
+    return { batchId, createdBatch, sendAfter: batchSendAfter };
   });
 
   if (queueResult.createdBatch) {
-    await scheduleEmailBatchFlush(queueResult.batchId);
+    await scheduleEmailBatchFlush(
+      queueResult.batchId,
+      queueResult.sendAfter,
+      input.flushScheduler
+    );
   }
 
   return {
@@ -281,7 +300,91 @@ export async function markBatchSent(batchId: string, notificationIds: string[]):
   });
 }
 
-async function scheduleEmailBatchFlush(batchId: string): Promise<void> {
+export async function flushNotificationEmailBatch(
+  batchId: string
+): Promise<FlushNotificationEmailBatchResult> {
+  const batchWindow = await db.query.notificationEmailBatches.findFirst({
+    where: eq(notificationEmailBatches.id, batchId),
+    columns: { id: true, status: true, sendAfter: true },
+  });
+
+  if (!batchWindow) {
+    return { skipped: true, reason: 'Batch not found' };
+  }
+  if (batchWindow.status !== 'pending') {
+    return { skipped: true, reason: `Batch already ${batchWindow.status}` };
+  }
+
+  const sendAfter = new Date(batchWindow.sendAfter);
+  if (sendAfter > new Date()) {
+    return { skipped: true, reason: 'Batch not ready', retryAt: sendAfter };
+  }
+
+  const [claimedBatch] = await db
+    .update(notificationEmailBatches)
+    .set({ status: 'sending', updatedAt: new Date() })
+    .where(
+      and(
+        eq(notificationEmailBatches.id, batchId),
+        eq(notificationEmailBatches.status, 'pending')
+      )
+    )
+    .returning({
+      id: notificationEmailBatches.id,
+      userId: notificationEmailBatches.userId,
+    });
+
+  if (!claimedBatch) {
+    return { skipped: true, reason: 'Batch already claimed' };
+  }
+
+  const recipient = await db.query.users.findFirst({
+    where: eq(users.id, claimedBatch.userId),
+    columns: { email: true, name: true, preferences: true },
+  });
+
+  const prefs = recipient?.preferences as UserPreferences | null;
+  if (!recipient || !prefs?.notifications?.email?.enabled || prefs.notifications.email.digest !== 'instant') {
+    await markBatchSkipped(batchId);
+    return { skipped: true, reason: 'User preferences' };
+  }
+
+  const batchNotifications = await listSendableBatchNotifications(batchId, prefs);
+
+  if (batchNotifications.length === 0) {
+    await markBatchSkipped(batchId);
+    return { skipped: true, reason: 'No sendable notifications' };
+  }
+
+  const emailResult = await resend.emails.send({
+    from: EMAIL_CONFIG.from,
+    to: recipient.email,
+    subject: batchedNotificationsEmailSubject(batchNotifications.length),
+    html: await batchedNotificationsEmailHtml({
+      recipientName: recipient.name || 'there',
+      notifications: batchNotifications,
+    }),
+  });
+
+  await markBatchSent(batchId, batchNotifications.map((notification) => notification.id));
+
+  return {
+    success: true,
+    emailId: emailResult.data?.id,
+    notificationCount: batchNotifications.length,
+  };
+}
+
+async function scheduleEmailBatchFlush(
+  batchId: string,
+  sendAfter: Date,
+  scheduler: EmailBatchFlushScheduler = 'inngest'
+): Promise<void> {
+  if (scheduler === 'vercel-queue') {
+    await enqueueEmailBatchFlush({ batchId, sendAfter });
+    return;
+  }
+
   await inngest.send({
     name: 'notification/email-batch.flush',
     data: { batchId },
