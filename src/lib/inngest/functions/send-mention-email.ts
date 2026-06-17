@@ -1,6 +1,11 @@
 import { inngest } from '../client';
-import { resend, EMAIL_CONFIG } from '@/lib/email/client';
-import { mentionEmailSubject, mentionEmailHtml } from '@/lib/email/templates';
+import { getAppUrl } from '@/lib/email/client';
+import { sendCentralTemplateEmail } from '@/lib/email/send-template';
+import {
+  CENTRAL_EMAIL_TEMPLATE_ALIASES,
+  formatEmailDate,
+  mentionEmailSubject,
+} from '@/lib/email/templates';
 import { db } from '@/lib/db';
 import { notifications, users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -43,22 +48,25 @@ export const sendMentionEmail = inngest.createFunction(
 
     // Send the email
     const emailResult = await step.run('send-email', async () => {
-      const result = await resend.emails.send({
-        from: EMAIL_CONFIG.from,
+      const taskUrl = data.taskShortId
+        ? `${getAppUrl()}/t/${data.taskShortId}`
+        : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
+
+      const result = await sendCentralTemplateEmail({
+        templateAlias: CENTRAL_EMAIL_TEMPLATE_ALIASES.mention,
         to: data.recipientEmail,
         subject: mentionEmailSubject(data.mentionerName, data.taskTitle),
-        html: await mentionEmailHtml({
-          recipientName: data.recipientName || 'there',
-          mentionerName: data.mentionerName,
-          taskTitle: data.taskTitle,
-          taskId: data.taskId,
-          taskShortId: data.taskShortId || undefined,
-          boardId: data.boardId,
-          clientSlug: data.clientSlug,
-          commentPreview: data.commentPreview || undefined,
-          taskStatus: data.taskStatus,
-          taskDueDate: data.taskDueDate || undefined,
-        }),
+        variables: {
+          RECIPIENT_NAME: data.recipientName || 'there',
+          MENTIONER_NAME: data.mentionerName,
+          TASK_TITLE: data.taskTitle,
+          TASK_STATUS: data.taskStatus,
+          TASK_STATUS_COLOR: data.taskStatusColor,
+          TASK_STATUS_BACKGROUND_COLOR: data.taskStatusBackgroundColor,
+          TASK_DUE_DATE: data.taskDueDate ? formatEmailDate(data.taskDueDate) : undefined,
+          COMMENT_PREVIEW: data.commentPreview || undefined,
+          CTA_URL: taskUrl,
+        },
       });
 
       return result;

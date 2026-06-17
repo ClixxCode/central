@@ -1,8 +1,8 @@
-import { Text, Section, Hr } from '@react-email/components';
+import { Text, Section } from '@react-email/components';
 import { render } from '@react-email/render';
 import { getAppUrl } from '../client';
 import { formatEmailDate } from './base';
-import { EmailLayout, EmailButton, TaskCard } from '../components';
+import { EmailLayout, EmailButton } from '../components';
 
 export interface DigestTask {
   id: string;
@@ -27,11 +27,13 @@ export interface DigestNotification {
 
 export interface DailyDigestEmailData {
   recipientName: string;
-  date: Date;
-  tasksDueToday: DigestTask[];
-  tasksDueTomorrow: DigestTask[];
-  tasksOverdue: DigestTask[];
-  unreadNotifications: DigestNotification[];
+  date: Date | string;
+  tasksDueTodayCount: number | string;
+  tasksDueTomorrowCount: number | string;
+  tasksOverdueCount: number | string;
+  unreadNotificationsCount: number | string;
+  summaryText?: string;
+  ctaUrl?: string;
 }
 
 export function dailyDigestEmailSubject(date: Date): string {
@@ -46,137 +48,43 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
-function TaskSection({
-  title,
-  titleColor,
-  borderColor,
-  tasks,
-}: {
-  title: string;
-  titleColor: string;
-  borderColor: string;
-  tasks: DigestTask[];
-}) {
-  if (tasks.length === 0) return null;
-
-  return (
-    <Section style={{ marginBottom: '24px' }}>
-      <Text
-        style={{
-          margin: '0 0 12px',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          color: titleColor,
-          borderBottom: `2px solid ${borderColor}`,
-          paddingBottom: '8px',
-        }}
-      >
-        {title} ({tasks.length})
-      </Text>
-      {tasks.map((task) => (
-        <TaskCard
-          key={task.id}
-          title={task.title}
-          status={task.status}
-          dueDate={task.dueDate}
-          clientName={task.clientName}
-          boardName={task.boardName}
-        />
-      ))}
-    </Section>
-  );
-}
-
 function DailyDigestEmail({ data }: { data: DailyDigestEmailData }) {
-  const myTasksUrl = `${getAppUrl()}/my-tasks`;
+  const myTasksUrl = data.ctaUrl ?? `${getAppUrl()}/my-tasks`;
   const greeting = getGreeting();
   const formattedDate = formatEmailDate(data.date);
-
-  const hasContent =
-    data.tasksOverdue.length > 0 ||
-    data.tasksDueToday.length > 0 ||
-    data.tasksDueTomorrow.length > 0 ||
-    data.unreadNotifications.length > 0;
+  const summaryText =
+    data.summaryText ??
+    'Here is what needs your attention in Central today.';
 
   return (
     <EmailLayout preheader={`Your daily digest for ${formattedDate}`}>
-      <Text style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 'bold', color: '#f5f5f5' }}>
+      <Text className="email-heading" style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 'bold', color: '#18181b' }}>
         {greeting}, {data.recipientName || 'there'}!
       </Text>
-      <Text style={{ margin: '0 0 24px', color: '#a0a0a8', fontSize: '14px' }}>
+      <Text className="email-muted" style={{ margin: '0 0 16px', color: '#71717a', fontSize: '14px' }}>
         Here&apos;s your summary for {formattedDate}
       </Text>
+      <Text className="email-text" style={{ margin: '0 0 20px', color: '#3f3f46' }}>
+        {summaryText}
+      </Text>
 
-      {hasContent ? (
-        <>
-          <TaskSection
-            title="Overdue"
-            titleColor="#f87171"
-            borderColor="#5c2b2b"
-            tasks={data.tasksOverdue.map((t) => ({
-              ...t,
-              dueDate: t.dueDate ? formatEmailDate(t.dueDate) : undefined,
-            }))}
-          />
-          <TaskSection
-            title="Due Today"
-            titleColor="#fbbf24"
-            borderColor="#5c4a1e"
-            tasks={data.tasksDueToday.map((t) => ({ ...t, dueDate: 'Today' }))}
-          />
-          <TaskSection
-            title="Due Tomorrow"
-            titleColor="#F5303D"
-            borderColor="#353165"
-            tasks={data.tasksDueTomorrow.map((t) => ({ ...t, dueDate: 'Tomorrow' }))}
-          />
-
-          {data.unreadNotifications.length > 0 && (
-            <Section style={{ marginBottom: '24px' }}>
-              <Text
-                style={{
-                  margin: '0 0 12px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  color: '#a0a0a8',
-                  borderBottom: '2px solid #42424a',
-                  paddingBottom: '8px',
-                }}
-              >
-                Unread Notifications ({data.unreadNotifications.length})
-              </Text>
-              {data.unreadNotifications.map((notif, i) => {
-                const typeLabel =
-                  notif.type === 'mention'
-                    ? 'mentioned you in'
-                    : notif.type === 'task_assigned'
-                      ? 'assigned you to'
-                      : 'commented on';
-
-                return (
-                  <Text
-                    key={`${notif.taskId}-${i}`}
-                    style={{
-                      padding: '8px 0',
-                      borderBottom: '1px solid #42424a',
-                      color: '#d0d0d5',
-                      margin: '0',
-                    }}
-                  >
-                    <strong>{notif.actorName}</strong> {typeLabel} &ldquo;{notif.taskTitle}&rdquo;
-                  </Text>
-                );
-              })}
-            </Section>
-          )}
-        </>
-      ) : (
-        <Section style={{ textAlign: 'center' as const, padding: '24px' }}>
-          <Text style={{ margin: '0', color: '#a0a0a8' }}>
-            You&apos;re all caught up! No tasks due or new notifications.
-          </Text>
-        </Section>
-      )}
+      <Section className="email-panel" style={{ background: '#f7f7f8', border: '1px solid #e4e4e7', borderRadius: '8px', padding: '12px', margin: '0 0 20px' }}>
+        <Text className="email-heading" style={{ color: '#18181b', fontSize: '14px', fontWeight: '700', margin: '0 0 8px' }}>
+          Today at a glance
+        </Text>
+        <Text className="email-text" style={{ color: '#3f3f46', fontSize: '14px', margin: '0 0 6px' }}>
+          Overdue: <strong className="email-strong" style={{ color: '#18181b' }}>{data.tasksOverdueCount}</strong>
+        </Text>
+        <Text className="email-text" style={{ color: '#3f3f46', fontSize: '14px', margin: '0 0 6px' }}>
+          Due today: <strong className="email-strong" style={{ color: '#18181b' }}>{data.tasksDueTodayCount}</strong>
+        </Text>
+        <Text className="email-text" style={{ color: '#3f3f46', fontSize: '14px', margin: '0 0 6px' }}>
+          Due tomorrow: <strong className="email-strong" style={{ color: '#18181b' }}>{data.tasksDueTomorrowCount}</strong>
+        </Text>
+        <Text className="email-text" style={{ color: '#3f3f46', fontSize: '14px', margin: '0' }}>
+          Unread notifications: <strong className="email-strong" style={{ color: '#18181b' }}>{data.unreadNotificationsCount}</strong>
+        </Text>
+      </Section>
 
       <Section style={{ textAlign: 'center' as const, margin: '24px 0 8px' }}>
         <EmailButton href={myTasksUrl}>View My Tasks</EmailButton>

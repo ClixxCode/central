@@ -9,3 +9,4 @@ export * from './batched-notifications';
 export * from './email-verification';
 export * from './password-reset';
 export * from './invitation';
+export * from './registry';

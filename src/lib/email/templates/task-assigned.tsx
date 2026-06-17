@@ -11,9 +11,12 @@ export interface TaskAssignedEmailData {
   taskShortId?: string;
   boardId: string;
   clientSlug: string;
+  ctaUrl?: string;
   clientName: string;
   boardName: string;
   taskStatus: string;
+  taskStatusColor?: string;
+  taskStatusBackgroundColor?: string;
   taskDueDate?: string;
   taskDescription?: string;
 }
@@ -23,27 +26,31 @@ export function taskAssignedEmailSubject(taskTitle: string): string {
 }
 
 function TaskAssignedEmail({ data }: { data: TaskAssignedEmailData }) {
-  const taskUrl = data.taskShortId
-    ? `${getAppUrl()}/t/${data.taskShortId}`
-    : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
+  const taskUrl = data.ctaUrl ?? (
+    data.taskShortId
+      ? `${getAppUrl()}/t/${data.taskShortId}`
+      : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`
+  );
 
   return (
     <EmailLayout preheader={`${data.assignerName} assigned you to "${data.taskTitle}"`}>
-      <Text style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold', color: '#f5f5f5' }}>
+      <Text className="email-heading" style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold', color: '#18181b' }}>
         New Task Assignment
       </Text>
-      <Text style={{ margin: '0 0 16px', color: '#d0d0d5' }}>
-        <strong>{data.assignerName}</strong> assigned you to a task:
+      <Text className="email-text" style={{ margin: '0 0 16px', color: '#3f3f46' }}>
+        <strong className="email-strong" style={{ color: '#18181b' }}>{data.assignerName}</strong> assigned you to a task:
       </Text>
       <TaskCard
         title={data.taskTitle}
         status={data.taskStatus}
+        statusColor={data.taskStatusColor}
+        statusBackgroundColor={data.taskStatusBackgroundColor}
         dueDate={data.taskDueDate}
         clientName={data.clientName}
         boardName={data.boardName}
       />
       {data.taskDescription && (
-        <Text style={{ margin: '16px 0', color: '#a0a0a8', fontSize: '14px' }}>
+        <Text className="email-muted" style={{ margin: '16px 0', color: '#71717a', fontSize: '14px' }}>
           {data.taskDescription}
         </Text>
       )}

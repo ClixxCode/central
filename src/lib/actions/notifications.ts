@@ -9,7 +9,6 @@ import {
   clients,
   comments,
   taskAssignees,
-  teams,
   teamMembers,
   boardAccess,
 } from '@/lib/db/schema';
@@ -18,8 +17,10 @@ import { eq, and, isNull, desc, inArray, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { inngest } from '@/lib/inngest/client';
 import { getPlainText } from '@/lib/editor/mentions';
+import { getStatusBackgroundColor, normalizeStatusColor } from '@/lib/email/status-colors';
 import type { UserPreferences } from '@/lib/db/schema/users';
 import type { CommentReactionType } from '@/lib/comments/reactions';
+import type { StatusOption } from '@/lib/db/schema';
 
 // Helper to get parent task title for subtask notifications
 async function getParentTaskTitle(parentTaskId: string | null): Promise<string | null> {
@@ -29,6 +30,21 @@ async function getParentTaskTitle(parentTaskId: string | null): Promise<string |
     columns: { title: true },
   });
   return parent?.title ?? null;
+}
+
+function getTaskStatusDetails(status: string, statusOptions: StatusOption[]): {
+  label: string;
+  color: string;
+  backgroundColor: string;
+} {
+  const option = statusOptions.find((s) => s.id === status || s.label === status);
+  const color = normalizeStatusColor(option?.color);
+
+  return {
+    label: option?.label ?? status,
+    color,
+    backgroundColor: getStatusBackgroundColor(color),
+  };
 }
 
 // Types
@@ -401,6 +417,7 @@ export async function createMentionNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -416,6 +433,7 @@ export async function createMentionNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
 
   // Check if mentioned user has access to the board
   // Non-contractors have access to all boards; contractors need explicit access
@@ -479,7 +497,9 @@ export async function createMentionNotification(input: {
       taskId: task.id,
       taskShortId: task.shortId,
       taskTitle: task.title,
-      taskStatus: task.status,
+      taskStatus: statusDetails.label,
+      taskStatusColor: statusDetails.color,
+      taskStatusBackgroundColor: statusDetails.backgroundColor,
       taskDueDate: task.dueDate,
       boardId: task.boardId,
       clientSlug: task.clientSlug,
@@ -529,6 +549,7 @@ export async function createCommentAddedNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -544,6 +565,7 @@ export async function createCommentAddedNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
 
   // Collect all users who should be notified (using Set to avoid duplicates)
   const recipientIds = new Set<string>();
@@ -667,7 +689,9 @@ export async function createCommentAddedNotification(input: {
           taskId: task.id,
           taskShortId: task.shortId,
           taskTitle: task.title,
-          taskStatus: task.status,
+          taskStatus: statusDetails.label,
+          taskStatusColor: statusDetails.color,
+          taskStatusBackgroundColor: statusDetails.backgroundColor,
           taskDueDate: task.dueDate,
           boardId: task.boardId,
           clientSlug: task.clientSlug,
@@ -727,6 +751,7 @@ export async function createAssignmentNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -742,6 +767,7 @@ export async function createAssignmentNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
   const assignerName = assigner.name || assigner.email;
   const taskDescription = task.description
     ? getPlainText(task.description).slice(0, 200)
@@ -773,7 +799,9 @@ export async function createAssignmentNotification(input: {
       taskId: task.id,
       taskShortId: task.shortId,
       taskTitle: task.title,
-      taskStatus: task.status,
+      taskStatus: statusDetails.label,
+      taskStatusColor: statusDetails.color,
+      taskStatusBackgroundColor: statusDetails.backgroundColor,
       taskDueDate: task.dueDate,
       taskDescription,
       boardId: task.boardId,
@@ -820,6 +848,7 @@ export async function createDueNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -835,6 +864,7 @@ export async function createDueNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
   const notificationType = input.isOverdue ? 'task_overdue' : 'task_due_soon';
   const taskLabel = parentTitle ? `"${task.title}" (subtask of "${parentTitle}")` : `"${task.title}"`;
   const title = input.isOverdue
@@ -864,7 +894,9 @@ export async function createDueNotification(input: {
       taskId: task.id,
       taskShortId: task.shortId,
       taskTitle: task.title,
-      taskStatus: task.status,
+      taskStatus: statusDetails.label,
+      taskStatusColor: statusDetails.color,
+      taskStatusBackgroundColor: statusDetails.backgroundColor,
       dueDate: task.dueDate,
       isOverdue: input.isOverdue,
       boardId: task.boardId,

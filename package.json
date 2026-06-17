@@ -13,6 +13,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "db:migrate-avatars": "tsx scripts/migrate-external-avatars.ts",
+    "email:templates:sync": "tsx scripts/sync-resend-templates.ts",
+    "email:templates:publish": "tsx scripts/sync-resend-templates.ts --publish",
     "generate-icons": "tsx scripts/generate-icons.ts",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -1,11 +1,12 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { invitations, users, teams } from '@/lib/db/schema';
+import { invitations, users } from '@/lib/db/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth/session';
-import { resend, EMAIL_CONFIG, getAppUrl } from '@/lib/email/client';
-import { invitationEmailHtml } from '@/lib/email/templates/invitation';
+import { getAppUrl } from '@/lib/email/client';
+import { sendCentralTemplateEmail } from '@/lib/email/send-template';
+import { CENTRAL_EMAIL_TEMPLATE_ALIASES } from '@/lib/email/templates';
 
 interface CreateInvitationInput {
   email: string;
@@ -96,11 +97,14 @@ async function sendInvitationEmail(
   const inviteUrl = `${getAppUrl()}/invite/${invitationId}`;
 
   try {
-    await resend.emails.send({
-      from: EMAIL_CONFIG.from,
+    await sendCentralTemplateEmail({
+      templateAlias: CENTRAL_EMAIL_TEMPLATE_ALIASES.invitation,
       to: email,
       subject: `You've been invited to Central`,
-      html: await invitationEmailHtml(inviterName, inviteUrl),
+      variables: {
+        INVITER_NAME: inviterName,
+        INVITE_URL: inviteUrl,
+      },
     });
   } catch (error) {
     console.error('Failed to send invitation email:', error);

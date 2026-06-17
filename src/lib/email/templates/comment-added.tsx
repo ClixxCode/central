@@ -11,8 +11,11 @@ export interface CommentAddedEmailData {
   taskShortId?: string;
   boardId: string;
   clientSlug: string;
+  ctaUrl?: string;
   commentPreview?: string;
   taskStatus: string;
+  taskStatusColor?: string;
+  taskStatusBackgroundColor?: string;
   taskDueDate?: string;
 }
 
@@ -21,17 +24,19 @@ export function commentAddedEmailSubject(commenterName: string, taskTitle: strin
 }
 
 function CommentAddedEmail({ data }: { data: CommentAddedEmailData }) {
-  const taskUrl = data.taskShortId
-    ? `${getAppUrl()}/t/${data.taskShortId}`
-    : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`;
+  const taskUrl = data.ctaUrl ?? (
+    data.taskShortId
+      ? `${getAppUrl()}/t/${data.taskShortId}`
+      : `${getAppUrl()}/clients/${data.clientSlug}/boards/${data.boardId}?task=${data.taskId}`
+  );
 
   return (
     <EmailLayout preheader={`${data.commenterName} commented on "${data.taskTitle}"`}>
-      <Text style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold', color: '#f5f5f5' }}>
+      <Text className="email-heading" style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold', color: '#18181b' }}>
         New Comment
       </Text>
-      <Text style={{ margin: '0 0 16px', color: '#d0d0d5' }}>
-        <strong>{data.commenterName}</strong> added a comment on a task you&apos;re following:
+      <Text className="email-text" style={{ margin: '0 0 16px', color: '#3f3f46' }}>
+        <strong className="email-strong" style={{ color: '#18181b' }}>{data.commenterName}</strong> added a comment on a task you&apos;re following:
       </Text>
       {data.commentPreview && (
         <CommentQuote>{data.commentPreview}</CommentQuote>
@@ -39,6 +44,8 @@ function CommentAddedEmail({ data }: { data: CommentAddedEmailData }) {
       <TaskCard
         title={data.taskTitle}
         status={data.taskStatus}
+        statusColor={data.taskStatusColor}
+        statusBackgroundColor={data.taskStatusBackgroundColor}
         dueDate={data.taskDueDate}
       />
       <Section style={{ textAlign: 'center' as const, margin: '24px 0 8px' }}>
