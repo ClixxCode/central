@@ -615,29 +615,6 @@ export async function createCommentAddedNotification(input: {
     return { success: true, notificationIds: [] };
   }
 
-  // Remove users who already have a recent unread notification for this task
-  // (e.g. they were @mentioned in another comment moments ago — no need to also send "commented on")
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-  const recentNotifications = await db
-    .select({ userId: notifications.userId })
-    .from(notifications)
-    .where(
-      and(
-        eq(notifications.taskId, input.taskId),
-        inArray(notifications.userId, [...recipientIds]),
-        isNull(notifications.readAt),
-        sql`${notifications.createdAt} > ${tenMinutesAgo}`
-      )
-    );
-
-  for (const existing of recentNotifications) {
-    recipientIds.delete(existing.userId);
-  }
-
-  if (recipientIds.size === 0) {
-    return { success: true, notificationIds: [] };
-  }
-
   // Filter out deactivated users
   const recipientUsers = recipientIds.size > 0
     ? await db
@@ -681,43 +658,59 @@ export async function createCommentAddedNotification(input: {
     notificationIds.push(notification.id);
 
     if (recipient) {
-      // Trigger notification via Inngest so Slack keeps using the existing path.
-      await inngest.send({
-        name: 'notification/comment.added',
-        data: {
-          notificationId: notification.id,
-          recipientId: recipient.id,
-          recipientEmail: recipient.email,
-          recipientName: recipient.name,
-          commenterName,
-          taskId: task.id,
-          taskShortId: task.shortId,
-          taskTitle: task.title,
-          taskStatus: statusDetails.label,
-          taskStatusColor: statusDetails.color,
-          taskStatusBackgroundColor: statusDetails.backgroundColor,
-          taskDueDate: task.dueDate,
-          boardId: task.boardId,
-          clientSlug: task.clientSlug,
-          commentId: input.commentId,
-          commentPreview,
-        },
-      });
+      const commentAddedEventData = {
+        notificationId: notification.id,
+        recipientId: recipient.id,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        commenterName,
+        taskId: task.id,
+        taskShortId: task.shortId,
+        taskTitle: task.title,
+        taskStatus: statusDetails.label,
+        taskStatusColor: statusDetails.color,
+        taskStatusBackgroundColor: statusDetails.backgroundColor,
+        taskDueDate: task.dueDate,
+        boardId: task.boardId,
+        clientSlug: task.clientSlug,
+        commentId: input.commentId,
+        commentPreview,
+      };
+
+      const notificationDispatches: Promise<void>[] = [
+        inngest
+          .send({
+            name: 'notification/comment.added',
+            data: commentAddedEventData,
+          })
+          .then(() => undefined)
+          .catch((error) => {
+            console.error('Failed to send Inngest comment notification event:', {
+              notificationId: notification.id,
+              recipientId: recipient.id,
+              error,
+            });
+          }),
+      ];
 
       if (isEmailQueuePilotEnabled()) {
-        try {
-          await enqueueCommentAddedNotificationEmail({
+        notificationDispatches.push(
+          enqueueCommentAddedNotificationEmail({
             notificationId: notification.id,
             recipientId: recipient.id,
-          });
-        } catch (error) {
-          console.error('Failed to enqueue Vercel Queue comment notification email:', {
-            notificationId: notification.id,
-            recipientId: recipient.id,
-            error,
-          });
-        }
+          })
+            .then(() => undefined)
+            .catch((error) => {
+              console.error('Failed to enqueue Vercel Queue comment notification email:', {
+                notificationId: notification.id,
+                recipientId: recipient.id,
+                error,
+              });
+            })
+        );
       }
+
+      await Promise.all(notificationDispatches);
     }
   }
 

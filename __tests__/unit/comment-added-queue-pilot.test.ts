@@ -123,7 +123,6 @@ describe('comment_added Vercel Queue pilot', () => {
         ])
       )
       .mockReturnValueOnce(selectWhereChain([{ userId: 'recipient-1' }, { userId: 'recipient-2' }]))
-      .mockReturnValueOnce(selectWhereChain([]))
       .mockReturnValueOnce(
         selectWhereChain([
           {
@@ -160,6 +159,71 @@ describe('comment_added Vercel Queue pilot', () => {
     expect(mocks.enqueueCommentAddedNotificationEmail).toHaveBeenCalledTimes(2);
     expect(errorSpy).toHaveBeenCalledWith(
       'Failed to enqueue Vercel Queue comment notification email:',
+      expect.objectContaining({
+        notificationId: 'notification-1',
+        recipientId: 'recipient-1',
+        error: expect.any(Error),
+      })
+    );
+
+    errorSpy.mockRestore();
+  });
+
+  it('still enqueues the Queue pilot message when Inngest send fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { createCommentAddedNotification } = await import('@/lib/actions/notifications');
+
+    mocks.select
+      .mockReturnValueOnce(
+        selectTaskDetailsChain([
+          {
+            id: 'task-1',
+            shortId: 'T_1',
+            title: 'Test Task',
+            status: 'ready',
+            dueDate: null,
+            parentTaskId: null,
+            boardId: 'board-1',
+            boardName: 'Main Board',
+            statusOptions: [{ id: 'ready', label: 'Ready', color: '#c4c4c4' }],
+            clientSlug: 'client-slug',
+            clientName: 'Client',
+          },
+        ])
+      )
+      .mockReturnValueOnce(selectWhereChain([{ userId: 'recipient-1' }]))
+      .mockReturnValueOnce(
+        selectWhereChain([
+          {
+            id: 'recipient-1',
+            email: 'one@example.com',
+            name: 'One',
+            deactivatedAt: null,
+          },
+        ])
+      );
+    mockNotificationInserts(['notification-1']);
+    mocks.inngestSend.mockRejectedValueOnce(new Error('Inngest unavailable'));
+    mocks.enqueueCommentAddedNotificationEmail.mockResolvedValueOnce({ messageId: 'msg-1' });
+
+    const result = await createCommentAddedNotification({
+      commenterId: 'commenter-1',
+      taskId: 'task-1',
+      commentId: 'comment-1',
+      commentContent: { type: 'doc', content: [] },
+    });
+
+    expect(result).toEqual({
+      success: true,
+      notificationIds: ['notification-1'],
+    });
+    expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
+    expect(mocks.enqueueCommentAddedNotificationEmail).toHaveBeenCalledWith({
+      notificationId: 'notification-1',
+      recipientId: 'recipient-1',
+    });
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Failed to send Inngest comment notification event:',
       expect.objectContaining({
         notificationId: 'notification-1',
         recipientId: 'recipient-1',
