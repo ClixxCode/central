@@ -5,6 +5,7 @@ export * from './task-assigned';
 export * from './task-due';
 export * from './daily-digest';
 export * from './comment-added';
+export * from './batched-notifications';
 export * from './email-verification';
 export * from './password-reset';
 export * from './invitation';

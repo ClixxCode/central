@@ -70,6 +70,13 @@ export interface DailyDigestEvent {
   };
 }
 
+export interface EmailBatchFlushEvent {
+  name: 'notification/email-batch.flush';
+  data: {
+    batchId: string;
+  };
+}
+
 // Recurring task completion event
 export interface RecurringTaskCompletedEvent {
   name: 'task/recurring.completed';
@@ -104,4 +111,5 @@ export type NotificationEvent =
   | AssignmentNotificationEvent
   | DueReminderEvent
   | DailyDigestEvent
+  | EmailBatchFlushEvent
   | RecurringTaskCompletedEvent;
