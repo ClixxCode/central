@@ -68,7 +68,7 @@ function TeamGroup({ label, members }: { label: string; members: AccountTeamMemb
       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
       <AvatarGroup>
         {members.slice(0, 5).map((m) => (
-          <Avatar key={m.staff_id} size="sm">
+          <Avatar key={m.staff_id} size="lg">
             <AvatarImage src={m.avatar_url ?? undefined} alt={m.full_name ?? ''} />
             <AvatarFallback>{getInitials(m.full_name ?? m.email ?? '?')}</AvatarFallback>
           </Avatar>
