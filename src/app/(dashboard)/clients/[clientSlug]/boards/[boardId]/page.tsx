@@ -76,6 +76,10 @@ export default async function BoardPage({ params }: Props) {
         clientName={board.client?.name}
         clientSlug={clientSlug}
         canEdit={canEdit}
+        accountStatus={board.client?.accountStatus}
+        accountType={board.client?.accountType}
+        podName={board.client?.podName}
+        accountTeam={board.client?.accountTeam ?? []}
       />
 
       {/* Board Content */}

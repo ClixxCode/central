@@ -64,6 +64,8 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   image: text('image'),
   role: userRoleEnum('role').notNull().default('user'),
+  // Link to the Pulse staff record (Pulse is the system of record for staff).
+  pulseStaffId: uuid('pulse_staff_id'),
   authProvider: authProviderEnum('auth_provider'),
   passwordHash: text('password_hash'),
   preferences: jsonb('preferences').$type<UserPreferences>().default({

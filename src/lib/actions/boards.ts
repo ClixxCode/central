@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { boards, boardAccess, clients, teams, users, teamMembers, statuses, sections } from '@/lib/db/schema';
-import type { StatusOption, SectionOption } from '@/lib/db/schema';
+import type { StatusOption, SectionOption, AccountTeamMember } from '@/lib/db/schema';
 import { eq, and, not, inArray, or, asc } from 'drizzle-orm';
 import { getCurrentUser, requireAdmin, requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
@@ -51,6 +51,10 @@ export interface BoardWithAccess {
     name: string;
     slug: string;
     color: string | null;
+    accountStatus: string | null;
+    accountType: string | null;
+    podName: string | null;
+    accountTeam: AccountTeamMember[];
   } | null;
   access: BoardAccessEntry[];
 }
@@ -321,7 +325,16 @@ export async function getBoard(boardId: string): Promise<ActionResult<BoardWithA
       where: eq(boards.id, boardId),
       with: {
         client: {
-          columns: { id: true, name: true, slug: true, color: true },
+          columns: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
+            accountStatus: true,
+            accountType: true,
+            podName: true,
+            accountTeam: true,
+          },
         },
         access: {
           with: {
@@ -460,6 +473,10 @@ export async function createBoard(input: CreateBoardInput): Promise<ActionResult
           name: client.name,
           slug: client.slug,
           color: client.color,
+          accountStatus: null,
+          accountType: null,
+          podName: null,
+          accountTeam: [],
         },
         access: [],
       },
@@ -508,7 +525,16 @@ export async function updateBoard(
       where: eq(boards.id, boardId),
       with: {
         client: {
-          columns: { id: true, name: true, slug: true, color: true },
+          columns: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
+            accountStatus: true,
+            accountType: true,
+            podName: true,
+            accountTeam: true,
+          },
         },
         access: {
           with: {
@@ -878,7 +904,16 @@ export async function getOrCreatePersonalBoard(): Promise<ActionResult<BoardWith
       ),
       with: {
         client: {
-          columns: { id: true, name: true, slug: true, color: true },
+          columns: {
+            id: true,
+            name: true,
+            slug: true,
+            color: true,
+            accountStatus: true,
+            accountType: true,
+            podName: true,
+            accountTeam: true,
+          },
         },
         access: {
           with: {
