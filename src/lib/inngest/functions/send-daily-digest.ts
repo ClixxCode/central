@@ -1,8 +1,10 @@
 import { inngest } from '../client';
-import { resend, EMAIL_CONFIG } from '@/lib/email/client';
+import { getAppUrl } from '@/lib/email/client';
+import { sendCentralTemplateEmail } from '@/lib/email/send-template';
 import {
+  CENTRAL_EMAIL_TEMPLATE_ALIASES,
   dailyDigestEmailSubject,
-  dailyDigestEmailHtml,
+  formatEmailDate,
   type DigestTask,
   type DigestNotification,
 } from '@/lib/email/templates';
@@ -18,7 +20,7 @@ import {
   teamMembers,
   siteSettings,
 } from '@/lib/db/schema';
-import { eq, and, isNull, lt, lte, gte, inArray, or } from 'drizzle-orm';
+import { eq, and, isNull, gte, inArray } from 'drizzle-orm';
 import type { UserPreferences } from '@/lib/db/schema/users';
 import type { SiteSettings } from '@/lib/db/schema/site-settings';
 import { getOrgToday, getOrgTomorrow } from '@/lib/utils/timezone';
@@ -242,19 +244,27 @@ export const sendDailyDigest = inngest.createFunction(
     // Send the email
     const emailResult = await step.run('send-email', async () => {
       const today = new Date();
+      const stats = {
+        tasksDueToday: digestData.tasksDueToday.length,
+        tasksDueTomorrow: digestData.tasksDueTomorrow.length,
+        tasksOverdue: digestData.tasksOverdue.length,
+        unreadNotifications: digestData.unreadNotifications.length,
+      };
 
-      const result = await resend.emails.send({
-        from: EMAIL_CONFIG.from,
+      const result = await sendCentralTemplateEmail({
+        templateAlias: CENTRAL_EMAIL_TEMPLATE_ALIASES.dailyDigest,
         to: data.userEmail,
         subject: dailyDigestEmailSubject(today),
-        html: await dailyDigestEmailHtml({
-          recipientName: data.userName || 'there',
-          date: today,
-          tasksDueToday: digestData.tasksDueToday,
-          tasksDueTomorrow: digestData.tasksDueTomorrow,
-          tasksOverdue: digestData.tasksOverdue,
-          unreadNotifications: digestData.unreadNotifications,
-        }),
+        variables: {
+          RECIPIENT_NAME: data.userName || 'there',
+          DIGEST_DATE: formatEmailDate(today),
+          SUMMARY_TEXT: buildDigestSummary(stats),
+          TASKS_OVERDUE_COUNT: stats.tasksOverdue,
+          TASKS_DUE_TODAY_COUNT: stats.tasksDueToday,
+          TASKS_DUE_TOMORROW_COUNT: stats.tasksDueTomorrow,
+          UNREAD_NOTIFICATIONS_COUNT: stats.unreadNotifications,
+          CTA_URL: `${getAppUrl()}/my-tasks`,
+        },
       });
 
       return result;
@@ -272,6 +282,25 @@ export const sendDailyDigest = inngest.createFunction(
     };
   }
 );
+
+function buildDigestSummary(stats: {
+  tasksDueToday: number;
+  tasksDueTomorrow: number;
+  tasksOverdue: number;
+  unreadNotifications: number;
+}): string {
+  const total =
+    stats.tasksDueToday +
+    stats.tasksDueTomorrow +
+    stats.tasksOverdue +
+    stats.unreadNotifications;
+
+  if (stats.tasksOverdue > 0) {
+    return `You have ${stats.tasksOverdue} overdue item${stats.tasksOverdue === 1 ? '' : 's'} that need attention.`;
+  }
+
+  return `You have ${total} Central update${total === 1 ? '' : 's'} to review today.`;
+}
 
 /**
  * Helper to get all board IDs a user has access to

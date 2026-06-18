@@ -12,6 +12,8 @@ export interface MentionNotificationEvent {
     taskShortId: string | null;
     taskTitle: string;
     taskStatus: string;
+    taskStatusColor?: string;
+    taskStatusBackgroundColor?: string;
     taskDueDate: string | null;
     boardId: string;
     clientSlug: string;
@@ -32,6 +34,8 @@ export interface AssignmentNotificationEvent {
     taskShortId: string | null;
     taskTitle: string;
     taskStatus: string;
+    taskStatusColor?: string;
+    taskStatusBackgroundColor?: string;
     taskDueDate: string | null;
     taskDescription: string | null;
     boardId: string;
@@ -52,6 +56,8 @@ export interface DueReminderEvent {
     taskShortId: string | null;
     taskTitle: string;
     taskStatus: string;
+    taskStatusColor?: string;
+    taskStatusBackgroundColor?: string;
     dueDate: string;
     isOverdue: boolean;
     boardId: string;
@@ -67,6 +73,13 @@ export interface DailyDigestEvent {
     userId: string;
     userEmail: string;
     userName: string | null;
+  };
+}
+
+export interface EmailBatchFlushEvent {
+  name: 'notification/email-batch.flush';
+  data: {
+    batchId: string;
   };
 }
 
@@ -104,4 +117,5 @@ export type NotificationEvent =
   | AssignmentNotificationEvent
   | DueReminderEvent
   | DailyDigestEvent
+  | EmailBatchFlushEvent
   | RecurringTaskCompletedEvent;

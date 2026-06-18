@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
+  CENTRAL_EMAIL_TEMPLATE_ALIASES,
+  CENTRAL_EMAIL_TEMPLATE_LIST,
+  RESERVED_RESEND_TEMPLATE_VARIABLE_KEYS,
   formatEmailDate,
   mentionEmailSubject,
   mentionEmailHtml,
@@ -144,42 +147,11 @@ describe('Email Templates', () => {
     const digestData = {
       recipientName: 'Dave',
       date: new Date('2026-01-15'),
-      tasksDueToday: [
-        {
-          id: 'task-1',
-          title: 'Task Today',
-          status: 'Open',
-          dueDate: '2026-01-15',
-          clientName: 'Client A',
-          boardName: 'Board 1',
-          boardId: 'board-1',
-          clientSlug: 'client-a',
-        },
-      ],
-      tasksDueTomorrow: [
-        {
-          id: 'task-2',
-          title: 'Task Tomorrow',
-          status: 'In Progress',
-          dueDate: '2026-01-16',
-          clientName: 'Client B',
-          boardName: 'Board 2',
-          boardId: 'board-2',
-          clientSlug: 'client-b',
-        },
-      ],
-      tasksOverdue: [],
-      unreadNotifications: [
-        {
-          type: 'mention' as const,
-          actorName: 'Alice',
-          taskTitle: 'Review this',
-          taskId: 'task-3',
-          boardId: 'board-3',
-          clientSlug: 'client-c',
-          createdAt: new Date('2026-01-14'),
-        },
-      ],
+      tasksDueTodayCount: 1,
+      tasksDueTomorrowCount: 1,
+      tasksOverdueCount: 0,
+      unreadNotificationsCount: 1,
+      summaryText: 'You have 3 Central updates to review today.',
     };
 
     it('generates subject with date', () => {
@@ -195,50 +167,77 @@ describe('Email Templates', () => {
       const html = await dailyDigestEmailHtml(digestData);
 
       expect(html).toContain('Dave');
-      expect(html).toContain('Due Today');
-      expect(html).toContain('Task Today');
-      expect(html).toContain('Due Tomorrow');
-      expect(html).toContain('Task Tomorrow');
-      expect(html).toContain('Unread Notifications');
-      expect(html).toContain('Alice');
+      expect(html).toContain('Today at a glance');
+      expect(html).toContain('Due today');
+      expect(html).toContain('Due tomorrow');
+      expect(html).toContain('Unread notifications');
+      expect(html).toContain('You have 3 Central updates to review today.');
     });
 
-    it('shows overdue section when tasks are overdue', async () => {
+    it('shows overdue count when tasks are overdue', async () => {
       const dataWithOverdue = {
         ...digestData,
-        tasksOverdue: [
-          {
-            id: 'task-old',
-            title: 'Old Task',
-            status: 'Open',
-            dueDate: '2026-01-10',
-            clientName: 'Client X',
-            boardName: 'Board X',
-            boardId: 'board-x',
-            clientSlug: 'client-x',
-          },
-        ],
+        tasksOverdueCount: 2,
       };
 
       const html = await dailyDigestEmailHtml(dataWithOverdue);
 
       expect(html).toContain('Overdue');
-      expect(html).toContain('Old Task');
+      expect(html).toContain('2');
     });
 
-    it('shows empty state when nothing to report', async () => {
+    it('shows zero counts when nothing to report', async () => {
       const emptyData = {
         recipientName: 'Dave',
         date: new Date('2026-01-15'),
-        tasksDueToday: [],
-        tasksDueTomorrow: [],
-        tasksOverdue: [],
-        unreadNotifications: [],
+        tasksDueTodayCount: 0,
+        tasksDueTomorrowCount: 0,
+        tasksOverdueCount: 0,
+        unreadNotificationsCount: 0,
       };
 
       const html = await dailyDigestEmailHtml(emptyData);
 
-      expect(html).toContain('all caught up');
+      expect(html).toContain('Today at a glance');
+      expect(html).toContain('0');
+    });
+  });
+
+  describe('Central Resend Template Registry', () => {
+    it('contains the expected central_ aliases', () => {
+      const aliases = CENTRAL_EMAIL_TEMPLATE_LIST.map((template) => template.alias).sort();
+
+      expect(aliases).toEqual(Object.values(CENTRAL_EMAIL_TEMPLATE_ALIASES).sort());
+      expect(aliases).toHaveLength(10);
+      expect(aliases.every((alias) => alias.startsWith('central_'))).toBe(true);
+    });
+
+    it('uses uppercase, non-reserved variable keys', () => {
+      for (const template of CENTRAL_EMAIL_TEMPLATE_LIST) {
+        for (const variable of template.variables) {
+          expect(variable.key).toMatch(/^[A-Z0-9_]+$/);
+          expect(RESERVED_RESEND_TEMPLATE_VARIABLE_KEYS.has(variable.key)).toBe(false);
+        }
+      }
+    });
+
+    it('renders every hosted template with branding and CTA variables', async () => {
+      for (const template of CENTRAL_EMAIL_TEMPLATE_LIST) {
+        const html = await template.renderHtml();
+        const urlVariable = template.variables.find((variable) => variable.key.endsWith('_URL'));
+
+        expect(html).toContain('Central');
+        expect(html).toContain('clix_logo_black.png');
+        expect(html).toContain('#F5303D');
+        if (urlVariable) {
+          expect(html).toContain(`{{{${urlVariable.key}}}}`);
+          expect(template.text).toContain(`{{{${urlVariable.key}}}}`);
+        }
+        if (template.variables.some((variable) => variable.key === 'TASK_STATUS_COLOR')) {
+          expect(html).toContain('{{{TASK_STATUS_COLOR}}}');
+          expect(html).toContain('{{{TASK_STATUS_BACKGROUND_COLOR}}}');
+        }
+      }
     });
   });
 });

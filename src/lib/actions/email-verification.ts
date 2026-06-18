@@ -3,8 +3,9 @@
 import { db } from '@/lib/db';
 import { emailVerificationTokens, users } from '@/lib/db/schema';
 import { eq, and, gt } from 'drizzle-orm';
-import { resend, EMAIL_CONFIG, getAppUrl } from '@/lib/email/client';
-import { emailVerificationTemplate } from '@/lib/email/templates/email-verification';
+import { getAppUrl } from '@/lib/email/client';
+import { sendCentralTemplateEmail } from '@/lib/email/send-template';
+import { CENTRAL_EMAIL_TEMPLATE_ALIASES } from '@/lib/email/templates';
 import { randomBytes } from 'crypto';
 
 /**
@@ -53,17 +54,14 @@ export async function sendVerificationEmail(userId: string): Promise<{
     // Build verification URL
     const verificationUrl = `${getAppUrl()}/verify-email?token=${token}`;
 
-    // Send email
-    const emailContent = await emailVerificationTemplate({
-      name: user.name ?? undefined,
-      verificationUrl,
-    });
-
-    await resend.emails.send({
-      from: EMAIL_CONFIG.from,
+    await sendCentralTemplateEmail({
+      templateAlias: CENTRAL_EMAIL_TEMPLATE_ALIASES.emailVerification,
       to: user.email,
-      subject: emailContent.subject,
-      html: emailContent.html,
+      subject: 'Verify your email for Central',
+      variables: {
+        USER_NAME: user.name ?? 'there',
+        VERIFICATION_URL: verificationUrl,
+      },
     });
 
     return { success: true };

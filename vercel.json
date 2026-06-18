@@ -1,4 +1,14 @@
 {
+  "functions": {
+    "src/app/api/queues/email-notifications/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "central-email-notifications"
+        }
+      ]
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/backup-database",

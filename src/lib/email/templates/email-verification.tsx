@@ -14,19 +14,19 @@ function EmailVerificationEmail({
 
   return (
     <EmailLayout preheader="Please verify your email to complete registration">
-      <Text style={{ margin: '0 0 16px', color: '#f5f5f5' }}>{greeting}</Text>
-      <Text style={{ margin: '0 0 16px', color: '#d0d0d5' }}>
+      <Text className="email-heading" style={{ margin: '0 0 16px', color: '#18181b' }}>{greeting}</Text>
+      <Text className="email-text" style={{ margin: '0 0 16px', color: '#3f3f46' }}>
         Welcome to Central! Please verify your email address to complete your registration
         and start managing your projects.
       </Text>
       <Section style={{ margin: '0 0 24px', textAlign: 'center' as const }}>
         <EmailButton href={verificationUrl}>Verify Email</EmailButton>
       </Section>
-      <Text style={{ margin: '0 0 16px', color: '#a0a0a8', fontSize: '14px' }}>
+      <Text className="email-muted" style={{ margin: '0 0 16px', color: '#71717a', fontSize: '14px' }}>
         This link will expire in 24 hours. If you didn&apos;t create an account with Central,
         you can safely ignore this email.
       </Text>
-      <Text style={{ margin: '0', color: '#6b6b74', fontSize: '13px' }}>
+      <Text className="email-subtle" style={{ margin: '0', color: '#71717a', fontSize: '13px' }}>
         If the button doesn&apos;t work, copy and paste this link into your browser:
         <br />
         <Link href={verificationUrl} style={{ color: '#F5303D', wordBreak: 'break-all' }}>
@@ -37,21 +37,21 @@ function EmailVerificationEmail({
   );
 }
 
-function EmailVerifiedEmail({ name }: { name?: string }) {
+function EmailVerifiedEmail({ name, loginUrl }: { name?: string; loginUrl?: string }) {
   const greeting = name ? `Hi ${name},` : 'Hi,';
-  const loginUrl = `${getAppUrl()}/login`;
+  const signInUrl = loginUrl ?? `${getAppUrl()}/login`;
 
   return (
     <EmailLayout preheader="Your email has been verified">
-      <Text style={{ margin: '0 0 16px', color: '#f5f5f5' }}>{greeting}</Text>
-      <Text style={{ margin: '0 0 16px', color: '#d0d0d5' }}>
+      <Text className="email-heading" style={{ margin: '0 0 16px', color: '#18181b' }}>{greeting}</Text>
+      <Text className="email-text" style={{ margin: '0 0 16px', color: '#3f3f46' }}>
         Your email has been verified successfully! You can now sign in to Central
         and start managing your projects.
       </Text>
       <Section style={{ margin: '0 0 24px', textAlign: 'center' as const }}>
-        <EmailButton href={loginUrl}>Sign In</EmailButton>
+        <EmailButton href={signInUrl}>Sign In</EmailButton>
       </Section>
-      <Text style={{ margin: '0', color: '#a0a0a8', fontSize: '14px' }}>
+      <Text className="email-muted" style={{ margin: '0', color: '#71717a', fontSize: '14px' }}>
         Welcome to the team!
       </Text>
     </EmailLayout>
@@ -72,9 +72,10 @@ export async function emailVerificationTemplate(params: {
 
 export async function emailVerifiedTemplate(params: {
   name?: string;
+  loginUrl?: string;
 }): Promise<{ subject: string; html: string }> {
   return {
     subject: 'Email verified - Welcome to Central',
-    html: await render(<EmailVerifiedEmail name={params.name} />),
+    html: await render(<EmailVerifiedEmail name={params.name} loginUrl={params.loginUrl} />),
   };
 }

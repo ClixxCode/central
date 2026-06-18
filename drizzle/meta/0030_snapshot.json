@@ -1,5 +1,5 @@
 {
-  "id": "979140d1-65a8-44b8-b096-ef560fbc32ec",
+  "id": "97fad6a1-29ce-4659-9f21-9a0f39668308",
   "prevId": "18500a4f-ada7-4313-a6ec-2e7a4ffbb88d",
   "version": "7",
   "dialect": "postgresql",
@@ -52,12 +52,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'user'"
-        },
-        "pulse_staff_id": {
-          "name": "pulse_staff_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         },
         "auth_provider": {
           "name": "auth_provider",
@@ -377,49 +371,6 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'{}'::jsonb"
-        },
-        "pulse_account_id": {
-          "name": "pulse_account_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "account_status": {
-          "name": "account_status",
-          "type": "varchar(32)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "account_type": {
-          "name": "account_type",
-          "type": "varchar(32)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pod_name": {
-          "name": "pod_name",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pod_sub_context": {
-          "name": "pod_sub_context",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "account_team": {
-          "name": "account_team",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "pulse_synced_at": {
-          "name": "pulse_synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_by": {
           "name": "created_by",
@@ -1342,6 +1293,136 @@
       },
       "isRLSEnabled": false
     },
+    "public.notification_email_batches": {
+      "name": "notification_email_batches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel": {
+          "name": "channel",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'email'"
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "send_after": {
+          "name": "send_after",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "skipped_at": {
+          "name": "skipped_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "notification_email_batches_pending_user_channel_idx": {
+          "name": "notification_email_batches_pending_user_channel_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "channel",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"notification_email_batches\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notification_email_batches_pending_send_after_idx": {
+          "name": "notification_email_batches_pending_send_after_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "send_after",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notification_email_batches_user_id_users_id_fk": {
+          "name": "notification_email_batches_user_id_users_id_fk",
+          "tableFrom": "notification_email_batches",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.notifications": {
       "name": "notifications",
       "schema": "",
@@ -1408,6 +1489,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "email_batch_id": {
+          "name": "email_batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -1416,7 +1503,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "notifications_email_batch_id_idx": {
+          "name": "notifications_email_batch_id_idx",
+          "columns": [
+            {
+              "expression": "email_batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "notifications_user_id_users_id_fk": {
           "name": "notifications_user_id_users_id_fk",
@@ -1450,6 +1553,19 @@
           "tableTo": "comments",
           "columnsFrom": [
             "comment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "notifications_email_batch_id_notification_email_batches_id_fk": {
+          "name": "notifications_email_batch_id_notification_email_batches_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "notification_email_batches",
+          "columnsFrom": [
+            "email_batch_id"
           ],
           "columnsTo": [
             "id"

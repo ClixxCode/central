@@ -2,6 +2,7 @@
 export { sendMentionEmail } from './send-mention-email';
 export { sendAssignmentEmail } from './send-assignment-email';
 export { sendDueReminder } from './send-due-reminder';
+export { flushNotificationEmailBatch } from './flush-notification-email-batch';
 export { sendDailyDigest } from './send-daily-digest';
 export { checkDueDates, scheduleDailyDigests } from './check-due-dates';
 export { sendSlackNotification } from './send-slack-notification';

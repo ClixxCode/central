@@ -4,8 +4,9 @@ import { db } from '@/lib/db';
 import { passwordResetTokens, users } from '@/lib/db/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth/session';
-import { resend, EMAIL_CONFIG, getAppUrl } from '@/lib/email/client';
-import { adminPasswordResetTemplate } from '@/lib/email/templates/password-reset';
+import { getAppUrl } from '@/lib/email/client';
+import { sendCentralTemplateEmail } from '@/lib/email/send-template';
+import { CENTRAL_EMAIL_TEMPLATE_ALIASES } from '@/lib/email/templates';
 import { hashPassword, validatePassword } from '@/lib/auth/password';
 import { randomBytes } from 'crypto';
 
@@ -49,18 +50,15 @@ export async function sendPasswordResetLink(userId: string): Promise<{
     // Build reset URL
     const resetUrl = `${getAppUrl()}/reset-password?token=${token}`;
 
-    // Send email
-    const emailContent = await adminPasswordResetTemplate({
-      name: user.name ?? undefined,
-      adminName: admin.name ?? 'An administrator',
-      resetUrl,
-    });
-
-    await resend.emails.send({
-      from: EMAIL_CONFIG.from,
+    await sendCentralTemplateEmail({
+      templateAlias: CENTRAL_EMAIL_TEMPLATE_ALIASES.passwordReset,
       to: user.email,
-      subject: emailContent.subject,
-      html: emailContent.html,
+      subject: 'Reset your password for Central',
+      variables: {
+        USER_NAME: user.name ?? 'there',
+        ADMIN_NAME: admin.name ?? 'An administrator',
+        RESET_URL: resetUrl,
+      },
     });
 
     return { success: true };

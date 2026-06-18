@@ -9,7 +9,6 @@ import {
   clients,
   comments,
   taskAssignees,
-  teams,
   teamMembers,
   boardAccess,
 } from '@/lib/db/schema';
@@ -18,8 +17,16 @@ import { eq, and, isNull, desc, inArray, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { inngest } from '@/lib/inngest/client';
 import { getPlainText } from '@/lib/editor/mentions';
+import { getStatusBackgroundColor, normalizeStatusColor } from '@/lib/email/status-colors';
 import type { UserPreferences } from '@/lib/db/schema/users';
 import type { CommentReactionType } from '@/lib/comments/reactions';
+import type { StatusOption } from '@/lib/db/schema';
+import {
+  enqueueNotificationEmail,
+  type EmailNotificationQueueType,
+  shouldDispatchEmailBatchViaInngest,
+  shouldDispatchEmailBatchViaQueue,
+} from '@/lib/queues/email-notifications';
 
 // Helper to get parent task title for subtask notifications
 async function getParentTaskTitle(parentTaskId: string | null): Promise<string | null> {
@@ -29,6 +36,43 @@ async function getParentTaskTitle(parentTaskId: string | null): Promise<string |
     columns: { title: true },
   });
   return parent?.title ?? null;
+}
+
+function getTaskStatusDetails(status: string, statusOptions: StatusOption[]): {
+  label: string;
+  color: string;
+  backgroundColor: string;
+} {
+  const option = statusOptions.find((s) => s.id === status || s.label === status);
+  const color = normalizeStatusColor(option?.color);
+
+  return {
+    label: option?.label ?? status,
+    color,
+    backgroundColor: getStatusBackgroundColor(color),
+  };
+}
+
+function enqueueBatchNotificationEmail(input: {
+  notificationId: string;
+  recipientId: string;
+  notificationType: EmailNotificationQueueType;
+  logLabel: string;
+}): Promise<void> {
+  return enqueueNotificationEmail({
+    notificationId: input.notificationId,
+    recipientId: input.recipientId,
+    notificationType: input.notificationType,
+  })
+    .then(() => undefined)
+    .catch((error) => {
+      console.error(`Failed to enqueue Vercel Queue ${input.logLabel} notification email:`, {
+        notificationId: input.notificationId,
+        recipientId: input.recipientId,
+        notificationType: input.notificationType,
+        error,
+      });
+    });
 }
 
 // Types
@@ -401,6 +445,7 @@ export async function createMentionNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -416,6 +461,7 @@ export async function createMentionNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
 
   // Check if mentioned user has access to the board
   // Non-contractors have access to all boards; contractors need explicit access
@@ -479,7 +525,9 @@ export async function createMentionNotification(input: {
       taskId: task.id,
       taskShortId: task.shortId,
       taskTitle: task.title,
-      taskStatus: task.status,
+      taskStatus: statusDetails.label,
+      taskStatusColor: statusDetails.color,
+      taskStatusBackgroundColor: statusDetails.backgroundColor,
       taskDueDate: task.dueDate,
       boardId: task.boardId,
       clientSlug: task.clientSlug,
@@ -529,6 +577,7 @@ export async function createCommentAddedNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -544,6 +593,7 @@ export async function createCommentAddedNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
 
   // Collect all users who should be notified (using Set to avoid duplicates)
   const recipientIds = new Set<string>();
@@ -583,29 +633,6 @@ export async function createCommentAddedNotification(input: {
     for (const userId of input.excludeUserIds) {
       recipientIds.delete(userId);
     }
-  }
-
-  if (recipientIds.size === 0) {
-    return { success: true, notificationIds: [] };
-  }
-
-  // Remove users who already have a recent unread notification for this task
-  // (e.g. they were @mentioned in another comment moments ago — no need to also send "commented on")
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-  const recentNotifications = await db
-    .select({ userId: notifications.userId })
-    .from(notifications)
-    .where(
-      and(
-        eq(notifications.taskId, input.taskId),
-        inArray(notifications.userId, [...recipientIds]),
-        isNull(notifications.readAt),
-        sql`${notifications.createdAt} > ${tenMinutesAgo}`
-      )
-    );
-
-  for (const existing of recentNotifications) {
-    recipientIds.delete(existing.userId);
   }
 
   if (recipientIds.size === 0) {
@@ -655,26 +682,57 @@ export async function createCommentAddedNotification(input: {
     notificationIds.push(notification.id);
 
     if (recipient) {
-      // Trigger notification via Inngest (email/Slack based on preferences)
-      await inngest.send({
-        name: 'notification/comment.added',
-        data: {
-          notificationId: notification.id,
-          recipientId: recipient.id,
-          recipientEmail: recipient.email,
-          recipientName: recipient.name,
-          commenterName,
-          taskId: task.id,
-          taskShortId: task.shortId,
-          taskTitle: task.title,
-          taskStatus: task.status,
-          taskDueDate: task.dueDate,
-          boardId: task.boardId,
-          clientSlug: task.clientSlug,
-          commentId: input.commentId,
-          commentPreview,
-        },
-      });
+      const commentAddedEventData = {
+        notificationId: notification.id,
+        recipientId: recipient.id,
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        commenterName,
+        taskId: task.id,
+        taskShortId: task.shortId,
+        taskTitle: task.title,
+        taskStatus: statusDetails.label,
+        taskStatusColor: statusDetails.color,
+        taskStatusBackgroundColor: statusDetails.backgroundColor,
+        taskDueDate: task.dueDate,
+        boardId: task.boardId,
+        clientSlug: task.clientSlug,
+        commentId: input.commentId,
+        commentPreview,
+      };
+
+      const notificationDispatches: Promise<void>[] = [];
+
+      if (shouldDispatchEmailBatchViaInngest()) {
+        notificationDispatches.push(
+          inngest
+            .send({
+              name: 'notification/comment.added',
+              data: commentAddedEventData,
+            })
+            .then(() => undefined)
+            .catch((error) => {
+              console.error('Failed to send Inngest comment notification event:', {
+                notificationId: notification.id,
+                recipientId: recipient.id,
+                error,
+              });
+            })
+        );
+      }
+
+      if (shouldDispatchEmailBatchViaQueue()) {
+        notificationDispatches.push(
+          enqueueBatchNotificationEmail({
+            notificationId: notification.id,
+            recipientId: recipient.id,
+            notificationType: 'comment_added',
+            logLabel: 'comment',
+          })
+        );
+      }
+
+      await Promise.all(notificationDispatches);
     }
   }
 
@@ -727,6 +785,7 @@ export async function createAssignmentNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -742,6 +801,7 @@ export async function createAssignmentNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
   const assignerName = assigner.name || assigner.email;
   const taskDescription = task.description
     ? getPlainText(task.description).slice(0, 200)
@@ -761,27 +821,58 @@ export async function createAssignmentNotification(input: {
     })
     .returning();
 
-  // Trigger email via Inngest
-  await inngest.send({
-    name: 'notification/assignment.created',
-    data: {
-      notificationId: notification.id,
-      recipientId: assignee.id,
-      recipientEmail: assignee.email,
-      recipientName: assignee.name,
-      assignerName,
-      taskId: task.id,
-      taskShortId: task.shortId,
-      taskTitle: task.title,
-      taskStatus: task.status,
-      taskDueDate: task.dueDate,
-      taskDescription,
-      boardId: task.boardId,
-      boardName: task.boardName,
-      clientSlug: task.clientSlug,
-      clientName: task.clientName,
-    },
-  });
+  const assignmentEventData = {
+    notificationId: notification.id,
+    recipientId: assignee.id,
+    recipientEmail: assignee.email,
+    recipientName: assignee.name,
+    assignerName,
+    taskId: task.id,
+    taskShortId: task.shortId,
+    taskTitle: task.title,
+    taskStatus: statusDetails.label,
+    taskStatusColor: statusDetails.color,
+    taskStatusBackgroundColor: statusDetails.backgroundColor,
+    taskDueDate: task.dueDate,
+    taskDescription,
+    boardId: task.boardId,
+    boardName: task.boardName,
+    clientSlug: task.clientSlug,
+    clientName: task.clientName,
+  };
+
+  const notificationDispatches: Promise<void>[] = [];
+
+  if (shouldDispatchEmailBatchViaInngest()) {
+    notificationDispatches.push(
+      inngest
+        .send({
+          name: 'notification/assignment.created',
+          data: assignmentEventData,
+        })
+        .then(() => undefined)
+        .catch((error) => {
+          console.error('Failed to send Inngest assignment notification event:', {
+            notificationId: notification.id,
+            recipientId: assignee.id,
+            error,
+          });
+        })
+    );
+  }
+
+  if (shouldDispatchEmailBatchViaQueue()) {
+    notificationDispatches.push(
+      enqueueBatchNotificationEmail({
+        notificationId: notification.id,
+        recipientId: assignee.id,
+        notificationType: 'task_assigned',
+        logLabel: 'assignment',
+      })
+    );
+  }
+
+  await Promise.all(notificationDispatches);
 
   return { success: true, notificationId: notification.id };
 }
@@ -820,6 +911,7 @@ export async function createDueNotification(input: {
       parentTaskId: tasks.parentTaskId,
       boardId: boards.id,
       boardName: boards.name,
+      statusOptions: boards.statusOptions,
       clientSlug: clients.slug,
       clientName: clients.name,
     })
@@ -835,6 +927,7 @@ export async function createDueNotification(input: {
   }
 
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
+  const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
   const notificationType = input.isOverdue ? 'task_overdue' : 'task_due_soon';
   const taskLabel = parentTitle ? `"${task.title}" (subtask of "${parentTitle}")` : `"${task.title}"`;
   const title = input.isOverdue
@@ -853,26 +946,58 @@ export async function createDueNotification(input: {
     })
     .returning();
 
-  // Trigger email via Inngest
-  await inngest.send({
-    name: 'notification/due-reminder.scheduled',
-    data: {
-      notificationId: notification.id,
-      recipientId: user.id,
-      recipientEmail: user.email,
-      recipientName: user.name,
-      taskId: task.id,
-      taskShortId: task.shortId,
-      taskTitle: task.title,
-      taskStatus: task.status,
-      dueDate: task.dueDate,
-      isOverdue: input.isOverdue,
-      boardId: task.boardId,
-      boardName: task.boardName,
-      clientSlug: task.clientSlug,
-      clientName: task.clientName,
-    },
-  });
+  const dueReminderEventData = {
+    notificationId: notification.id,
+    recipientId: user.id,
+    recipientEmail: user.email,
+    recipientName: user.name,
+    taskId: task.id,
+    taskShortId: task.shortId,
+    taskTitle: task.title,
+    taskStatus: statusDetails.label,
+    taskStatusColor: statusDetails.color,
+    taskStatusBackgroundColor: statusDetails.backgroundColor,
+    dueDate: task.dueDate,
+    isOverdue: input.isOverdue,
+    boardId: task.boardId,
+    boardName: task.boardName,
+    clientSlug: task.clientSlug,
+    clientName: task.clientName,
+  };
+
+  const dueNotificationDispatches: Promise<void>[] = [];
+
+  if (shouldDispatchEmailBatchViaInngest()) {
+    dueNotificationDispatches.push(
+      inngest
+        .send({
+          name: 'notification/due-reminder.scheduled',
+          data: dueReminderEventData,
+        })
+        .then(() => undefined)
+        .catch((error) => {
+          console.error('Failed to send Inngest due reminder notification event:', {
+            notificationId: notification.id,
+            recipientId: user.id,
+            notificationType,
+            error,
+          });
+        })
+    );
+  }
+
+  if (shouldDispatchEmailBatchViaQueue()) {
+    dueNotificationDispatches.push(
+      enqueueBatchNotificationEmail({
+        notificationId: notification.id,
+        recipientId: user.id,
+        notificationType,
+        logLabel: 'due reminder',
+      })
+    );
+  }
+
+  await Promise.all(dueNotificationDispatches);
 
   return { success: true, notificationId: notification.id };
 }
