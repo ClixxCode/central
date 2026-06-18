@@ -22,6 +22,14 @@ export interface SectionOption {
   position: number;
 }
 
+// Rule that defines a rollup board's membership. Membership is fully derived
+// from Pulse-reflected client attributes (pod / assignment / lifecycle) and
+// reconciled automatically — no manual source curation.
+export type RollupRule =
+  | { type: 'pod'; pod_name: string }
+  | { type: 'assignment'; staff_id: string; role?: 'management' | 'delivery' | null }
+  | { type: 'lifecycle'; statuses: string[] };
+
 export const boards = pgTable('boards', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }),
@@ -37,6 +45,8 @@ export const boards = pgTable('boards', {
   color: varchar('color', { length: 7 }),
   icon: varchar('icon', { length: 100 }),
   reviewModeEnabled: boolean('review_mode_enabled').notNull().default(false),
+  // For type='rollup' boards: the auto-membership rule (null = legacy manual).
+  rollupRule: jsonb('rollup_rule').$type<RollupRule>(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { clients } from '@/lib/db/schema';
 import type { ClientMetadata, AccountTeamMember } from '@/lib/db/schema';
+import { reconcileAllRollups } from '@/lib/rollups/reconcile';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -127,6 +128,12 @@ export async function POST(request: NextRequest) {
         pulseSyncedAt: new Date(),
       })
       .where(eq(clients.id, existing.id));
+
+    // Pod/team/status just changed for this client → re-derive rule-based
+    // rollup membership (fire-and-forget; never blocks the webhook ack).
+    void reconcileAllRollups().catch((e) =>
+      console.error('[pulse-account] rollup reconcile failed', e),
+    );
 
     return NextResponse.json({ ok: true, matched: true, client_id: existing.id });
   } catch (error) {

@@ -225,6 +225,13 @@
       "when": 1781812603001,
       "tag": "0031_pulse_account_reflection",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1781814403574,
+      "tag": "0032_boards_rollup_rule",
+      "breakpoints": true
     }
   ]
 }
