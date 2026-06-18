@@ -15,6 +15,7 @@
     "db:migrate-avatars": "tsx scripts/migrate-external-avatars.ts",
     "email:templates:sync": "tsx scripts/sync-resend-templates.ts",
     "email:templates:publish": "tsx scripts/sync-resend-templates.ts --publish",
+    "email:batch-health": "tsx scripts/check-email-batch-health.ts",
     "generate-icons": "tsx scripts/generate-icons.ts",
     "test": "vitest run",
     "test:watch": "vitest",

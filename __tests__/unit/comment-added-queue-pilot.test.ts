@@ -7,8 +7,9 @@ const mocks = vi.hoisted(() => ({
   insert: vi.fn(),
   inngestSend: vi.fn(),
   inngestCreateFunction: vi.fn((_config, _trigger, handler) => handler),
-  enqueueCommentAddedNotificationEmail: vi.fn(),
-  isEmailQueuePilotEnabled: vi.fn(),
+  enqueueNotificationEmail: vi.fn(),
+  shouldDispatchEmailBatchViaInngest: vi.fn(),
+  shouldDispatchEmailBatchViaQueue: vi.fn(),
   queueNotificationEmail: vi.fn(),
   getPlainText: vi.fn(),
   extractMentionedUserIds: vi.fn(),
@@ -46,8 +47,9 @@ vi.mock('@/lib/editor/mentions', () => ({
 }));
 
 vi.mock('@/lib/queues/email-notifications', () => ({
-  enqueueCommentAddedNotificationEmail: mocks.enqueueCommentAddedNotificationEmail,
-  isEmailQueuePilotEnabled: mocks.isEmailQueuePilotEnabled,
+  enqueueNotificationEmail: mocks.enqueueNotificationEmail,
+  shouldDispatchEmailBatchViaInngest: mocks.shouldDispatchEmailBatchViaInngest,
+  shouldDispatchEmailBatchViaQueue: mocks.shouldDispatchEmailBatchViaQueue,
 }));
 
 vi.mock('@/lib/email/notification-batches', () => ({
@@ -97,7 +99,8 @@ describe('comment_added Vercel Queue pilot', () => {
     mocks.getPlainText.mockReturnValue('A queued comment notification');
     mocks.extractMentionedUserIds.mockReturnValue([]);
     mocks.inngestSend.mockResolvedValue({ ids: ['event-1'] });
-    mocks.isEmailQueuePilotEnabled.mockReturnValue(true);
+    mocks.shouldDispatchEmailBatchViaInngest.mockReturnValue(true);
+    mocks.shouldDispatchEmailBatchViaQueue.mockReturnValue(true);
   });
 
   it('does not let a Queue enqueue failure block comment_added notifications', async () => {
@@ -140,7 +143,7 @@ describe('comment_added Vercel Queue pilot', () => {
         ])
       );
     mockNotificationInserts(['notification-1', 'notification-2']);
-    mocks.enqueueCommentAddedNotificationEmail
+    mocks.enqueueNotificationEmail
       .mockRejectedValueOnce(new Error('Queue unavailable'))
       .mockResolvedValueOnce({ messageId: 'msg-2' });
 
@@ -156,12 +159,13 @@ describe('comment_added Vercel Queue pilot', () => {
       notificationIds: ['notification-1', 'notification-2'],
     });
     expect(mocks.inngestSend).toHaveBeenCalledTimes(2);
-    expect(mocks.enqueueCommentAddedNotificationEmail).toHaveBeenCalledTimes(2);
+    expect(mocks.enqueueNotificationEmail).toHaveBeenCalledTimes(2);
     expect(errorSpy).toHaveBeenCalledWith(
       'Failed to enqueue Vercel Queue comment notification email:',
       expect.objectContaining({
         notificationId: 'notification-1',
         recipientId: 'recipient-1',
+        notificationType: 'comment_added',
         error: expect.any(Error),
       })
     );
@@ -204,7 +208,7 @@ describe('comment_added Vercel Queue pilot', () => {
       );
     mockNotificationInserts(['notification-1']);
     mocks.inngestSend.mockRejectedValueOnce(new Error('Inngest unavailable'));
-    mocks.enqueueCommentAddedNotificationEmail.mockResolvedValueOnce({ messageId: 'msg-1' });
+    mocks.enqueueNotificationEmail.mockResolvedValueOnce({ messageId: 'msg-1' });
 
     const result = await createCommentAddedNotification({
       commenterId: 'commenter-1',
@@ -218,9 +222,10 @@ describe('comment_added Vercel Queue pilot', () => {
       notificationIds: ['notification-1'],
     });
     expect(mocks.inngestSend).toHaveBeenCalledTimes(1);
-    expect(mocks.enqueueCommentAddedNotificationEmail).toHaveBeenCalledWith({
+    expect(mocks.enqueueNotificationEmail).toHaveBeenCalledWith({
       notificationId: 'notification-1',
       recipientId: 'recipient-1',
+      notificationType: 'comment_added',
     });
     expect(errorSpy).toHaveBeenCalledWith(
       'Failed to send Inngest comment notification event:',
@@ -233,6 +238,178 @@ describe('comment_added Vercel Queue pilot', () => {
 
     errorSpy.mockRestore();
   });
+
+  it('shadow enqueues assignment email batching through Queues while keeping Inngest live', async () => {
+    const { createAssignmentNotification } = await import('@/lib/actions/notifications');
+
+    mocks.userFindFirst
+      .mockResolvedValueOnce({
+        name: 'Manager',
+        email: 'manager@example.com',
+      })
+      .mockResolvedValueOnce({
+        id: 'assignee-1',
+        name: 'Assignee',
+        email: 'assignee@example.com',
+        deactivatedAt: null,
+      });
+    mocks.select.mockReturnValueOnce(
+      selectTaskDetailsChain([
+        {
+          id: 'task-1',
+          shortId: 'T_1',
+          title: 'Assigned Task',
+          status: 'ready',
+          dueDate: null,
+          description: null,
+          parentTaskId: null,
+          boardId: 'board-1',
+          boardName: 'Main Board',
+          statusOptions: [{ id: 'ready', label: 'Ready', color: '#c4c4c4' }],
+          clientSlug: 'client-slug',
+          clientName: 'Client',
+        },
+      ])
+    );
+    mockNotificationInserts(['assignment-notification-1']);
+    mocks.enqueueNotificationEmail.mockResolvedValueOnce({ messageId: 'msg-assignment' });
+
+    const result = await createAssignmentNotification({
+      assigneeUserId: 'assignee-1',
+      assignerUserId: 'assigner-1',
+      taskId: 'task-1',
+    });
+
+    expect(result).toEqual({ success: true, notificationId: 'assignment-notification-1' });
+    expect(mocks.inngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'notification/assignment.created',
+        data: expect.objectContaining({
+          notificationId: 'assignment-notification-1',
+          recipientId: 'assignee-1',
+        }),
+      })
+    );
+    expect(mocks.enqueueNotificationEmail).toHaveBeenCalledWith({
+      notificationId: 'assignment-notification-1',
+      recipientId: 'assignee-1',
+      notificationType: 'task_assigned',
+    });
+  });
+
+  it('can make Queues primary for assignment email batching without sending Inngest events', async () => {
+    const { createAssignmentNotification } = await import('@/lib/actions/notifications');
+
+    mocks.shouldDispatchEmailBatchViaInngest.mockReturnValue(false);
+    mocks.shouldDispatchEmailBatchViaQueue.mockReturnValue(true);
+    mocks.userFindFirst
+      .mockResolvedValueOnce({
+        name: 'Manager',
+        email: 'manager@example.com',
+      })
+      .mockResolvedValueOnce({
+        id: 'assignee-1',
+        name: 'Assignee',
+        email: 'assignee@example.com',
+        deactivatedAt: null,
+      });
+    mocks.select.mockReturnValueOnce(
+      selectTaskDetailsChain([
+        {
+          id: 'task-1',
+          shortId: 'T_1',
+          title: 'Assigned Task',
+          status: 'ready',
+          dueDate: null,
+          description: null,
+          parentTaskId: null,
+          boardId: 'board-1',
+          boardName: 'Main Board',
+          statusOptions: [{ id: 'ready', label: 'Ready', color: '#c4c4c4' }],
+          clientSlug: 'client-slug',
+          clientName: 'Client',
+        },
+      ])
+    );
+    mockNotificationInserts(['assignment-notification-1']);
+    mocks.enqueueNotificationEmail.mockResolvedValueOnce({ messageId: 'msg-assignment' });
+
+    const result = await createAssignmentNotification({
+      assigneeUserId: 'assignee-1',
+      assignerUserId: 'assigner-1',
+      taskId: 'task-1',
+    });
+
+    expect(result).toEqual({ success: true, notificationId: 'assignment-notification-1' });
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+    expect(mocks.enqueueNotificationEmail).toHaveBeenCalledWith({
+      notificationId: 'assignment-notification-1',
+      recipientId: 'assignee-1',
+      notificationType: 'task_assigned',
+    });
+  });
+
+  it.each([
+    { isOverdue: false, notificationType: 'task_due_soon' as const },
+    { isOverdue: true, notificationType: 'task_overdue' as const },
+  ])(
+    'shadow enqueues $notificationType due email batching through Queues while keeping Inngest live',
+    async ({ isOverdue, notificationType }) => {
+      const { createDueNotification } = await import('@/lib/actions/notifications');
+
+      mocks.userFindFirst.mockResolvedValueOnce({
+        id: 'recipient-1',
+        name: 'Recipient',
+        email: 'recipient@example.com',
+        deactivatedAt: null,
+      });
+      mocks.select.mockReturnValueOnce(
+        selectTaskDetailsChain([
+          {
+            id: 'task-1',
+            shortId: 'T_1',
+            title: 'Due Task',
+            status: 'ready',
+            dueDate: '2026-06-18',
+            parentTaskId: null,
+            boardId: 'board-1',
+            boardName: 'Main Board',
+            statusOptions: [{ id: 'ready', label: 'Ready', color: '#c4c4c4' }],
+            clientSlug: 'client-slug',
+            clientName: 'Client',
+          },
+        ])
+      );
+      mockNotificationInserts([`due-${notificationType}-notification-1`]);
+      mocks.enqueueNotificationEmail.mockResolvedValueOnce({ messageId: `msg-${notificationType}` });
+
+      const result = await createDueNotification({
+        userId: 'recipient-1',
+        taskId: 'task-1',
+        isOverdue,
+      });
+
+      expect(result).toEqual({
+        success: true,
+        notificationId: `due-${notificationType}-notification-1`,
+      });
+      expect(mocks.inngestSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'notification/due-reminder.scheduled',
+          data: expect.objectContaining({
+            notificationId: `due-${notificationType}-notification-1`,
+            recipientId: 'recipient-1',
+            isOverdue,
+          }),
+        })
+      );
+      expect(mocks.enqueueNotificationEmail).toHaveBeenCalledWith({
+        notificationId: `due-${notificationType}-notification-1`,
+        recipientId: 'recipient-1',
+        notificationType,
+      });
+    }
+  );
 
   it('keeps Inngest as the authoritative comment_added email batcher during the pilot', async () => {
     const { sendCommentAddedEmail } = await import('@/lib/inngest/functions/send-comment-added-email');

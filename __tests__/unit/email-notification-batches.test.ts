@@ -181,6 +181,66 @@ describe('email notification batches', () => {
     });
   });
 
+  it('reschedules the existing batch when duplicate delivery sees an already batched notification', async () => {
+    const { queueNotificationEmail } = await import('@/lib/email/notification-batches');
+    const sendAfter = new Date('2026-06-17T00:05:00.000Z');
+
+    mocks.notificationFindFirst.mockResolvedValue({
+      id: 'notification-duplicate',
+      userId: 'user-1',
+      type: 'task_assigned',
+      emailSentAt: null,
+      emailBatchId: 'batch-1',
+    });
+    mocks.batchFindFirst.mockResolvedValue({
+      id: 'batch-1',
+      status: 'pending',
+      sendAfter,
+    });
+
+    const result = await queueNotificationEmail({
+      notificationId: 'notification-duplicate',
+      recipientId: 'user-1',
+      type: 'task_assigned',
+      flushScheduler: 'vercel-queue',
+    });
+
+    expect(result).toEqual({ queued: true, batchId: 'batch-1', scheduledFlush: true });
+    expect(mocks.dbTransaction).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+    expect(mocks.enqueueEmailBatchFlush).toHaveBeenCalledWith({
+      batchId: 'batch-1',
+      sendAfter,
+    });
+  });
+
+  it('skips duplicate delivery after the notification email has already been sent', async () => {
+    const { queueNotificationEmail } = await import('@/lib/email/notification-batches');
+
+    mocks.notificationFindFirst.mockResolvedValue({
+      id: 'notification-sent',
+      userId: 'user-1',
+      type: 'task_overdue',
+      emailSentAt: new Date('2026-06-17T00:10:00.000Z'),
+      emailBatchId: 'batch-1',
+    });
+
+    const result = await queueNotificationEmail({
+      notificationId: 'notification-sent',
+      recipientId: 'user-1',
+      type: 'task_overdue',
+      flushScheduler: 'vercel-queue',
+    });
+
+    expect(result).toEqual({
+      queued: false,
+      reason: 'Notification email already sent',
+    });
+    expect(mocks.dbTransaction).not.toHaveBeenCalled();
+    expect(mocks.inngestSend).not.toHaveBeenCalled();
+    expect(mocks.enqueueEmailBatchFlush).not.toHaveBeenCalled();
+  });
+
   it('joins an existing pending batch without scheduling another flush', async () => {
     const { queueNotificationEmail } = await import('@/lib/email/notification-batches');
     const tx = createTx({ existingBatchId: 'batch-1' });
