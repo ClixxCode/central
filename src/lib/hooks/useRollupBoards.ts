@@ -11,6 +11,8 @@ import {
   deleteRollupBoard,
   getRollupTasks,
   getAvailableSourceBoards,
+  getRollupRuleOptions,
+  updateRollupRule,
   type RollupBoardSummary,
   type RollupBoardWithSources,
   type RollupTaskWithAssignees,
@@ -19,6 +21,7 @@ import type {
   CreateRollupBoardInput,
   UpdateRollupBoardInput,
   UpdateRollupSourcesInput,
+  UpdateRollupRuleInput,
 } from '@/lib/validations/rollup';
 import type { TaskFilters, TaskSortOptions } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
@@ -34,7 +37,45 @@ export const rollupKeys = {
   taskList: (rollupId: string, filters?: TaskFilters, sort?: TaskSortOptions) =>
     [...rollupKeys.tasks(), rollupId, { filters, sort }] as const,
   availableSources: () => [...rollupKeys.all, 'available-sources'] as const,
+  ruleOptions: () => [...rollupKeys.all, 'rule-options'] as const,
 };
+
+/**
+ * Fetch the options for building a rollup rule (pods, people, statuses).
+ */
+export function useRollupRuleOptions() {
+  return useQuery({
+    queryKey: rollupKeys.ruleOptions(),
+    queryFn: async () => {
+      const result = await getRollupRuleOptions();
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+  });
+}
+
+/**
+ * Update a rollup board's membership rule (re-derives members server-side).
+ */
+export function useUpdateRollupRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateRollupRuleInput) => {
+      const result = await updateRollupRule(input);
+      if (!result.success || !result.data) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: rollupKeys.detail(data.id) });
+      queryClient.invalidateQueries({ queryKey: rollupKeys.taskList(data.id) });
+      queryClient.invalidateQueries({ queryKey: rollupKeys.lists() });
+      toast.success('Rollup rule updated');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update rollup rule');
+    },
+  });
+}
 
 /**
  * Fetch all rollup boards

@@ -10,81 +10,75 @@ describe('Rollup Validations', () => {
   const validUUID2 = '550e8400-e29b-41d4-a716-446655440001';
   const validUUID3 = '550e8400-e29b-41d4-a716-446655440002';
 
-  describe('createRollupBoardSchema', () => {
-    it('validates valid rollup data', () => {
+  describe('createRollupBoardSchema (rule-based)', () => {
+    it('validates a pod rule', () => {
       const result = createRollupBoardSchema.safeParse({
-        name: 'All Client Tasks',
-        sourceBoardIds: [validUUID1, validUUID2],
+        name: 'Pod 1',
+        rule: { type: 'pod', pod_name: 'Pod 1' },
       });
-
       expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.name).toBe('All Client Tasks');
-        expect(result.data.sourceBoardIds).toHaveLength(2);
+      if (result.success && result.data.rule.type === 'pod') {
+        expect(result.data.rule.pod_name).toBe('Pod 1');
       }
     });
 
-    it('accepts single source board', () => {
+    it('validates an assignment rule (with role)', () => {
       const result = createRollupBoardSchema.safeParse({
-        name: 'Single Source Rollup',
-        sourceBoardIds: [validUUID1],
+        name: "Lauren's Clients",
+        rule: { type: 'assignment', staff_id: validUUID1, role: 'management' },
       });
+      expect(result.success).toBe(true);
+    });
 
+    it('validates an assignment rule (any role / null)', () => {
+      const result = createRollupBoardSchema.safeParse({
+        name: "AJ's Clients",
+        rule: { type: 'assignment', staff_id: validUUID2, role: null },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('validates a lifecycle rule', () => {
+      const result = createRollupBoardSchema.safeParse({
+        name: 'Offboarding',
+        rule: { type: 'lifecycle', statuses: ['offboarding', 'terminated'] },
+      });
       expect(result.success).toBe(true);
     });
 
     it('rejects empty name', () => {
       const result = createRollupBoardSchema.safeParse({
         name: '',
-        sourceBoardIds: [validUUID1],
+        rule: { type: 'pod', pod_name: 'Pod 1' },
       });
-
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.issues[0].message).toContain('Name is required');
       }
     });
 
-    it('rejects name that is too long', () => {
+    it('rejects an unknown rule type', () => {
       const result = createRollupBoardSchema.safeParse({
-        name: 'A'.repeat(256),
-        sourceBoardIds: [validUUID1],
+        name: 'Bad',
+        rule: { type: 'sponge', pod_name: 'Pod 1' },
       });
-
       expect(result.success).toBe(false);
     });
 
-    it('rejects empty source boards array', () => {
+    it('rejects an assignment rule with a non-uuid staff_id', () => {
       const result = createRollupBoardSchema.safeParse({
-        name: 'Empty Rollup',
-        sourceBoardIds: [],
+        name: 'Bad assignment',
+        rule: { type: 'assignment', staff_id: 'not-a-uuid' },
       });
-
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.issues[0].message).toContain('At least one source board');
-      }
-    });
-
-    it('rejects invalid board IDs', () => {
-      const result = createRollupBoardSchema.safeParse({
-        name: 'Invalid IDs Rollup',
-        sourceBoardIds: ['not-a-uuid', 'also-not-a-uuid'],
-      });
-
       expect(result.success).toBe(false);
     });
 
-    it('accepts multiple valid board IDs', () => {
+    it('rejects a lifecycle rule with no statuses', () => {
       const result = createRollupBoardSchema.safeParse({
-        name: 'Multi-Board Rollup',
-        sourceBoardIds: [validUUID1, validUUID2, validUUID3],
+        name: 'Empty lifecycle',
+        rule: { type: 'lifecycle', statuses: [] },
       });
-
-      expect(result.success).toBe(true);
-      if (result.success) {
-        expect(result.data.sourceBoardIds).toHaveLength(3);
-      }
+      expect(result.success).toBe(false);
     });
   });
 

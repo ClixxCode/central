@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import {
   boards,
+  clients,
   rollupSources,
   rollupOwners,
   rollupInvitations,
@@ -16,17 +17,20 @@ import {
   attachments,
   taskViews,
 } from '@/lib/db/schema';
-import type { StatusOption, SectionOption, TiptapContent, RecurringConfig } from '@/lib/db/schema';
+import type { StatusOption, SectionOption, TiptapContent, RecurringConfig, RollupRule } from '@/lib/db/schema';
 import { eq, and, or, inArray, notInArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { getCurrentUser, requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import { reconcileRollup } from '@/lib/rollups/reconcile';
 import {
   createRollupBoardSchema,
   updateRollupSourcesSchema,
   updateRollupBoardSchema,
+  updateRollupRuleSchema,
   type CreateRollupBoardInput,
   type UpdateRollupSourcesInput,
   type UpdateRollupBoardInput,
+  type UpdateRollupRuleInput,
 } from '@/lib/validations/rollup';
 import type { TaskFilters, TaskSortOptions } from './tasks';
 import { getSiteSettings } from './site-settings';
@@ -410,67 +414,20 @@ export async function createRollupBoard(
       };
     }
 
-    const { name, sourceBoardIds } = validation.data;
-    const userIsAdmin = user.role === 'admin';
+    const { name, rule } = validation.data;
 
-    // Verify user has access to all source boards
-    if (!userIsAdmin) {
-      const isContractor = await isUserInContractorTeam(user.id);
-
-      if (isContractor) {
-        // Contractors need explicit access to all source boards
-        const accessibleBoardIds = await getExplicitAccessBoardIds(user.id);
-        const accessibleSet = new Set(accessibleBoardIds);
-
-        const allAccessible = sourceBoardIds.every((id) => accessibleSet.has(id));
-        if (!allAccessible) {
-          return {
-            success: false,
-            error: 'You do not have access to all selected source boards',
-          };
-        }
-      }
-      // Non-contractors have access to all boards (public by default)
-    }
-
-    // Verify all source boards exist and are standard boards
-    const sourceBoards = await db.query.boards.findMany({
-      where: and(
-        inArray(boards.id, sourceBoardIds),
-        eq(boards.type, 'standard')
-      ),
-      with: {
-        client: {
-          columns: { id: true, name: true, slug: true, color: true, icon: true },
-        },
-      },
-    });
-
-    if (sourceBoards.length !== sourceBoardIds.length) {
-      return {
-        success: false,
-        error: 'One or more source boards not found or are not standard boards',
-      };
-    }
-
-    // Create the rollup board
+    // Create the rule-based rollup board. Membership is derived from the rule
+    // (pod / assignment / lifecycle), not hand-picked, and reconciled below.
     const [newRollup] = await db
       .insert(boards)
       .values({
         name,
         type: 'rollup',
         clientId: null, // Rollup boards are not client-specific
+        rollupRule: rule,
         createdBy: user.id,
       })
       .returning();
-
-    // Create rollup source entries
-    await db.insert(rollupSources).values(
-      sourceBoardIds.map((sourceBoardId) => ({
-        rollupBoardId: newRollup.id,
-        sourceBoardId,
-      }))
-    );
 
     // Create ownership entry for the creator
     await db.insert(rollupOwners).values({
@@ -478,6 +435,9 @@ export async function createRollupBoard(
       userId: user.id,
       isPrimary: true,
     });
+
+    // Derive initial membership from the rule.
+    await reconcileRollup(newRollup.id);
 
     revalidatePath('/rollups');
     revalidatePath('/', 'layout');
@@ -491,20 +451,81 @@ export async function createRollupBoard(
         reviewModeEnabled: newRollup.reviewModeEnabled,
         createdBy: newRollup.createdBy,
         createdAt: newRollup.createdAt,
-        sources: sourceBoards.map((board) => ({
-          boardId: board.id,
-          boardName: board.name,
-          clientId: board.client?.id ?? null,
-          clientName: board.client?.name ?? null,
-          clientSlug: board.client?.slug ?? null,
-          clientColor: board.client?.color ?? null,
-          clientIcon: board.client?.icon ?? null,
-        })),
+        sources: [],
       },
     };
   } catch (error) {
     console.error('createRollupBoard error:', error);
     return { success: false, error: 'Failed to create rollup board' };
+  }
+}
+
+/**
+ * Options for building a rollup rule: available pods, assignable people (from the
+ * Pulse-reflected account teams), and lifecycle statuses.
+ */
+export async function getRollupRuleOptions(): Promise<
+  ActionResult<{ pods: string[]; people: { staffId: string; name: string }[]; statuses: string[] }>
+> {
+  try {
+    await requireAuth();
+
+    const podRows = await db
+      .selectDistinct({ pod: clients.podName })
+      .from(clients)
+      .where(isNotNull(clients.podName));
+    const pods = podRows
+      .map((r) => r.pod)
+      .filter((p): p is string => !!p)
+      .sort();
+
+    // Derive assignable people from the reflected account teams.
+    const teamRows = await db.select({ team: clients.accountTeam }).from(clients);
+    const peopleMap = new Map<string, string>();
+    for (const row of teamRows) {
+      for (const m of row.team ?? []) {
+        if (m.staff_id) peopleMap.set(m.staff_id, m.full_name ?? '');
+      }
+    }
+    const people = Array.from(peopleMap, ([staffId, name]) => ({ staffId, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    return {
+      success: true,
+      data: {
+        pods,
+        people,
+        statuses: ['onboarding', 'active', 'paused', 'offboarding', 'terminated'],
+      },
+    };
+  } catch (error) {
+    console.error('getRollupRuleOptions error:', error);
+    return { success: false, error: 'Failed to load rule options' };
+  }
+}
+
+/**
+ * Update a rollup board's membership rule, then re-derive its members.
+ */
+export async function updateRollupRule(
+  input: UpdateRollupRuleInput
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requireAuth();
+    const validation = updateRollupRuleSchema.safeParse(input);
+    if (!validation.success) {
+      return { success: false, error: validation.error.issues[0]?.message ?? 'Invalid input' };
+    }
+    const { rollupBoardId, rule } = validation.data;
+    await db.update(boards).set({ rollupRule: rule as RollupRule }).where(eq(boards.id, rollupBoardId));
+    await reconcileRollup(rollupBoardId);
+    revalidatePath('/rollups');
+    revalidatePath('/', 'layout');
+    return { success: true, data: { id: rollupBoardId } };
+  } catch (error) {
+    console.error('updateRollupRule error:', error);
+    return { success: false, error: 'Failed to update rollup rule' };
   }
 }
 
