@@ -119,6 +119,11 @@ export async function POST(request: NextRequest) {
     await db
       .update(clients)
       .set({
+        // Pulse is the system of record for the account name. Reflect renames
+        // onto the Central client so the displayed reference always tracks
+        // Pulse. Slug is intentionally left stable (URL identity + unique
+        // constraint); matching is by pulse_account_id, not slug.
+        ...(snapshot.business_name ? { name: snapshot.business_name } : {}),
         pulseAccountId: snapshot.id,
         accountStatus: snapshot.account_status,
         accountType: snapshot.account_type,
