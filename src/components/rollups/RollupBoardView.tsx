@@ -395,6 +395,7 @@ export function RollupBoardView({
                   <RollupBoardSwimlane
                     key={group.boardId}
                     group={group}
+                    hasSiblingBoards={(boardCountByClient.get(group.clientSlug || group.clientName || group.boardId)?.size ?? 1) > 1}
                     statusOptions={sortedStatusOptions}
                     sectionOptions={sectionOptions}
                     assignableUsers={assignableUsers}
@@ -458,6 +459,7 @@ export function RollupBoardView({
 // Rollup Board Swimlane Component - displays a Client + Board with status columns
 interface RollupBoardSwimlaneProps {
   group: BoardGroup;
+  hasSiblingBoards: boolean;
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
@@ -482,6 +484,7 @@ function hexToSubtleBg(hex: string, opacity = 0.06): string {
 
 function RollupBoardSwimlane({
   group,
+  hasSiblingBoards,
   statusOptions,
   sectionOptions,
   assignableUsers,
@@ -659,7 +662,7 @@ function RollupBoardSwimlane({
           >
             {group.clientName}
           </span>
-          {(boardCountByClient.get(group.clientSlug || group.clientName || group.boardId)?.size ?? 1) > 1 &&
+          {hasSiblingBoards &&
             group.boardName.toLowerCase() !== group.clientName.toLowerCase() && (
               <>
                 <span className="text-muted-foreground">/</span>
@@ -804,6 +807,12 @@ function ReviewFloatingBar({
   const current = boardGroups[reviewIndex];
   if (!current) return null;
 
+  // The board-name suffix only disambiguates when the client has >1 board here.
+  const currentClientKey = current.clientSlug || current.clientName || current.boardId;
+  const currentClientBoardCount = boardGroups.filter(
+    (g) => (g.clientSlug || g.clientName || g.boardId) === currentClientKey
+  ).length;
+
   return createPortal(
     <div style={{ position: 'fixed', bottom: '48px', left: '50%', transform: 'translateX(-50%)', zIndex: 100, width: '540px' }}>
       <div className="flex items-center gap-2 rounded-lg border bg-background px-4 py-3 shadow-2xl">
@@ -822,7 +831,7 @@ function ReviewFloatingBar({
           <ClientIcon icon={current.clientIcon} color={current.clientColor} name={current.clientName} size="sm" />
           <span className="truncate font-medium" style={{ color: current.clientColor ?? undefined }}>
             {current.clientName}
-            {(boardCountByClient.get(current.clientSlug || current.clientName || current.boardId)?.size ?? 1) > 1 &&
+            {currentClientBoardCount > 1 &&
               current.boardName.toLowerCase() !== current.clientName.toLowerCase() && (
                 <span className="text-foreground"> / {current.boardName}</span>
               )}
