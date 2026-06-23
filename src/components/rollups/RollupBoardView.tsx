@@ -126,6 +126,19 @@ export function RollupBoardView({
     return groups;
   }, [tasks]);
 
+  // How many distinct boards each client contributes to this rollup. Used to
+  // decide whether the "/ board" suffix in a group header adds information —
+  // for single-board clients it's just a redundant echo of the client name.
+  const boardCountByClient = React.useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    tasks.forEach((t) => {
+      const key = t.clientSlug || t.clientName || t.boardId;
+      if (!m.has(key)) m.set(key, new Set());
+      m.get(key)!.add(t.boardId);
+    });
+    return m;
+  }, [tasks]);
+
   // Review mode: clamp index and auto-exit if no groups
   const clampedReviewIndex = React.useMemo(() => {
     if (!reviewMode || boardGroups.length === 0) return 0;
@@ -646,12 +659,13 @@ function RollupBoardSwimlane({
           >
             {group.clientName}
           </span>
-          {group.boardName.toLowerCase() !== group.clientName.toLowerCase() && (
-            <>
-              <span className="text-muted-foreground">/</span>
-              <span className="font-medium">{group.boardName}</span>
-            </>
-          )}
+          {(boardCountByClient.get(group.clientSlug || group.clientName || group.boardId)?.size ?? 1) > 1 &&
+            group.boardName.toLowerCase() !== group.clientName.toLowerCase() && (
+              <>
+                <span className="text-muted-foreground">/</span>
+                <span className="font-medium">{group.boardName}</span>
+              </>
+            )}
         </button>
         <div className="ml-3">
           <RollupAccountMeta
@@ -808,9 +822,10 @@ function ReviewFloatingBar({
           <ClientIcon icon={current.clientIcon} color={current.clientColor} name={current.clientName} size="sm" />
           <span className="truncate font-medium" style={{ color: current.clientColor ?? undefined }}>
             {current.clientName}
-            {current.boardName.toLowerCase() !== current.clientName.toLowerCase() && (
-              <span className="text-foreground"> / {current.boardName}</span>
-            )}
+            {(boardCountByClient.get(current.clientSlug || current.clientName || current.boardId)?.size ?? 1) > 1 &&
+              current.boardName.toLowerCase() !== current.clientName.toLowerCase() && (
+                <span className="text-foreground"> / {current.boardName}</span>
+              )}
           </span>
         </div>
 

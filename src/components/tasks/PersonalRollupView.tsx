@@ -136,6 +136,15 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
     return groups;
   }, [filteredTasksByClient]);
 
+  // Distinct boards per client shown here. The "/ board" suffix in a group
+  // header only adds information for clients with multiple boards; for a
+  // single-board client it's a redundant echo of the client name.
+  const boardCountByClient = React.useMemo(() => {
+    const m = new Map<string, number>();
+    boardGroups.forEach((g) => m.set(g.clientId, (m.get(g.clientId) ?? 0) + 1));
+    return m;
+  }, [boardGroups]);
+
   // Group tasks by date bucket for the "by date" view
   const dateGroups = React.useMemo((): DateBucketGroup[] => {
     if (viewMode !== 'date') return [];
@@ -434,6 +443,7 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
                 <MyWorkBoardSwimlane
                   key={group.boardId}
                   group={group}
+                  hasSiblingBoards={(boardCountByClient.get(group.clientId) ?? 1) > 1}
                   isCollapsed={isCollapsed}
                   onToggleCollapse={() => toggleClient(group.boardId)}
                   onTaskClick={(task) => {
@@ -491,6 +501,7 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
 // My Work Board Swimlane Component - displays a Client + Board with status columns
 interface MyWorkBoardSwimlaneProps {
   group: BoardGroup;
+  hasSiblingBoards: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onTaskClick: (task: MyTaskWithContext) => void;
@@ -512,6 +523,7 @@ function hexToSubtleBg(hex: string, opacity = 0.06): string {
 
 function MyWorkBoardSwimlane({
   group,
+  hasSiblingBoards,
   isCollapsed,
   onToggleCollapse,
   onTaskClick,
@@ -645,12 +657,13 @@ function MyWorkBoardSwimlane({
           >
             {group.clientName}
           </span>
-          {group.boardName.toLowerCase() !== group.clientName.toLowerCase() && (
-            <>
-              <span className="text-muted-foreground">/</span>
-              <span className="font-medium">{group.boardName}</span>
-            </>
-          )}
+          {hasSiblingBoards &&
+            group.boardName.toLowerCase() !== group.clientName.toLowerCase() && (
+              <>
+                <span className="text-muted-foreground">/</span>
+                <span className="font-medium">{group.boardName}</span>
+              </>
+            )}
         </button>
         <div className="ml-3">
           <RollupAccountMeta
