@@ -17,6 +17,7 @@ import {
   RecurringConfig,
   StatusOption,
   SectionOption,
+  type AccountTeamMember,
 } from '@/lib/db/schema';
 import { eq, and, or, not, inArray, notInArray, desc, asc, sql, isNull, isNotNull, lt } from 'drizzle-orm';
 import { getCurrentUser, requireAuth, SessionUser } from '@/lib/auth/session';
@@ -1862,6 +1863,8 @@ export interface MyTasksByClient {
     slug: string;
     color: string | null;
     icon: string | null;
+    accountStatus: string | null;
+    accountTeam: AccountTeamMember[];
   };
   boards: {
     id: string;
@@ -1930,6 +1933,8 @@ export async function listMyTasks(): Promise<{
       clientSlug: clients.slug,
       clientColor: clients.color,
       clientIcon: clients.icon,
+      clientAccountStatus: clients.accountStatus,
+      clientAccountTeam: clients.accountTeam,
     })
     .from(tasks)
     .innerJoin(boards, eq(tasks.boardId, boards.id))
@@ -2115,6 +2120,8 @@ export async function listMyTasks(): Promise<{
           slug: row.clientSlug,
           color: row.clientColor,
           icon: row.clientIcon,
+          accountStatus: row.clientAccountStatus,
+          accountTeam: row.clientAccountTeam ?? [],
         },
         boards: [],
         tasks: [],

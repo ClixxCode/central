@@ -17,7 +17,7 @@ import {
   attachments,
   taskViews,
 } from '@/lib/db/schema';
-import type { StatusOption, SectionOption, TiptapContent, RecurringConfig, RollupRule } from '@/lib/db/schema';
+import type { StatusOption, SectionOption, TiptapContent, RecurringConfig, RollupRule, AccountTeamMember } from '@/lib/db/schema';
 import { eq, and, or, inArray, notInArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { getCurrentUser, requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
@@ -72,6 +72,9 @@ export interface RollupTaskWithAssignees {
   clientSlug: string | null;
   clientColor: string | null;
   clientIcon: string | null;
+  // Pulse-reflected account context, surfaced on rollup group headers.
+  accountStatus: string | null;
+  accountTeam: AccountTeamMember[];
   title: string;
   description: TiptapContent | null;
   status: string;
@@ -334,7 +337,7 @@ export async function getRollupBoard(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, accountStatus: true, accountTeam: true },
                 },
               },
             },
@@ -559,7 +562,7 @@ export async function updateRollupBoard(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, accountStatus: true, accountTeam: true },
                 },
               },
             },
@@ -792,7 +795,7 @@ export async function getRollupTasks(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, accountStatus: true, accountTeam: true },
                 },
               },
             },
@@ -1175,6 +1178,8 @@ export async function getRollupTasks(
           clientSlug: s.sourceBoard.client?.slug ?? null,
           clientColor: s.sourceBoard.client?.color ?? null,
           clientIcon: s.sourceBoard.client?.icon ?? null,
+          accountStatus: s.sourceBoard.client?.accountStatus ?? null,
+          accountTeam: s.sourceBoard.client?.accountTeam ?? [],
         },
       ])
     );
@@ -1225,6 +1230,8 @@ export async function getRollupTasks(
         clientSlug: boardInfo.clientSlug,
         clientColor: boardInfo.clientColor,
         clientIcon: boardInfo.clientIcon,
+        accountStatus: boardInfo.accountStatus,
+        accountTeam: boardInfo.accountTeam,
         title: task.title,
         description: task.description,
         status: task.status,

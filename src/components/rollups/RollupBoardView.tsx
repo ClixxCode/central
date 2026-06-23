@@ -22,6 +22,7 @@ import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from '@/components/tasks/AssigneePicker';
 import { ExpandedSubtasks } from '@/components/tasks/ExpandedSubtasks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
+import { RollupAccountMeta } from './RollupAccountMeta';
 
 type RollupViewMode = 'swimlane' | 'kanban' | 'table';
 
@@ -33,6 +34,8 @@ interface BoardGroup {
   clientSlug: string;
   clientColor: string | null;
   clientIcon: string | null;
+  accountStatus: string | null;
+  accountTeam: RollupTaskWithAssignees['accountTeam'];
   tasks: RollupTaskWithAssignees[];
 }
 
@@ -96,6 +99,8 @@ export function RollupBoardView({
           clientSlug: task.clientSlug ?? '',
           clientColor: task.clientColor ?? null,
           clientIcon: task.clientIcon ?? null,
+          accountStatus: task.accountStatus ?? null,
+          accountTeam: task.accountTeam ?? [],
           tasks: [task],
         });
       }
@@ -644,6 +649,9 @@ function RollupBoardSwimlane({
             </>
           )}
         </button>
+        <div className="ml-3">
+          <RollupAccountMeta accountStatus={group.accountStatus} accountTeam={group.accountTeam} />
+        </div>
         <span className="ml-auto text-sm text-muted-foreground">
           {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
         </span>

@@ -16,7 +16,8 @@ import { useQuickActionsStore } from '@/lib/stores';
 import { useUpdateMyTask } from '@/lib/hooks/useMyTasks';
 import { useDeleteTask, useTask, useAssignableUsers } from '@/lib/hooks/useTasks';
 import type { MyTasksByClient, MyTaskWithContext, UpdateTaskInput } from '@/lib/actions/tasks';
-import type { StatusOption, SectionOption } from '@/lib/db/schema';
+import type { StatusOption, SectionOption, AccountTeamMember } from '@/lib/db/schema';
+import { RollupAccountMeta } from '@/components/rollups/RollupAccountMeta';
 import { ExpandedSubtasks } from './ExpandedSubtasks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 
@@ -29,6 +30,8 @@ interface BoardGroup {
   clientSlug: string;
   clientColor: string | null;
   clientIcon: string | null;
+  accountStatus: string | null;
+  accountTeam: AccountTeamMember[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   tasks: MyTaskWithContext[];
@@ -108,6 +111,8 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
             clientSlug: clientGroup.client.slug,
             clientColor: clientGroup.client.color,
             clientIcon: clientGroup.client.icon,
+            accountStatus: clientGroup.client.accountStatus,
+            accountTeam: clientGroup.client.accountTeam,
             statusOptions: task.board.statusOptions,
             sectionOptions: task.board.sectionOptions,
             tasks: [task],
@@ -598,6 +603,8 @@ function MyWorkBoardSwimlane({
               clientSlug: group.clientSlug,
               clientColor: group.clientColor,
               clientIcon: group.clientIcon,
+              accountStatus: group.accountStatus,
+              accountTeam: group.accountTeam,
             }}
             sectionOptions={group.sectionOptions}
             assignableUsers={task.assignees}
@@ -639,6 +646,9 @@ function MyWorkBoardSwimlane({
             </>
           )}
         </button>
+        <div className="ml-3">
+          <RollupAccountMeta accountStatus={group.accountStatus} accountTeam={group.accountTeam} />
+        </div>
         <span className="ml-auto text-sm text-muted-foreground">
           {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
         </span>
@@ -706,6 +716,8 @@ function MyWorkBoardSwimlane({
                                   clientSlug: group.clientSlug,
                                   clientColor: group.clientColor,
                                   clientIcon: group.clientIcon,
+                                  accountStatus: group.accountStatus,
+                                  accountTeam: group.accountTeam,
                                 }}
                                 sectionOptions={group.sectionOptions}
                                 assignableUsers={task.assignees}
