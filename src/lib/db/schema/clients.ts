@@ -47,6 +47,9 @@ export const clients = pgTable('clients', {
   podName: varchar('pod_name', { length: 64 }),
   podSubContext: text('pod_sub_context'),
   accountTeam: jsonb('account_team').$type<AccountTeamMember[]>().notNull().default([]),
+  // Reflected active service names from Pulse (consolidated reference only;
+  // full service detail lives in Pulse). Distinct active service_name values.
+  accountServices: jsonb('account_services').$type<string[]>().notNull().default([]),
   pulseSyncedAt: timestamp('pulse_synced_at'),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),

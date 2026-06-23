@@ -34,8 +34,10 @@ interface BoardGroup {
   clientSlug: string;
   clientColor: string | null;
   clientIcon: string | null;
+  pulseAccountId: string | null;
   accountStatus: string | null;
   accountTeam: RollupTaskWithAssignees['accountTeam'];
+  accountServices: string[];
   tasks: RollupTaskWithAssignees[];
 }
 
@@ -99,8 +101,10 @@ export function RollupBoardView({
           clientSlug: task.clientSlug ?? '',
           clientColor: task.clientColor ?? null,
           clientIcon: task.clientIcon ?? null,
+          pulseAccountId: task.pulseAccountId ?? null,
           accountStatus: task.accountStatus ?? null,
           accountTeam: task.accountTeam ?? [],
+          accountServices: task.accountServices ?? [],
           tasks: [task],
         });
       }
@@ -650,7 +654,12 @@ function RollupBoardSwimlane({
           )}
         </button>
         <div className="ml-3">
-          <RollupAccountMeta accountStatus={group.accountStatus} accountTeam={group.accountTeam} />
+          <RollupAccountMeta
+            pulseAccountId={group.pulseAccountId}
+            accountStatus={group.accountStatus}
+            accountTeam={group.accountTeam}
+            accountServices={group.accountServices}
+          />
         </div>
         <span className="ml-auto text-sm text-muted-foreground">
           {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}

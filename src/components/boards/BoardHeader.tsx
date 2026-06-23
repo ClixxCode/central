@@ -2,9 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Settings } from 'lucide-react';
+import { Settings, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/shared/FavoriteButton';
+import { PULSE_BASE_URL } from '@/lib/ui/account-status';
 import {
   Avatar,
   AvatarImage,
@@ -21,10 +22,12 @@ interface BoardHeaderProps {
   clientSlug: string;
   canEdit: boolean;
   // Reflected Pulse account state (one-way Pulse → Central).
+  pulseAccountId?: string | null;
   accountStatus?: string | null;
   accountType?: string | null;
   podName?: string | null;
   accountTeam?: AccountTeamMember[];
+  accountServices?: string[];
 }
 
 // Lifecycle status → pill styling. Falls back to neutral for unknown values.
@@ -85,10 +88,12 @@ export function BoardHeader({
   clientName,
   clientSlug,
   canEdit,
+  pulseAccountId,
   accountStatus,
   accountType,
   podName,
   accountTeam = [],
+  accountServices = [],
 }: BoardHeaderProps) {
   const management = accountTeam.filter((m) => m.group === 'management');
   const delivery = accountTeam.filter((m) => m.group === 'delivery');
@@ -105,6 +110,18 @@ export function BoardHeader({
             <Pill label={titleCase(accountType)} />
           )}
           {podName && <Pill label={podName} />}
+          {pulseAccountId && (
+            <a
+              href={`${PULSE_BASE_URL}/accounts/${pulseAccountId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-full border border-transparent bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline"
+              title="Open this account in Pulse"
+            >
+              View in Pulse
+              <ExternalLink className="size-3" />
+            </a>
+          )}
         </div>
         {clientName && (
           <Link
@@ -118,6 +135,21 @@ export function BoardHeader({
           <div className="mt-2 flex flex-wrap items-center gap-4">
             <TeamGroup label="Management" members={management} />
             <TeamGroup label="Delivery" members={delivery} />
+          </div>
+        )}
+        {accountServices.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Services
+            </span>
+            {accountServices.map((s) => (
+              <span
+                key={s}
+                className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+              >
+                {s}
+              </span>
+            ))}
           </div>
         )}
       </div>

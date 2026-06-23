@@ -30,8 +30,10 @@ interface BoardGroup {
   clientSlug: string;
   clientColor: string | null;
   clientIcon: string | null;
+  pulseAccountId: string | null;
   accountStatus: string | null;
   accountTeam: AccountTeamMember[];
+  accountServices: string[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   tasks: MyTaskWithContext[];
@@ -111,8 +113,10 @@ export function PersonalRollupView({ tasksByClient, viewMode = 'swimlane', prior
             clientSlug: clientGroup.client.slug,
             clientColor: clientGroup.client.color,
             clientIcon: clientGroup.client.icon,
+            pulseAccountId: clientGroup.client.pulseAccountId,
             accountStatus: clientGroup.client.accountStatus,
             accountTeam: clientGroup.client.accountTeam,
+            accountServices: clientGroup.client.accountServices,
             statusOptions: task.board.statusOptions,
             sectionOptions: task.board.sectionOptions,
             tasks: [task],
@@ -603,8 +607,10 @@ function MyWorkBoardSwimlane({
               clientSlug: group.clientSlug,
               clientColor: group.clientColor,
               clientIcon: group.clientIcon,
+              pulseAccountId: group.pulseAccountId,
               accountStatus: group.accountStatus,
               accountTeam: group.accountTeam,
+              accountServices: group.accountServices,
             }}
             sectionOptions={group.sectionOptions}
             assignableUsers={task.assignees}
@@ -647,7 +653,12 @@ function MyWorkBoardSwimlane({
           )}
         </button>
         <div className="ml-3">
-          <RollupAccountMeta accountStatus={group.accountStatus} accountTeam={group.accountTeam} />
+          <RollupAccountMeta
+            pulseAccountId={group.pulseAccountId}
+            accountStatus={group.accountStatus}
+            accountTeam={group.accountTeam}
+            accountServices={group.accountServices}
+          />
         </div>
         <span className="ml-auto text-sm text-muted-foreground">
           {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
@@ -716,8 +727,10 @@ function MyWorkBoardSwimlane({
                                   clientSlug: group.clientSlug,
                                   clientColor: group.clientColor,
                                   clientIcon: group.clientIcon,
+                                  pulseAccountId: group.pulseAccountId,
                                   accountStatus: group.accountStatus,
                                   accountTeam: group.accountTeam,
+                                  accountServices: group.accountServices,
                                 }}
                                 sectionOptions={group.sectionOptions}
                                 assignableUsers={task.assignees}

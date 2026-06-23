@@ -16,6 +16,11 @@ export function accountTitleCase(s: string): string {
   return s.replace(/(^|_)([a-z])/g, (_, p, c) => (p ? ' ' : '') + c.toUpperCase());
 }
 
+// Base URL for the Pulse operations app. The account profile lives at
+// `${PULSE_BASE_URL}/accounts/${pulseAccountId}`.
+export const PULSE_BASE_URL =
+  process.env.NEXT_PUBLIC_PULSE_URL ?? 'https://pulse.clix.co';
+
 export function accountInitials(name: string): string {
   return name
     .split(/\s+/)

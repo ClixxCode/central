@@ -38,6 +38,7 @@ interface AccountSnapshot {
   termination_date: string | null;
   pod: { id: string; name: string; sub_context: string | null } | null;
   team: AccountTeamMember[];
+  services?: string[];
   updated_at: string | null;
 }
 
@@ -116,9 +117,11 @@ export async function POST(request: NextRequest) {
     }
 
     const team = Array.isArray(snapshot.team) ? snapshot.team : [];
+    const services = Array.isArray(snapshot.services) ? snapshot.services : [];
     await db
       .update(clients)
       .set({
+        accountServices: services,
         // Pulse is the system of record for the account name. Reflect renames
         // onto the Central client so the displayed reference always tracks
         // Pulse. Slug is intentionally left stable (URL identity + unique

@@ -1863,8 +1863,10 @@ export interface MyTasksByClient {
     slug: string;
     color: string | null;
     icon: string | null;
+    pulseAccountId: string | null;
     accountStatus: string | null;
     accountTeam: AccountTeamMember[];
+    accountServices: string[];
   };
   boards: {
     id: string;
@@ -1933,8 +1935,10 @@ export async function listMyTasks(): Promise<{
       clientSlug: clients.slug,
       clientColor: clients.color,
       clientIcon: clients.icon,
+      clientPulseAccountId: clients.pulseAccountId,
       clientAccountStatus: clients.accountStatus,
       clientAccountTeam: clients.accountTeam,
+      clientAccountServices: clients.accountServices,
     })
     .from(tasks)
     .innerJoin(boards, eq(tasks.boardId, boards.id))
@@ -2120,8 +2124,10 @@ export async function listMyTasks(): Promise<{
           slug: row.clientSlug,
           color: row.clientColor,
           icon: row.clientIcon,
+          pulseAccountId: row.clientPulseAccountId,
           accountStatus: row.clientAccountStatus,
           accountTeam: row.clientAccountTeam ?? [],
+          accountServices: row.clientAccountServices ?? [],
         },
         boards: [],
         tasks: [],

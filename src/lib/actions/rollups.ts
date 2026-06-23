@@ -73,8 +73,10 @@ export interface RollupTaskWithAssignees {
   clientColor: string | null;
   clientIcon: string | null;
   // Pulse-reflected account context, surfaced on rollup group headers.
+  pulseAccountId: string | null;
   accountStatus: string | null;
   accountTeam: AccountTeamMember[];
+  accountServices: string[];
   title: string;
   description: TiptapContent | null;
   status: string;
@@ -337,7 +339,7 @@ export async function getRollupBoard(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true, accountStatus: true, accountTeam: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
                 },
               },
             },
@@ -562,7 +564,7 @@ export async function updateRollupBoard(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true, accountStatus: true, accountTeam: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
                 },
               },
             },
@@ -795,7 +797,7 @@ export async function getRollupTasks(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true, accountStatus: true, accountTeam: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
                 },
               },
             },
@@ -1178,8 +1180,10 @@ export async function getRollupTasks(
           clientSlug: s.sourceBoard.client?.slug ?? null,
           clientColor: s.sourceBoard.client?.color ?? null,
           clientIcon: s.sourceBoard.client?.icon ?? null,
+          pulseAccountId: s.sourceBoard.client?.pulseAccountId ?? null,
           accountStatus: s.sourceBoard.client?.accountStatus ?? null,
           accountTeam: s.sourceBoard.client?.accountTeam ?? [],
+          accountServices: s.sourceBoard.client?.accountServices ?? [],
         },
       ])
     );
@@ -1230,8 +1234,10 @@ export async function getRollupTasks(
         clientSlug: boardInfo.clientSlug,
         clientColor: boardInfo.clientColor,
         clientIcon: boardInfo.clientIcon,
+        pulseAccountId: boardInfo.pulseAccountId,
         accountStatus: boardInfo.accountStatus,
         accountTeam: boardInfo.accountTeam,
+        accountServices: boardInfo.accountServices,
         title: task.title,
         description: task.description,
         status: task.status,

@@ -51,10 +51,12 @@ export interface BoardWithAccess {
     name: string;
     slug: string;
     color: string | null;
+    pulseAccountId: string | null;
     accountStatus: string | null;
     accountType: string | null;
     podName: string | null;
     accountTeam: AccountTeamMember[];
+    accountServices: string[];
   } | null;
   access: BoardAccessEntry[];
 }
@@ -330,10 +332,12 @@ export async function getBoard(boardId: string): Promise<ActionResult<BoardWithA
             name: true,
             slug: true,
             color: true,
+            pulseAccountId: true,
             accountStatus: true,
             accountType: true,
             podName: true,
             accountTeam: true,
+            accountServices: true,
           },
         },
         access: {
@@ -473,10 +477,12 @@ export async function createBoard(input: CreateBoardInput): Promise<ActionResult
           name: client.name,
           slug: client.slug,
           color: client.color,
+          pulseAccountId: client.pulseAccountId ?? null,
           accountStatus: null,
           accountType: null,
           podName: null,
           accountTeam: [],
+          accountServices: [],
         },
         access: [],
       },
@@ -530,10 +536,12 @@ export async function updateBoard(
             name: true,
             slug: true,
             color: true,
+            pulseAccountId: true,
             accountStatus: true,
             accountType: true,
             podName: true,
             accountTeam: true,
+            accountServices: true,
           },
         },
         access: {
@@ -909,10 +917,12 @@ export async function getOrCreatePersonalBoard(): Promise<ActionResult<BoardWith
             name: true,
             slug: true,
             color: true,
+            pulseAccountId: true,
             accountStatus: true,
             accountType: true,
             podName: true,
             accountTeam: true,
+            accountServices: true,
           },
         },
         access: {
