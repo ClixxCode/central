@@ -30,8 +30,14 @@ interface ClientCardProps {
   onDelete?: (client: ClientWithBoards) => void;
 }
 
-export function ClientCard({ client, teamMembers = [], onEdit, onDelete }: ClientCardProps) {
-  const leads = client.metadata?.leads ?? [];
+export function ClientCard({ client, onEdit, onDelete }: ClientCardProps) {
+  // Account leads reflect Pulse's synced account_team (system of record),
+  // management first so AM/BD lead the avatar stack.
+  const accountTeam = client.accountTeam ?? [];
+  const leads = [
+    ...accountTeam.filter((m) => m.group === 'management'),
+    ...accountTeam.filter((m) => m.group !== 'management'),
+  ];
   const cardLinks = (client.metadata?.links ?? []).filter((l) => l.showOnCard);
 
   return (
@@ -94,22 +100,23 @@ export function ClientCard({ client, teamMembers = [], onEdit, onDelete }: Clien
         {leads.length > 0 && (
           <div className="flex items-center gap-2 mb-3">
             <AvatarGroup>
-              {leads.map((lead, i) => {
-                const member = teamMembers.find((m) => m.id === lead.userId);
-                const displayName = member?.name ?? member?.email ?? 'Unknown';
+              {leads.map((member) => {
+                const displayName = member.full_name ?? member.email ?? 'Unknown';
                 const initials = displayName.slice(0, 2).toUpperCase();
 
                 return (
-                  <Tooltip key={i}>
+                  <Tooltip key={member.staff_id}>
                     <TooltipTrigger asChild>
                       <Avatar size="sm" className="cursor-default">
-                        <AvatarImage src={member?.avatarUrl ?? undefined} />
+                        <AvatarImage src={member.avatar_url ?? undefined} />
                         <AvatarFallback className="text-[10px] bg-muted-foreground/20 text-foreground">{initials}</AvatarFallback>
                       </Avatar>
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="font-medium">{displayName}</p>
-                      <p className="text-muted-foreground">{lead.role}</p>
+                      {member.position && (
+                        <p className="text-muted-foreground">{member.position}</p>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 );

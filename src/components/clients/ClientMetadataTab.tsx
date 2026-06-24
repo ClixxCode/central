@@ -1,29 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Pencil, Plus, X, Check, Users, ExternalLink, LayoutGrid, Hash, ChevronsUpDown } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Pencil, Plus, X, Check, Users, ExternalLink, LayoutGrid, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useUpdateClient, useClients } from '@/lib/hooks';
+import { useUpdateClient } from '@/lib/hooks';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { ClientWithBoards } from '@/lib/actions/clients';
-import type { ClientMetadata } from '@/lib/schema';
+import type { ClientMetadata, AccountTeamMember } from '@/lib/db/schema';
 
 interface TeamMember {
   id: string;
@@ -34,170 +21,16 @@ interface TeamMember {
 
 interface ClientMetadataTabProps {
   client: ClientWithBoards;
+  // Retained for parent compatibility; account leads now reflect Pulse's
+  // synced account_team, so this list is no longer used to edit leads.
   teamMembers: TeamMember[];
   isAdmin: boolean;
-}
-
-interface LeadData {
-  role: string;
-  userId: string;
 }
 
 interface LinkData {
   name: string;
   url: string;
   showOnCard?: boolean;
-}
-
-function LeadEditRow({
-  initial,
-  teamMembers,
-  existingRoles,
-  onSave,
-  onCancel,
-}: {
-  initial?: LeadData;
-  teamMembers: TeamMember[];
-  existingRoles: string[];
-  onSave: (lead: LeadData) => void;
-  onCancel: () => void;
-}) {
-  const [role, setRole] = useState(initial?.role ?? '');
-  const [userId, setUserId] = useState(initial?.userId ?? '');
-  const [personOpen, setPersonOpen] = useState(false);
-  const [showRoleSuggestions, setShowRoleSuggestions] = useState(false);
-  const roleInputRef = useRef<HTMLInputElement>(null);
-
-  const selectedMember = teamMembers.find((m) => m.id === userId);
-
-  const filteredRoles = useMemo(() => {
-    if (!role.trim()) return existingRoles;
-    const lower = role.toLowerCase();
-    return existingRoles.filter((r) => r.toLowerCase().includes(lower) && r.toLowerCase() !== lower);
-  }, [role, existingRoles]);
-
-  return (
-    <div className="flex items-center gap-3 py-2 px-3 rounded-lg bg-muted/30">
-      <div className="relative flex-1">
-        <Input
-          ref={roleInputRef}
-          value={role}
-          onChange={(e) => {
-            setRole(e.target.value);
-            setShowRoleSuggestions(true);
-          }}
-          onFocus={() => setShowRoleSuggestions(true)}
-          onBlur={() => {
-            // Delay to allow click on suggestion
-            setTimeout(() => setShowRoleSuggestions(false), 150);
-          }}
-          placeholder="Role (eg. Account Manager)"
-          className="flex-1 h-8 text-sm"
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && role.trim() && userId) {
-              onSave({ role: role.trim(), userId });
-            } else if (e.key === 'Escape') {
-              onCancel();
-            } else if (e.key === 'Tab' && showRoleSuggestions && filteredRoles.length > 0) {
-              e.preventDefault();
-              setRole(filteredRoles[0]);
-              setShowRoleSuggestions(false);
-            }
-          }}
-        />
-        {showRoleSuggestions && filteredRoles.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-popover border rounded-md shadow-md overflow-hidden">
-            {filteredRoles.map((r) => (
-              <button
-                key={r}
-                type="button"
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setRole(r);
-                  setShowRoleSuggestions(false);
-                  roleInputRef.current?.focus();
-                }}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <Popover open={personOpen} onOpenChange={setPersonOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={personOpen}
-            className="w-[200px] h-8 text-sm justify-between font-normal"
-          >
-            {selectedMember ? (
-              <div className="flex items-center gap-2 truncate">
-                <Avatar className="h-5 w-5 shrink-0">
-                  <AvatarImage src={selectedMember.avatarUrl ?? undefined} />
-                  <AvatarFallback className="text-[10px]">
-                    {(selectedMember.name ?? selectedMember.email).slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="truncate">{selectedMember.name ?? selectedMember.email}</span>
-              </div>
-            ) : (
-              <span className="text-muted-foreground">Select person</span>
-            )}
-            <ChevronsUpDown className="ml-auto h-3.5 w-3.5 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[250px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search people..." />
-            <CommandList>
-              <CommandEmpty>No person found.</CommandEmpty>
-              <CommandGroup>
-                {teamMembers.map((member) => (
-                  <CommandItem
-                    key={member.id}
-                    value={`${member.name ?? ''} ${member.email}`}
-                    onSelect={() => {
-                      setUserId(member.id);
-                      setPersonOpen(false);
-                    }}
-                  >
-                    <Avatar className="h-5 w-5 shrink-0">
-                      <AvatarImage src={member.avatarUrl ?? undefined} />
-                      <AvatarFallback className="text-[10px]">
-                        {(member.name ?? member.email).slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span>{member.name ?? member.email}</span>
-                    {member.id === userId && (
-                      <Check className="ml-auto h-4 w-4" />
-                    )}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-7 w-7 shrink-0"
-        onClick={() => {
-          if (role.trim() && userId) onSave({ role: role.trim(), userId });
-        }}
-        disabled={!role.trim() || !userId}
-      >
-        <Check className="h-4 w-4 text-green-600" />
-      </Button>
-      <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={onCancel}>
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
-  );
 }
 
 function LinkEditRow({
@@ -268,26 +101,42 @@ function LinkEditRow({
   );
 }
 
-export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetadataTabProps) {
+function TeamMemberRow({ member }: { member: AccountTeamMember }) {
+  const displayName = member.full_name ?? member.email ?? 'Unknown';
+  const initials = (member.full_name ?? member.email ?? '??').slice(0, 2).toUpperCase();
+  return (
+    <div className="flex items-center justify-between py-2 px-3 rounded-lg">
+      <div className="flex items-center gap-3">
+        <Avatar className="h-8 w-8">
+          <AvatarImage src={member.avatar_url ?? undefined} />
+          <AvatarFallback>{initials}</AvatarFallback>
+        </Avatar>
+        <div>
+          <p className="text-sm font-medium">{displayName}</p>
+          {member.position && (
+            <p className="text-xs text-muted-foreground">{member.position}</p>
+          )}
+        </div>
+      </div>
+      {member.is_primary && (
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground rounded-full bg-muted px-2 py-0.5">
+          Primary
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function ClientMetadataTab({ client, isAdmin }: ClientMetadataTabProps) {
   const updateClient = useUpdateClient();
-  const { data: allClients } = useClients();
 
-  // Gather unique roles from all clients for autocomplete
-  const existingRoles = useMemo(() => {
-    const roles = new Set<string>();
-    allClients?.forEach((c) => {
-      c.metadata?.leads?.forEach((lead: { role: string }) => {
-        if (lead.role) roles.add(lead.role);
-      });
-    });
-    return Array.from(roles).sort();
-  }, [allClients]);
+  // Account leads are reflected from Pulse's account_team (Pulse is the system
+  // of record for team assignments). Read-only here — edits happen in Pulse.
+  const accountTeam = client.accountTeam ?? [];
+  const management = accountTeam.filter((m) => m.group === 'management');
+  const delivery = accountTeam.filter((m) => m.group === 'delivery');
 
-  const [leads, setLeads] = useState<LeadData[]>(client.metadata?.leads ?? []);
   const [links, setLinks] = useState<LinkData[]>(client.metadata?.links ?? []);
-  const [editingLeads, setEditingLeads] = useState(false);
-  const [editingLeadIndex, setEditingLeadIndex] = useState<number | null>(null);
-  const [isAddingLead, setIsAddingLead] = useState(false);
   const [editingLinks, setEditingLinks] = useState(false);
   const [editingLinkIndex, setEditingLinkIndex] = useState<number | null>(null);
   const [isAddingLink, setIsAddingLink] = useState(false);
@@ -297,33 +146,30 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
   // Sync data from server but preserve editing state
   const clientId = client.id;
   useEffect(() => {
-    setLeads(client.metadata?.leads ?? []);
     setLinks(client.metadata?.links ?? []);
     setSlackChannelUrl(client.metadata?.slackChannelUrl ?? '');
   }, [client.metadata]);
 
   // Reset editing state only when navigating to a different client
   useEffect(() => {
-    setEditingLeads(false);
-    setEditingLeadIndex(null);
-    setIsAddingLead(false);
     setEditingLinks(false);
     setEditingLinkIndex(null);
     setIsAddingLink(false);
     setEditingSlack(false);
   }, [clientId]);
 
+  // Persist links only. Legacy metadata.leads is left dormant in the DB —
+  // account leads now come from Pulse's synced account_team.
   const persist = useCallback(
-    (newLeads: LeadData[], newLinks: LinkData[]) => {
+    (newLinks: LinkData[]) => {
       updateClient.mutate(
         {
           id: client.id,
           input: {
             metadata: {
               ...client.metadata,
-              leads: newLeads,
               links: newLinks,
-            },
+            } as ClientMetadata,
           },
         },
         {
@@ -336,27 +182,6 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
     [client.id, client.metadata, updateClient]
   );
 
-  const handleSaveLead = (index: number | null, lead: LeadData) => {
-    const newLeads =
-      index !== null
-        ? leads.map((l, i) => (i === index ? lead : l))
-        : [...leads, lead];
-    setLeads(newLeads);
-    setEditingLeadIndex(null);
-    // Stay in editing mode — don't exit isAddingLead for new leads,
-    // just clear the form so user can add another or click Done
-    if (index === null) {
-      setIsAddingLead(false);
-    }
-    persist(newLeads, links);
-  };
-
-  const handleDeleteLead = (index: number) => {
-    const newLeads = leads.filter((_, i) => i !== index);
-    setLeads(newLeads);
-    persist(newLeads, links);
-  };
-
   const handleSaveLink = (index: number | null, link: LinkData) => {
     const newLinks =
       index !== null
@@ -365,13 +190,13 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
     setLinks(newLinks);
     setEditingLinkIndex(null);
     setIsAddingLink(false);
-    persist(leads, newLinks);
+    persist(newLinks);
   };
 
   const handleDeleteLink = (index: number) => {
     const newLinks = links.filter((_, i) => i !== index);
     setLinks(newLinks);
-    persist(leads, newLinks);
+    persist(newLinks);
   };
 
   const handleSaveSlackChannel = (url: string) => {
@@ -385,7 +210,7 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
           metadata: {
             ...client.metadata,
             slackChannelUrl: trimmed || undefined,
-          },
+          } as ClientMetadata,
         },
       },
       {
@@ -399,129 +224,46 @@ export function ClientMetadataTab({ client, teamMembers, isAdmin }: ClientMetada
 
   return (
     <div className="space-y-6">
-      {/* Account Leads */}
+      {/* Account Leads — reflected from Pulse */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Users className="h-4 w-4" />
             Account Leads
           </CardTitle>
-          {isAdmin && (
-            <CardAction>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  if (editingLeads) {
-                    setEditingLeads(false);
-                    setEditingLeadIndex(null);
-                    setIsAddingLead(false);
-                  } else {
-                    setEditingLeads(true);
-                  }
-                }}
-              >
-                {editingLeads ? (
-                  <>
-                    <Check className="h-4 w-4 mr-1" />
-                    Done
-                  </>
-                ) : (
-                  <>
-                    <Pencil className="h-4 w-4 mr-1" />
-                    Add / Edit Leads
-                  </>
-                )}
-              </Button>
-            </CardAction>
-          )}
+          <CardAction>
+            <span className="text-xs text-muted-foreground">Synced from Pulse</span>
+          </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="space-y-1">
-            {leads.map((lead, index) => {
-              const member = teamMembers.find((m) => m.id === lead.userId);
-
-              if (editingLeads && editingLeadIndex === index) {
-                return (
-                  <LeadEditRow
-                    key={index}
-                    initial={lead}
-                    teamMembers={teamMembers}
-                    existingRoles={existingRoles}
-                    onSave={(updated) => handleSaveLead(index, updated)}
-                    onCancel={() => setEditingLeadIndex(null)}
-                  />
-                );
-              }
-
-              return (
-                <div
-                  key={index}
-                  className={cn(
-                    'group/row flex items-center justify-between py-2 px-3 rounded-lg',
-                    editingLeads && 'cursor-pointer hover:bg-muted/50'
-                  )}
-                  onClick={() => editingLeads && setEditingLeadIndex(index)}
-                >
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={member?.avatarUrl ?? undefined} />
-                      <AvatarFallback>
-                        {(member?.name ?? member?.email ?? '??').slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium">
-                        {member?.name ?? member?.email ?? 'Unknown user'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{lead.role}</p>
-                    </div>
-                  </div>
-                  {editingLeads && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 opacity-0 group-hover/row:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteLead(index);
-                      }}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
+          {accountTeam.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2">
+              No team assigned in Pulse.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {management.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground px-3">
+                    Management
+                  </p>
+                  {management.map((member) => (
+                    <TeamMemberRow key={member.staff_id} member={member} />
+                  ))}
                 </div>
-              );
-            })}
-
-            {editingLeads && isAddingLead && (
-              <LeadEditRow
-                teamMembers={teamMembers}
-                existingRoles={existingRoles}
-                onSave={(lead) => handleSaveLead(null, lead)}
-                onCancel={() => setIsAddingLead(false)}
-              />
-            )}
-
-            {editingLeads && !isAddingLead && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-1"
-                onClick={() => {
-                  setIsAddingLead(true);
-                  setEditingLeadIndex(null);
-                }}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Lead
-              </Button>
-            )}
-
-            {leads.length === 0 && !editingLeads && (
-              <p className="text-sm text-muted-foreground py-2">No leads assigned.</p>
-            )}
-          </div>
+              )}
+              {delivery.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground px-3">
+                    Delivery
+                  </p>
+                  {delivery.map((member) => (
+                    <TeamMemberRow key={member.staff_id} member={member} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

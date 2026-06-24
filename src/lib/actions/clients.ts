@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { createClientSchema, updateClientSchema, type CreateClientInput, type UpdateClientInput } from '@/lib/validations/client';
 import { mapClientForSummit, notifySummitClientChange } from '@/lib/clients/summit-sync';
 
-import type { ClientMetadata } from '@/lib/db/schema';
+import type { ClientMetadata, AccountTeamMember } from '@/lib/db/schema';
 
 // Types
 export interface ClientWithBoards {
@@ -22,6 +22,9 @@ export interface ClientWithBoards {
   metadata: ClientMetadata | null;
   createdBy: string | null;
   createdAt: Date;
+  // Pulse-reflected account team (one-way Pulse → Central). Populated by
+  // getClient; the source of truth for "who's on this account".
+  accountTeam?: AccountTeamMember[];
   boards: {
     id: string;
     name: string;
@@ -141,6 +144,7 @@ export async function listClients(): Promise<ActionResult<ClientWithBoards[]>> {
           metadata: client.metadata,
           createdBy: client.createdBy,
           createdAt: client.createdAt,
+          accountTeam: client.accountTeam,
           boards: client.boards,
           leadUser: client.leadUser,
         })),
@@ -186,6 +190,7 @@ export async function listClients(): Promise<ActionResult<ClientWithBoards[]>> {
           metadata: client.metadata,
           createdBy: client.createdBy,
           createdAt: client.createdAt,
+          accountTeam: client.accountTeam,
           boards: client.boards,
           leadUser: client.leadUser,
         })),
@@ -245,6 +250,7 @@ export async function listClients(): Promise<ActionResult<ClientWithBoards[]>> {
       metadata: client.metadata,
       createdBy: client.createdBy,
       createdAt: client.createdAt,
+      accountTeam: client.accountTeam,
       boards: accessibleBoards
         .filter((b) => b.clientId === client.id)
         .map((b) => ({ id: b.id, name: b.name, type: b.type })),
@@ -310,6 +316,7 @@ export async function getClient(slug: string): Promise<ActionResult<ClientWithBo
           metadata: client.metadata,
           createdBy: client.createdBy,
           createdAt: client.createdAt,
+          accountTeam: client.accountTeam,
           boards: client.boards,
           leadUser: client.leadUser,
         },
@@ -334,6 +341,7 @@ export async function getClient(slug: string): Promise<ActionResult<ClientWithBo
           metadata: client.metadata,
           createdBy: client.createdBy,
           createdAt: client.createdAt,
+          accountTeam: client.accountTeam,
           boards: client.boards,
           leadUser: client.leadUser,
         },
@@ -362,6 +370,7 @@ export async function getClient(slug: string): Promise<ActionResult<ClientWithBo
         metadata: client.metadata,
         createdBy: client.createdBy,
         createdAt: client.createdAt,
+        accountTeam: client.accountTeam,
         boards: accessibleBoards,
         leadUser: client.leadUser,
       },
