@@ -11,6 +11,7 @@ import { TaskActivityIndicators } from '@/components/tasks/TaskActivityIndicator
 import type { RollupTaskWithAssignees } from '@/lib/actions/rollups';
 import type { SectionOption } from '@/lib/db/schema';
 import { ClientIcon } from '@/components/clients/ClientIcon';
+import { BuildBadge } from '@/components/builds/BuildBadge';
 
 interface RollupTaskCardProps {
   task: RollupTaskWithAssignees;
@@ -117,6 +118,12 @@ export function RollupTaskCard({
           </span>
         )}
 
+        {task.isAgenticBuild && (
+          <div className="mb-1.5">
+            <BuildBadge buildStage={task.buildStage} />
+          </div>
+        )}
+
         {/* Title */}
         <p className="font-medium text-sm leading-tight">{task.title}</p>
 
@@ -221,6 +228,12 @@ export function RollupTaskCard({
                 <ExternalLink className="size-3" />
               </button>
             )}
+          </div>
+        )}
+
+        {task.isAgenticBuild && (
+          <div className="mb-1.5">
+            <BuildBadge buildStage={task.buildStage} />
           </div>
         )}
 

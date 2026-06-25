@@ -8,6 +8,7 @@ import { AssigneeAvatars, type AssigneeUser } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { TaskActivityIndicators } from './TaskActivityIndicators';
 import { SubtaskIndicator } from './SubtaskIndicator';
+import { BuildBadge } from '@/components/builds/BuildBadge';
 import type { TaskWithAssignees } from '@/lib/actions/tasks';
 import type { SectionOption } from '@/lib/db/schema';
 
@@ -78,6 +79,7 @@ export function SwimlaneTaskCard({
 
       {/* Content */}
       <div className="ml-4 space-y-2">
+        {task.isAgenticBuild && <BuildBadge buildStage={task.buildStage} />}
         {/* Title */}
         <p className="truncate font-medium text-sm leading-tight" title={task.title}>
           {task.title}

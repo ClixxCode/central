@@ -102,6 +102,8 @@ export interface RollupTaskWithAssignees {
   parentTaskId: string | null;
   subtasksBreakoutEnabled: boolean;
   subtasksSequentialEnabled: boolean;
+  isAgenticBuild?: boolean;
+  buildStage?: string | null;
   subtaskCount: number;
   subtaskCompletedCount: number;
   archivedAt: Date | null;
@@ -1257,6 +1259,8 @@ export async function getRollupTasks(
         parentTaskId: task.parentTaskId ?? null,
         subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
         subtasksSequentialEnabled: task.subtasksSequentialEnabled,
+        isAgenticBuild: task.isAgenticBuild,
+        buildStage: task.buildStage,
         subtaskCount: subtaskCountByParent.get(task.id) ?? 0,
         subtaskCompletedCount: completedSubtaskCountByParent.get(task.id) ?? 0,
         archivedAt: task.archivedAt ?? null,

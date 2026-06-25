@@ -50,6 +50,9 @@ export interface TaskWithAssignees {
   parentTaskTitle?: string | null;
   subtasksBreakoutEnabled: boolean;
   subtasksSequentialEnabled: boolean;
+  // Agentic website build flag + pipeline stage (see src/lib/builds/stages.ts).
+  isAgenticBuild?: boolean;
+  buildStage?: string | null;
   position: number;
   createdBy: string | null;
   createdAt: Date;
@@ -688,6 +691,8 @@ export async function listTasks(
       parentTaskTitle: task.parentTaskId ? parentTaskById.get(task.parentTaskId)?.title ?? null : null,
       subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
       subtasksSequentialEnabled: task.subtasksSequentialEnabled,
+      isAgenticBuild: task.isAgenticBuild,
+      buildStage: task.buildStage,
       position: task.position,
       createdBy: task.createdBy,
       createdAt: task.createdAt,
@@ -1598,6 +1603,8 @@ export async function listSubtasks(parentTaskId: string): Promise<{
       parentTaskId: task.parentTaskId,
       subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
       subtasksSequentialEnabled: task.subtasksSequentialEnabled,
+      isAgenticBuild: task.isAgenticBuild,
+      buildStage: task.buildStage,
       position: task.position,
       createdBy: task.createdBy,
       createdAt: task.createdAt,
@@ -1920,6 +1927,8 @@ export async function listMyTasks(): Promise<{
       taskParentTaskId: tasks.parentTaskId,
       taskSubtasksBreakoutEnabled: tasks.subtasksBreakoutEnabled,
       taskSubtasksSequentialEnabled: tasks.subtasksSequentialEnabled,
+      taskIsAgenticBuild: tasks.isAgenticBuild,
+      taskBuildStage: tasks.buildStage,
       taskPosition: tasks.position,
       taskCreatedBy: tasks.createdBy,
       taskCreatedAt: tasks.createdAt,
@@ -2173,6 +2182,8 @@ export async function listMyTasks(): Promise<{
       parentTaskId: row.taskParentTaskId,
       subtasksBreakoutEnabled: row.taskSubtasksBreakoutEnabled,
       subtasksSequentialEnabled: row.taskSubtasksSequentialEnabled,
+      isAgenticBuild: row.taskIsAgenticBuild,
+      buildStage: row.taskBuildStage,
       position: row.taskPosition,
       createdBy: row.taskCreatedBy,
       createdAt: row.taskCreatedAt,

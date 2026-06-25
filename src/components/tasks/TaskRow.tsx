@@ -23,6 +23,7 @@ import { CompleteParentDialog } from './CompleteParentDialog';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { isCompleteStatus } from '@/lib/utils/status';
 import { SubtaskIndicator } from './SubtaskIndicator';
+import { BuildBadge } from '@/components/builds/BuildBadge';
 import type { TaskWithAssignees, UpdateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 
@@ -259,6 +260,7 @@ export function TaskRow({
                   {task.title}
                 </button>
               )}
+              {task.isAgenticBuild && <BuildBadge buildStage={task.buildStage} className="shrink-0" />}
               {task.subtaskCount > 0 && (
                 <SubtaskIndicator
                   subtaskCount={task.subtaskCount}

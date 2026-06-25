@@ -7,6 +7,7 @@ import { AssigneeAvatars } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { SubtaskIndicator } from './SubtaskIndicator';
 import { useMyWorkPreferences } from '@/lib/hooks/useMyWorkPreferences';
+import { BuildBadge } from '@/components/builds/BuildBadge';
 import type { MyTaskWithContext } from '@/lib/actions/tasks';
 
 interface PersonalTaskCardProps {
@@ -63,6 +64,7 @@ export function PersonalTaskCard({
           <p className="min-w-0 flex-1 truncate font-medium text-sm leading-tight" title={task.title}>
             {task.title}
           </p>
+          {task.isAgenticBuild && <BuildBadge buildStage={task.buildStage} className="shrink-0" />}
           {task.subtaskCount > 0 && (
             <SubtaskIndicator
               subtaskCount={task.subtaskCount}

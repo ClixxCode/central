@@ -8,6 +8,7 @@ import { AssigneeAvatars, type AssigneeUser } from './AssigneePicker';
 import { DateDisplay } from './DatePicker';
 import { TaskActivityIndicators } from './TaskActivityIndicators';
 import { SubtaskIndicator } from './SubtaskIndicator';
+import { BuildBadge } from '@/components/builds/BuildBadge';
 import type { TaskWithAssignees } from '@/lib/actions/tasks';
 import type { SectionOption } from '@/lib/db/schema';
 
@@ -68,6 +69,7 @@ export function KanbanTaskCard({
       className={cn(
         'rounded-lg border bg-background p-3 shadow-sm transition-all',
         'hover:border-primary/50 hover:shadow-md',
+        task.isAgenticBuild && 'border-l-[3px] border-l-[#7C3AED]',
         isDragging && 'opacity-50 border-primary shadow-lg',
         isOverlay && 'border-primary shadow-lg cursor-grabbing rotate-2',
         onClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -99,6 +101,13 @@ export function KanbanTaskCard({
         >
           {section.label}
         </span>
+      )}
+
+      {/* Agentic build badge */}
+      {task.isAgenticBuild && (
+        <div className="mb-2">
+          <BuildBadge buildStage={task.buildStage} />
+        </div>
       )}
 
       {/* Title */}
