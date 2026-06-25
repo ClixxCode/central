@@ -66,6 +66,13 @@ export const tasks = pgTable('tasks', {
   parentTaskId: uuid('parent_task_id').references((): AnyPgColumn => tasks.id, { onDelete: 'cascade' }),
   subtasksBreakoutEnabled: boolean('subtasks_breakout_enabled').notNull().default(false),
   subtasksSequentialEnabled: boolean('subtasks_sequential_enabled').notNull().default(false),
+  // Agentic website builds: a build is a normal task flagged here, carrying its
+  // own pipeline stage (separate from the board status). It lives on its
+  // client's board (so it surfaces there + in pod rollups) and is re-grouped by
+  // stage on the standalone Agentic Website Builds board. buildStage ids come
+  // from BUILD_STAGES in src/lib/builds/stages.ts.
+  isAgenticBuild: boolean('is_agentic_build').notNull().default(false),
+  buildStage: varchar('build_stage', { length: 50 }),
   position: integer('position').notNull().default(0),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),

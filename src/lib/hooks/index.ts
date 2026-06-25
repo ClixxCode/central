@@ -166,6 +166,13 @@ export {
   useRevokeExtensionToken,
   extensionTokenKeys,
 } from './useExtensionTokens';
+export {
+  useAgenticBuilds,
+  useBuildableClients,
+  useCreateBuild,
+  useSetBuildStage,
+  buildKeys,
+} from './useBuilds';
 export { useMyWorkPreferences } from './useMyWorkPreferences';
 export { useIgnoreWeekends } from './useIgnoreWeekends';
 export { useDragToScroll } from './useDragToScroll';

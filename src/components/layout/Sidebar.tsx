@@ -26,6 +26,7 @@ import {
   Trash2,
   ArrowRight,
   ArrowUp,
+  Hammer,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -489,7 +490,7 @@ function SortableFolderItem({
   );
 }
 
-const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Schedule', 'Templates'];
+const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Builds', 'Schedule', 'Templates'];
 
 interface SortableNavEditItemProps {
   id: string;
@@ -740,6 +741,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
     'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
     'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
     'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
+    'Builds': { href: '/agentic-builds', label: 'Builds', icon: Hammer, alwaysVisible: false },
     'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
   };
 
