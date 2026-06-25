@@ -27,6 +27,7 @@ import {
 import { AssigneeAvatars } from '@/components/tasks/AssigneePicker';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useAgenticBuilds, useBuildableClients, useCreateBuild, useSetBuildStage } from '@/lib/hooks';
+import { useDragToScroll } from '@/lib/hooks/useDragToScroll';
 import { BUILD_STAGES, DEFAULT_BUILD_STAGE, BUILD_ACCENT_COLOR } from '@/lib/builds/stages';
 import type { AgenticBuild } from '@/lib/actions/builds';
 
@@ -135,6 +136,7 @@ export function AgenticBuildsBoard() {
   const createBuild = useCreateBuild();
   const setStage = useSetBuildStage();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const scrollRef = useDragToScroll();
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
@@ -199,7 +201,7 @@ export function AgenticBuildsBoard() {
         <p className="text-sm text-muted-foreground">Loading builds…</p>
       ) : (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-4">
             {BUILD_STAGES.map((stage) => (
               <StageColumn key={stage.id} stage={stage} builds={byStage.get(stage.id) ?? []} />
             ))}
