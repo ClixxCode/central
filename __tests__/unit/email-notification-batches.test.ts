@@ -5,9 +5,13 @@ const mocks = vi.hoisted(() => ({
   notificationFindFirst: vi.fn(),
   batchFindFirst: vi.fn(),
   userFindFirst: vi.fn(),
+  dbSelect: vi.fn(),
+  dbUpdate: vi.fn(),
   dbTransaction: vi.fn(),
   inngestSend: vi.fn(),
   enqueueEmailBatchFlush: vi.fn(),
+  resendSend: vi.fn(),
+  batchedNotificationsEmailHtml: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -23,6 +27,8 @@ vi.mock('@/lib/db', () => ({
         findFirst: mocks.userFindFirst,
       },
     },
+    select: mocks.dbSelect,
+    update: mocks.dbUpdate,
     transaction: mocks.dbTransaction,
   },
 }));
@@ -35,6 +41,23 @@ vi.mock('@/lib/inngest/client', () => ({
 
 vi.mock('@/lib/queues/email-notifications', () => ({
   enqueueEmailBatchFlush: mocks.enqueueEmailBatchFlush,
+}));
+
+vi.mock('@/lib/email/client', () => ({
+  EMAIL_CONFIG: {
+    from: 'Central <noreply@central.test>',
+  },
+  resend: {
+    emails: {
+      send: mocks.resendSend,
+    },
+  },
+}));
+
+vi.mock('@/lib/email/templates/batched-notifications', () => ({
+  batchedNotificationsEmailHtml: mocks.batchedNotificationsEmailHtml,
+  batchedNotificationsEmailSubject: (count: number) =>
+    `${count} Central notification${count === 1 ? '' : 's'}`,
 }));
 
 function prefs(overrides: Partial<UserPreferences['notifications']['email']> = {}): UserPreferences {
@@ -117,11 +140,35 @@ function createTx(options: { existingBatchId?: string; insertedBatchId?: string 
   };
 }
 
+function mockClaimedBatch(userId = 'user-1') {
+  const returning = vi.fn().mockResolvedValue([{ id: 'batch-1', userId }]);
+  const where = vi.fn(() => ({ returning }));
+  const set = vi.fn(() => ({ where }));
+  mocks.dbUpdate.mockReturnValue({ set });
+  return { returning, where, set };
+}
+
+function mockSendableBatchRows(rows: Record<string, unknown>[]) {
+  const query = {
+    from: vi.fn(),
+    leftJoin: vi.fn(),
+    where: vi.fn(),
+    orderBy: vi.fn().mockResolvedValue(rows),
+  };
+  query.from.mockReturnValue(query);
+  query.leftJoin.mockReturnValue(query);
+  query.where.mockReturnValue(query);
+  mocks.dbSelect.mockReturnValue(query);
+  return query;
+}
+
 describe('email notification batches', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.inngestSend.mockResolvedValue({ ids: ['event-1'] });
     mocks.enqueueEmailBatchFlush.mockResolvedValue({ messageId: 'msg-1' });
+    mocks.resendSend.mockResolvedValue({ data: { id: 'email-1' }, error: null, headers: null });
+    mocks.batchedNotificationsEmailHtml.mockResolvedValue('<p>Central notifications</p>');
   });
 
   it('creates a pending batch and schedules a flush for the first batchable notification', async () => {
@@ -300,5 +347,54 @@ describe('email notification batches', () => {
 
     expect(result).toEqual({ queued: false, reason: 'Notification type is not batchable' });
     expect(mocks.notificationFindFirst).not.toHaveBeenCalled();
+  });
+
+  it('does not mark a batch sent when Resend returns an API error', async () => {
+    const { flushNotificationEmailBatch } = await import('@/lib/email/notification-batches');
+
+    mocks.batchFindFirst.mockResolvedValue({
+      id: 'batch-1',
+      status: 'pending',
+      sendAfter: new Date('2026-06-17T00:00:00.000Z'),
+    });
+    mockClaimedBatch();
+    mocks.userFindFirst.mockResolvedValue({
+      email: 'recipient@example.com',
+      name: 'Recipient',
+      preferences: prefs(),
+    });
+    mockSendableBatchRows([
+      {
+        id: 'notification-1',
+        type: 'task_assigned',
+        title: 'Assigned',
+        body: 'Task assigned',
+        createdAt: new Date('2026-06-17T00:00:00.000Z'),
+        taskId: 'task-1',
+        commentId: null,
+        taskTitle: 'Important task',
+        taskShortId: 'T_1',
+        taskStatus: 'todo',
+        taskDueDate: null,
+        boardId: 'board-1',
+        boardName: 'Board',
+        clientName: 'Client',
+        clientSlug: 'client',
+      },
+    ]);
+    mocks.resendSend.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'Domain is not verified',
+        name: 'validation_error',
+        statusCode: 422,
+      },
+      headers: null,
+    });
+
+    await expect(flushNotificationEmailBatch('batch-1')).rejects.toThrow(
+      'Resend email send failed (validation_error 422): Domain is not verified'
+    );
+    expect(mocks.dbTransaction).not.toHaveBeenCalled();
   });
 });

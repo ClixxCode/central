@@ -7,9 +7,37 @@
           "topic": "central-email-notifications"
         }
       ]
+    },
+    "src/app/api/queues/notification-delivery/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "central-notification-delivery"
+        }
+      ]
+    },
+    "src/app/api/queues/background-jobs/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "central-background-jobs"
+        }
+      ]
     }
   },
   "crons": [
+    {
+      "path": "/api/cron/auto-archive-tasks",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/schedule-daily-digests",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/check-due-dates",
+      "schedule": "0 8 * * *"
+    },
     {
       "path": "/api/cron/backup-database",
       "schedule": "0 */12 * * *"

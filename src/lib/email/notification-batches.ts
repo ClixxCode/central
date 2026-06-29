@@ -11,6 +11,7 @@ import {
 import type { UserPreferences } from '@/lib/db/schema/users';
 import { inngest } from '@/lib/inngest/client';
 import { resend, EMAIL_CONFIG } from '@/lib/email/client';
+import { assertResendEmailSent } from '@/lib/email/send-template';
 import {
   batchedNotificationsEmailHtml,
   batchedNotificationsEmailSubject,
@@ -365,6 +366,7 @@ export async function flushNotificationEmailBatch(
       notifications: batchNotifications,
     }),
   });
+  assertResendEmailSent(emailResult);
 
   await markBatchSent(batchId, batchNotifications.map((notification) => notification.id));
 

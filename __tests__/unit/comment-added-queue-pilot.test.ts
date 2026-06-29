@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   enqueueNotificationEmail: vi.fn(),
   shouldDispatchEmailBatchViaInngest: vi.fn(),
   shouldDispatchEmailBatchViaQueue: vi.fn(),
+  enqueueMentionEmailDelivery: vi.fn(),
+  enqueueSlackNotificationDelivery: vi.fn(),
+  shouldDispatchNotificationDeliveryViaInngest: vi.fn(),
+  shouldDispatchNotificationDeliveryViaQueue: vi.fn(),
   queueNotificationEmail: vi.fn(),
   getPlainText: vi.fn(),
   extractMentionedUserIds: vi.fn(),
@@ -50,6 +54,13 @@ vi.mock('@/lib/queues/email-notifications', () => ({
   enqueueNotificationEmail: mocks.enqueueNotificationEmail,
   shouldDispatchEmailBatchViaInngest: mocks.shouldDispatchEmailBatchViaInngest,
   shouldDispatchEmailBatchViaQueue: mocks.shouldDispatchEmailBatchViaQueue,
+}));
+
+vi.mock('@/lib/queues/notification-delivery', () => ({
+  enqueueMentionEmailDelivery: mocks.enqueueMentionEmailDelivery,
+  enqueueSlackNotificationDelivery: mocks.enqueueSlackNotificationDelivery,
+  shouldDispatchNotificationDeliveryViaInngest: mocks.shouldDispatchNotificationDeliveryViaInngest,
+  shouldDispatchNotificationDeliveryViaQueue: mocks.shouldDispatchNotificationDeliveryViaQueue,
 }));
 
 vi.mock('@/lib/email/notification-batches', () => ({
@@ -101,6 +112,10 @@ describe('comment_added Vercel Queue pilot', () => {
     mocks.inngestSend.mockResolvedValue({ ids: ['event-1'] });
     mocks.shouldDispatchEmailBatchViaInngest.mockReturnValue(true);
     mocks.shouldDispatchEmailBatchViaQueue.mockReturnValue(true);
+    mocks.shouldDispatchNotificationDeliveryViaInngest.mockReturnValue(true);
+    mocks.shouldDispatchNotificationDeliveryViaQueue.mockReturnValue(true);
+    mocks.enqueueMentionEmailDelivery.mockResolvedValue({ messageId: 'mention-email-msg' });
+    mocks.enqueueSlackNotificationDelivery.mockResolvedValue({ messageId: 'slack-msg' });
   });
 
   it('does not let a Queue enqueue failure block comment_added notifications', async () => {
@@ -160,6 +175,7 @@ describe('comment_added Vercel Queue pilot', () => {
     });
     expect(mocks.inngestSend).toHaveBeenCalledTimes(2);
     expect(mocks.enqueueNotificationEmail).toHaveBeenCalledTimes(2);
+    expect(mocks.enqueueSlackNotificationDelivery).toHaveBeenCalledTimes(2);
     expect(errorSpy).toHaveBeenCalledWith(
       'Failed to enqueue Vercel Queue comment notification email:',
       expect.objectContaining({
@@ -226,6 +242,13 @@ describe('comment_added Vercel Queue pilot', () => {
       notificationId: 'notification-1',
       recipientId: 'recipient-1',
       notificationType: 'comment_added',
+    });
+    expect(mocks.enqueueSlackNotificationDelivery).toHaveBeenCalledWith({
+      notificationType: 'comment_added',
+      data: expect.objectContaining({
+        notificationId: 'notification-1',
+        recipientId: 'recipient-1',
+      }),
     });
     expect(errorSpy).toHaveBeenCalledWith(
       'Failed to send Inngest comment notification event:',
@@ -295,6 +318,13 @@ describe('comment_added Vercel Queue pilot', () => {
       recipientId: 'assignee-1',
       notificationType: 'task_assigned',
     });
+    expect(mocks.enqueueSlackNotificationDelivery).toHaveBeenCalledWith({
+      notificationType: 'task_assigned',
+      data: expect.objectContaining({
+        notificationId: 'assignment-notification-1',
+        recipientId: 'assignee-1',
+      }),
+    });
   });
 
   it('can make Queues primary for assignment email batching without sending Inngest events', async () => {
@@ -302,6 +332,8 @@ describe('comment_added Vercel Queue pilot', () => {
 
     mocks.shouldDispatchEmailBatchViaInngest.mockReturnValue(false);
     mocks.shouldDispatchEmailBatchViaQueue.mockReturnValue(true);
+    mocks.shouldDispatchNotificationDeliveryViaInngest.mockReturnValue(false);
+    mocks.shouldDispatchNotificationDeliveryViaQueue.mockReturnValue(true);
     mocks.userFindFirst
       .mockResolvedValueOnce({
         name: 'Manager',
@@ -346,6 +378,13 @@ describe('comment_added Vercel Queue pilot', () => {
       notificationId: 'assignment-notification-1',
       recipientId: 'assignee-1',
       notificationType: 'task_assigned',
+    });
+    expect(mocks.enqueueSlackNotificationDelivery).toHaveBeenCalledWith({
+      notificationType: 'task_assigned',
+      data: expect.objectContaining({
+        notificationId: 'assignment-notification-1',
+        recipientId: 'assignee-1',
+      }),
     });
   });
 
@@ -407,6 +446,14 @@ describe('comment_added Vercel Queue pilot', () => {
         notificationId: `due-${notificationType}-notification-1`,
         recipientId: 'recipient-1',
         notificationType,
+      });
+      expect(mocks.enqueueSlackNotificationDelivery).toHaveBeenCalledWith({
+        notificationType,
+        data: expect.objectContaining({
+          notificationId: `due-${notificationType}-notification-1`,
+          recipientId: 'recipient-1',
+          isOverdue,
+        }),
       });
     }
   );

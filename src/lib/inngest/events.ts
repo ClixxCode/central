@@ -45,6 +45,28 @@ export interface AssignmentNotificationEvent {
   };
 }
 
+export interface CommentAddedNotificationEvent {
+  name: 'notification/comment.added';
+  data: {
+    notificationId: string;
+    recipientId: string;
+    recipientEmail: string;
+    recipientName: string | null;
+    commenterName: string;
+    taskId: string;
+    taskShortId: string | null;
+    taskTitle: string;
+    taskStatus: string;
+    taskStatusColor?: string;
+    taskStatusBackgroundColor?: string;
+    taskDueDate: string | null;
+    boardId: string;
+    clientSlug: string;
+    commentId: string;
+    commentPreview: string | null;
+  };
+}
+
 export interface DueReminderEvent {
   name: 'notification/due-reminder.scheduled';
   data: {
@@ -73,6 +95,7 @@ export interface DailyDigestEvent {
     userId: string;
     userEmail: string;
     userName: string | null;
+    orgDate?: string;
   };
 }
 
@@ -115,6 +138,7 @@ export interface RecurringTaskCompletedEvent {
 export type NotificationEvent =
   | MentionNotificationEvent
   | AssignmentNotificationEvent
+  | CommentAddedNotificationEvent
   | DueReminderEvent
   | DailyDigestEvent
   | EmailBatchFlushEvent

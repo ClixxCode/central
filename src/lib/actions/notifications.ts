@@ -27,6 +27,13 @@ import {
   shouldDispatchEmailBatchViaInngest,
   shouldDispatchEmailBatchViaQueue,
 } from '@/lib/queues/email-notifications';
+import {
+  enqueueMentionEmailDelivery,
+  enqueueSlackNotificationDelivery,
+  shouldDispatchNotificationDeliveryViaInngest,
+  shouldDispatchNotificationDeliveryViaQueue,
+  type SlackNotificationDeliveryPayload,
+} from '@/lib/queues/notification-delivery';
 
 // Helper to get parent task title for subtask notifications
 async function getParentTaskTitle(parentTaskId: string | null): Promise<string | null> {
@@ -70,6 +77,37 @@ function enqueueBatchNotificationEmail(input: {
         notificationId: input.notificationId,
         recipientId: input.recipientId,
         notificationType: input.notificationType,
+        error,
+      });
+    });
+}
+
+function enqueueDirectMentionEmailDelivery(input: {
+  data: Parameters<typeof enqueueMentionEmailDelivery>[0];
+  logLabel: string;
+}): Promise<void> {
+  return enqueueMentionEmailDelivery(input.data)
+    .then(() => undefined)
+    .catch((error) => {
+      console.error(`Failed to enqueue Vercel Queue ${input.logLabel} mention email:`, {
+        notificationId: input.data.notificationId,
+        recipientId: input.data.recipientId,
+        error,
+      });
+    });
+}
+
+function enqueueSlackNotification(input: {
+  payload: SlackNotificationDeliveryPayload;
+  logLabel: string;
+}): Promise<void> {
+  return enqueueSlackNotificationDelivery(input.payload)
+    .then(() => undefined)
+    .catch((error) => {
+      console.error(`Failed to enqueue Vercel Queue ${input.logLabel} Slack notification:`, {
+        notificationId: input.payload.data.notificationId,
+        recipientId: input.payload.data.recipientId,
+        notificationType: input.payload.notificationType,
         error,
       });
     });
@@ -513,28 +551,62 @@ export async function createMentionNotification(input: {
     })
     .returning();
 
-  // Trigger email via Inngest
-  await inngest.send({
-    name: 'notification/mention.created',
-    data: {
-      notificationId: notification.id,
-      recipientId: mentionedUser.id,
-      recipientEmail: mentionedUser.email,
-      recipientName: mentionedUser.name,
-      mentionerName,
-      taskId: task.id,
-      taskShortId: task.shortId,
-      taskTitle: task.title,
-      taskStatus: statusDetails.label,
-      taskStatusColor: statusDetails.color,
-      taskStatusBackgroundColor: statusDetails.backgroundColor,
-      taskDueDate: task.dueDate,
-      boardId: task.boardId,
-      clientSlug: task.clientSlug,
-      commentId: input.commentId,
-      commentPreview,
-    },
-  });
+  const mentionEventData = {
+    notificationId: notification.id,
+    recipientId: mentionedUser.id,
+    recipientEmail: mentionedUser.email,
+    recipientName: mentionedUser.name,
+    mentionerName,
+    taskId: task.id,
+    taskShortId: task.shortId,
+    taskTitle: task.title,
+    taskStatus: statusDetails.label,
+    taskStatusColor: statusDetails.color,
+    taskStatusBackgroundColor: statusDetails.backgroundColor,
+    taskDueDate: task.dueDate,
+    boardId: task.boardId,
+    clientSlug: task.clientSlug,
+    commentId: input.commentId,
+    commentPreview,
+  };
+
+  const mentionNotificationDispatches: Promise<void>[] = [];
+
+  if (shouldDispatchNotificationDeliveryViaInngest()) {
+    mentionNotificationDispatches.push(
+      inngest
+        .send({
+          name: 'notification/mention.created',
+          data: mentionEventData,
+        })
+        .then(() => undefined)
+        .catch((error) => {
+          console.error('Failed to send Inngest mention notification event:', {
+            notificationId: notification.id,
+            recipientId: mentionedUser.id,
+            error,
+          });
+        })
+    );
+  }
+
+  if (shouldDispatchNotificationDeliveryViaQueue()) {
+    mentionNotificationDispatches.push(
+      enqueueDirectMentionEmailDelivery({
+        data: mentionEventData,
+        logLabel: 'direct',
+      }),
+      enqueueSlackNotification({
+        payload: {
+          notificationType: 'mention',
+          data: mentionEventData,
+        },
+        logLabel: 'mention',
+      })
+    );
+  }
+
+  await Promise.all(mentionNotificationDispatches);
 
   return { success: true, notificationId: notification.id };
 }
@@ -703,7 +775,10 @@ export async function createCommentAddedNotification(input: {
 
       const notificationDispatches: Promise<void>[] = [];
 
-      if (shouldDispatchEmailBatchViaInngest()) {
+      if (
+        shouldDispatchEmailBatchViaInngest() ||
+        shouldDispatchNotificationDeliveryViaInngest()
+      ) {
         notificationDispatches.push(
           inngest
             .send({
@@ -717,7 +792,19 @@ export async function createCommentAddedNotification(input: {
                 recipientId: recipient.id,
                 error,
               });
-            })
+          })
+        );
+      }
+
+      if (shouldDispatchNotificationDeliveryViaQueue()) {
+        notificationDispatches.push(
+          enqueueSlackNotification({
+            payload: {
+              notificationType: 'comment_added',
+              data: commentAddedEventData,
+            },
+            logLabel: 'comment',
+          })
         );
       }
 
@@ -843,7 +930,10 @@ export async function createAssignmentNotification(input: {
 
   const notificationDispatches: Promise<void>[] = [];
 
-  if (shouldDispatchEmailBatchViaInngest()) {
+  if (
+    shouldDispatchEmailBatchViaInngest() ||
+    shouldDispatchNotificationDeliveryViaInngest()
+  ) {
     notificationDispatches.push(
       inngest
         .send({
@@ -857,7 +947,19 @@ export async function createAssignmentNotification(input: {
             recipientId: assignee.id,
             error,
           });
-        })
+      })
+    );
+  }
+
+  if (shouldDispatchNotificationDeliveryViaQueue()) {
+    notificationDispatches.push(
+      enqueueSlackNotification({
+        payload: {
+          notificationType: 'task_assigned',
+          data: assignmentEventData,
+        },
+        logLabel: 'assignment',
+      })
     );
   }
 
@@ -967,7 +1069,10 @@ export async function createDueNotification(input: {
 
   const dueNotificationDispatches: Promise<void>[] = [];
 
-  if (shouldDispatchEmailBatchViaInngest()) {
+  if (
+    shouldDispatchEmailBatchViaInngest() ||
+    shouldDispatchNotificationDeliveryViaInngest()
+  ) {
     dueNotificationDispatches.push(
       inngest
         .send({
@@ -982,7 +1087,19 @@ export async function createDueNotification(input: {
             notificationType,
             error,
           });
-        })
+      })
+    );
+  }
+
+  if (shouldDispatchNotificationDeliveryViaQueue()) {
+    dueNotificationDispatches.push(
+      enqueueSlackNotification({
+        payload: {
+          notificationType,
+          data: dueReminderEventData,
+        },
+        logLabel: 'due reminder',
+      })
     );
   }
 

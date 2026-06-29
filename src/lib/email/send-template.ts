@@ -1,4 +1,9 @@
 import { EMAIL_CONFIG, resend } from './client';
+import type {
+  CreateEmailResponse,
+  CreateEmailResponseSuccess,
+  ErrorResponse,
+} from 'resend';
 import {
   getCentralEmailTemplate,
   RESEND_STRING_VARIABLE_MAX_LENGTH,
@@ -15,6 +20,19 @@ export interface SendCentralTemplateEmailOptions {
   variables: Partial<CentralTemplateVariables>;
   from?: string;
   replyTo?: string | string[];
+}
+
+type SuccessfulCreateEmailResponse = CreateEmailResponse & {
+  data: CreateEmailResponseSuccess;
+  error: null;
+};
+
+export function assertResendEmailSent(
+  result: CreateEmailResponse
+): asserts result is SuccessfulCreateEmailResponse {
+  if (result.error) {
+    throw new Error(formatResendEmailError(result.error));
+  }
 }
 
 export function normalizeTemplateVariables(
@@ -93,7 +111,7 @@ export async function sendCentralTemplateEmail({
   const template = getCentralEmailTemplate(templateAlias);
   const normalizedVariables = normalizeTemplateVariables(template.variables, variables);
 
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from,
     replyTo,
     to,
@@ -103,4 +121,13 @@ export async function sendCentralTemplateEmail({
       variables: normalizedVariables,
     },
   });
+
+  assertResendEmailSent(result);
+  return result;
+}
+
+function formatResendEmailError(error: ErrorResponse): string {
+  const code = [error.name, error.statusCode].filter(Boolean).join(' ');
+  const details = code ? ` (${code})` : '';
+  return `Resend email send failed${details}: ${error.message}`;
 }

@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 import withPWAInit from "next-pwa";
+import path from "node:path";
+
+const projectRoot = path.resolve(__dirname);
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -104,6 +107,10 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: projectRoot,
+  turbopack: {
+    root: projectRoot,
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',

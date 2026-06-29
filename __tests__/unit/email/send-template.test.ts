@@ -82,6 +82,31 @@ describe('sendCentralTemplateEmail', () => {
       })
     );
   });
+
+  it('throws when Resend returns an API error', async () => {
+    sendMock.mockResolvedValueOnce({
+      data: null,
+      error: {
+        message: 'Domain is not verified',
+        name: 'validation_error',
+        statusCode: 422,
+      },
+      headers: null,
+    });
+
+    await expect(
+      sendCentralTemplateEmail({
+        templateAlias: CENTRAL_EMAIL_TEMPLATE_ALIASES.invitation,
+        to: 'new@example.com',
+        variables: {
+          INVITER_NAME: 'Admin',
+          INVITE_URL: 'https://app.central.test/invite/token',
+        },
+      })
+    ).rejects.toThrow(
+      'Resend email send failed (validation_error 422): Domain is not verified'
+    );
+  });
 });
 
 describe('normalizeTemplateVariables', () => {

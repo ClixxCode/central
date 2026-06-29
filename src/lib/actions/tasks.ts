@@ -19,18 +19,65 @@ import {
   SectionOption,
   type AccountTeamMember,
 } from '@/lib/db/schema';
-import { eq, and, or, not, inArray, notInArray, desc, asc, sql, isNull, isNotNull, lt } from 'drizzle-orm';
-import { getCurrentUser, requireAuth, SessionUser } from '@/lib/auth/session';
+import { eq, and, or, inArray, notInArray, desc, asc, sql, isNull, isNotNull, lt } from 'drizzle-orm';
+import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createAssignmentNotification } from './notifications';
 import { logBoardActivity } from './board-activity';
 import { inngest } from '@/lib/inngest/client';
+import type { RecurringTaskCompletedEvent } from '@/lib/inngest/events';
+import {
+  enqueueRecurringNextTask,
+  shouldDispatchRecurringTasksViaInngest,
+  shouldDispatchRecurringTasksViaQueue,
+} from '@/lib/queues/background-jobs';
 import { getSiteSettings } from './site-settings';
 import { getOrgToday } from '@/lib/utils/timezone';
 import { randomBytes } from 'crypto';
 
 function generateShortId(): string {
   return randomBytes(6).toString('base64url'); // 8 URL-safe chars
+}
+
+async function dispatchRecurringTaskCompletion(input: {
+  data: RecurringTaskCompletedEvent['data'];
+  logLabel: string;
+}): Promise<void> {
+  const dispatches: Promise<void>[] = [];
+
+  if (shouldDispatchRecurringTasksViaInngest()) {
+    dispatches.push(
+      inngest
+        .send({
+          name: 'task/recurring.completed',
+          data: input.data,
+        })
+        .then(() => undefined)
+        .catch((error) => {
+          console.error(`Failed to send Inngest ${input.logLabel} recurring task event:`, {
+            taskId: input.data.taskId,
+            recurringGroupId: input.data.recurringGroupId,
+            error,
+          });
+        })
+    );
+  }
+
+  if (shouldDispatchRecurringTasksViaQueue()) {
+    dispatches.push(
+      enqueueRecurringNextTask(input.data)
+        .then(() => undefined)
+        .catch((error) => {
+          console.error(`Failed to enqueue Vercel Queue ${input.logLabel} recurring task event:`, {
+            taskId: input.data.taskId,
+            recurringGroupId: input.data.recurringGroupId,
+            error,
+          });
+        })
+    );
+  }
+
+  await Promise.all(dispatches);
 }
 
 // Types
@@ -1136,9 +1183,8 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
           .where(eq(tasks.id, input.id));
       }
 
-      // Trigger Inngest to create next occurrence
-      await inngest.send({
-        name: 'task/recurring.completed',
+      await dispatchRecurringTaskCompletion({
+        logLabel: 'task update',
         data: {
           taskId: input.id,
           boardId: existingTask.boardId,
@@ -1729,8 +1775,8 @@ export async function updateTaskPositions(
               .where(eq(tasks.id, update.id));
           }
 
-          inngest.send({
-            name: 'task/recurring.completed',
+          await dispatchRecurringTaskCompletion({
+            logLabel: 'DnD',
             data: {
               taskId: update.id,
               boardId: old.boardId,
@@ -1746,7 +1792,7 @@ export async function updateTaskPositions(
               subtasksSequentialEnabled: old.subtasksSequentialEnabled,
               assigneeIds: currentAssignees.map((a) => a.userId),
             },
-          }).catch((err) => console.error('Failed to send recurring task event:', err));
+          });
         }
       }
     }
@@ -2859,7 +2905,21 @@ export async function bulkUpdateTasks(input: BulkUpdateTasksInput): Promise<{
 
   // Verify access to all tasks in one query
   const taskList = await db
-    .select({ id: tasks.id, boardId: tasks.boardId })
+    .select({
+      id: tasks.id,
+      boardId: tasks.boardId,
+      title: tasks.title,
+      description: tasks.description,
+      status: tasks.status,
+      section: tasks.section,
+      dueDate: tasks.dueDate,
+      dateFlexibility: tasks.dateFlexibility,
+      recurringConfig: tasks.recurringConfig,
+      recurringGroupId: tasks.recurringGroupId,
+      parentTaskId: tasks.parentTaskId,
+      subtasksBreakoutEnabled: tasks.subtasksBreakoutEnabled,
+      subtasksSequentialEnabled: tasks.subtasksSequentialEnabled,
+    })
     .from(tasks)
     .where(inArray(tasks.id, input.taskIds));
 
@@ -2956,6 +3016,67 @@ export async function bulkUpdateTasks(input: BulkUpdateTasksInput): Promise<{
     await db
       .delete(taskAssignees)
       .where(inArray(taskAssignees.taskId, input.taskIds));
+  }
+
+  if (input.status !== undefined && !input.boardId) {
+    const boardsById = new Map<string, { id: string; label: string }[]>();
+
+    for (const task of taskList) {
+      if (!task.recurringConfig || !task.dueDate || task.parentTaskId) continue;
+
+      let completeStatuses = boardsById.get(task.boardId);
+      if (!completeStatuses) {
+        const board = await db.query.boards.findFirst({
+          where: eq(boards.id, task.boardId),
+          columns: { statusOptions: true },
+        });
+        completeStatuses = (board?.statusOptions ?? []).filter(
+          (status) =>
+            status.id === 'complete' ||
+            status.id === 'done' ||
+            status.label.toLowerCase().includes('complete') ||
+            status.label.toLowerCase().includes('done')
+        );
+        boardsById.set(task.boardId, completeStatuses);
+      }
+
+      const isCompleting = completeStatuses.some((status) => status.id === input.status);
+      const wasNotComplete = !completeStatuses.some((status) => status.id === task.status);
+
+      if (!isCompleting || !wasNotComplete) continue;
+
+      const currentAssignees = await db.query.taskAssignees.findMany({
+        where: eq(taskAssignees.taskId, task.id),
+        columns: { userId: true },
+      });
+      const recurringGroupId = task.recurringGroupId ?? task.id;
+
+      if (!task.recurringGroupId) {
+        await db
+          .update(tasks)
+          .set({ recurringGroupId })
+          .where(eq(tasks.id, task.id));
+      }
+
+      await dispatchRecurringTaskCompletion({
+        logLabel: 'bulk update',
+        data: {
+          taskId: task.id,
+          boardId: task.boardId,
+          recurringGroupId,
+          recurringConfig: task.recurringConfig,
+          completedDueDate: task.dueDate,
+          completedByUserId: user.id,
+          title: task.title,
+          description: task.description,
+          section: task.section,
+          dateFlexibility: task.dateFlexibility,
+          subtasksBreakoutEnabled: task.subtasksBreakoutEnabled,
+          subtasksSequentialEnabled: task.subtasksSequentialEnabled,
+          assigneeIds: currentAssignees.map((assignee) => assignee.userId),
+        },
+      });
+    }
   }
 
   // Log activity for each task (fire-and-forget)

@@ -1,17 +1,10 @@
+import { getCurrentOrgDate, processAutoArchive } from '@/lib/background-jobs';
+import { shouldDispatchBackgroundJobsViaInngest } from '@/lib/queues/background-jobs';
 import { inngest } from '../client';
-import { db } from '@/lib/db';
-import { tasks, siteSettings } from '@/lib/db/schema';
-import { eq, and, inArray, isNull, lte } from 'drizzle-orm';
-import { getCompleteStatusIds } from '@/lib/utils/status';
-import {
-  applySiteSettingsDefaults,
-  type SiteSettings,
-} from '@/lib/db/schema/site-settings';
-import { getOrgCutoffDate } from '@/lib/utils/timezone';
 
 /**
- * Inngest cron function to auto-archive completed tasks
- * Runs daily at 3 AM
+ * Inngest cron function to auto-archive completed tasks.
+ * Runs daily at 3 AM.
  */
 export const autoArchiveTasks = inngest.createFunction(
   {
@@ -20,70 +13,15 @@ export const autoArchiveTasks = inngest.createFunction(
   },
   { cron: '0 3 * * *' },
   async ({ step }) => {
-    // Step 1: Get site settings and check if auto-archive is enabled
-    const settings = await step.run('get-settings', async () => {
-      const rows = await db.select().from(siteSettings).limit(1);
-      if (rows.length === 0) return applySiteSettingsDefaults(null);
-      return applySiteSettingsDefaults(rows[0].settings as SiteSettings);
-    });
-
-    const days = settings.autoArchiveDays;
-    if (days === null || days === undefined || days <= 0) {
-      return { skipped: true, reason: 'Auto-archive disabled' };
+    if (!shouldDispatchBackgroundJobsViaInngest()) {
+      return { skipped: true, reason: 'Background job delivery mode is queue-only' };
     }
 
-    const cutoffDate = getOrgCutoffDate(settings.timezone, days);
-
-    // Step 2: Get all boards with their status options
-    const allBoards = await step.run('get-boards', async () => {
-      return await db.query.boards.findMany({
-        columns: { id: true, statusOptions: true },
-      });
+    return step.run('process-auto-archive', async () => {
+      return processAutoArchive(
+        { orgDate: await getCurrentOrgDate() },
+        { runnerId: 'inngest' }
+      );
     });
-
-    // Step 3: Archive tasks per board
-    let totalArchived = 0;
-    await step.run('archive-tasks', async () => {
-      const now = new Date();
-
-      for (const board of allBoards) {
-        const completeIds = getCompleteStatusIds(board.statusOptions ?? []);
-        if (completeIds.length === 0) continue;
-
-        // Find done parent tasks that haven't been updated since cutoff
-        const doneTasks = await db
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(
-            and(
-              eq(tasks.boardId, board.id),
-              inArray(tasks.status, completeIds),
-              isNull(tasks.archivedAt),
-              isNull(tasks.parentTaskId),
-              lte(tasks.updatedAt, cutoffDate)
-            )
-          );
-
-        if (doneTasks.length === 0) continue;
-
-        const doneTaskIds = doneTasks.map((t) => t.id);
-
-        // Archive parent tasks
-        await db
-          .update(tasks)
-          .set({ archivedAt: now })
-          .where(inArray(tasks.id, doneTaskIds));
-
-        // Archive their subtasks
-        await db
-          .update(tasks)
-          .set({ archivedAt: now })
-          .where(inArray(tasks.parentTaskId, doneTaskIds));
-
-        totalArchived += doneTaskIds.length;
-      }
-    });
-
-    return { archived: totalArchived, days };
   }
 );
