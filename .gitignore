@@ -24,6 +24,8 @@
 .DS_Store
 *.pem
 /docs
+.envrc
+.linctl.toml
 
 # debug
 npm-debug.log*
@@ -53,6 +55,9 @@ yarn-error.log*
 .vscode
 /docs
 /plans
+.agents/
+.codex/
+AGENTS.md
 
 # typescript
 *.tsbuildinfo
