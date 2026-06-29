@@ -6,11 +6,11 @@ interface BoardListProps {
   boards: {
     id: string;
     name: string;
-    type: 'standard' | 'rollup' | 'personal';
+    type: 'standard' | 'rollup' | 'personal' | 'project';
   }[];
   clientSlug: string;
-  onSettings?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' }) => void;
-  onDelete?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' }) => void;
+  onSettings?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' | 'project' }) => void;
+  onDelete?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' | 'project' }) => void;
 }
 
 export function BoardList({ boards, clientSlug, onSettings, onDelete }: BoardListProps) {

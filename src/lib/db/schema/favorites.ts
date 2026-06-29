@@ -69,7 +69,7 @@ export interface FavoriteWithDetails {
   clientSlug?: string;
   clientColor?: string;
   clientIcon?: string;
-  boardType?: 'standard' | 'rollup' | 'personal';
+  boardType?: 'standard' | 'rollup' | 'personal' | 'project';
   boardColor?: string;
   boardIcon?: string;
 }

@@ -6,66 +6,15 @@ import {
   tasks,
   taskAssignees,
   boards,
-  boardAccess,
   clients,
   users,
-  teamMembers,
 } from '@/lib/db/schema';
+import type { UserPreferences } from '@/lib/db/schema/users';
 import { eq, and, inArray, asc, isNull, sql } from 'drizzle-orm';
+import { getBoardAccessLevel, type BoardAccessLevel } from '@/lib/actions/board-access';
 
 export async function OPTIONS(request: NextRequest) {
   return handlePreflight(request);
-}
-
-// --- Access helpers (same as tasks/route.ts) ---
-
-type AccessLevel = 'full' | 'assigned_only' | null;
-
-async function isUserInContractorTeam(userId: string): Promise<boolean> {
-  const rows = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    with: { team: { columns: { excludeFromPublic: true } } },
-  });
-  return rows.some((tm) => tm.team.excludeFromPublic);
-}
-
-async function getBoardAccessLevel(
-  userId: string,
-  boardId: string,
-  isAdmin: boolean
-): Promise<AccessLevel> {
-  if (isAdmin) return 'full';
-
-  const board = await db.query.boards.findFirst({
-    where: eq(boards.id, boardId),
-    columns: { type: true, createdBy: true },
-  });
-  if (board?.type === 'personal') return board.createdBy === userId ? 'full' : null;
-
-  const isContractor = await isUserInContractorTeam(userId);
-  if (!isContractor) return 'full';
-
-  const directAccess = await db.query.boardAccess.findFirst({
-    where: and(eq(boardAccess.boardId, boardId), eq(boardAccess.userId, userId)),
-  });
-  if (directAccess) return directAccess.accessLevel;
-
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-  if (userTeams.length === 0) return null;
-
-  const teamAccess = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, boardId),
-      inArray(
-        boardAccess.teamId,
-        userTeams.map((t) => t.teamId)
-      )
-    ),
-  });
-  return teamAccess?.accessLevel ?? null;
 }
 
 // --- GET: List current user's assigned tasks ---
@@ -120,7 +69,7 @@ export async function GET(request: NextRequest) {
     .orderBy(asc(tasks.dueDate), asc(tasks.position));
 
   // Filter by accessible boards
-  const boardAccessCache = new Map<string, AccessLevel>();
+  const boardAccessCache = new Map<string, BoardAccessLevel>();
   const accessibleTasks: typeof tasksWithContext = [];
 
   for (const task of tasksWithContext) {
@@ -189,7 +138,7 @@ export async function GET(request: NextRequest) {
     where: eq(users.id, user.id),
     columns: { preferences: true },
   });
-  const priorityTaskIds: string[] = (userRecord?.preferences as any)?.priorityTaskIds ?? [];
+  const priorityTaskIds = (userRecord?.preferences as UserPreferences | null)?.priorityTaskIds ?? [];
   const prioritySet = new Set(priorityTaskIds);
 
   return NextResponse.json(

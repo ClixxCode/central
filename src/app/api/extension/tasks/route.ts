@@ -6,63 +6,15 @@ import {
   tasks,
   taskAssignees,
   boards,
-  boardAccess,
   clients,
-  users,
-  teamMembers,
+  type TiptapContent,
+  type TiptapNode,
 } from '@/lib/db/schema';
-import { eq, and, or, not, inArray, asc, sql, isNull } from 'drizzle-orm';
+import { eq, and, asc, sql, isNull } from 'drizzle-orm';
+import { getBoardAccessLevel, type BoardAccessLevel } from '@/lib/actions/board-access';
 
 export async function OPTIONS(request: NextRequest) {
   return handlePreflight(request);
-}
-
-// --- Helpers (mirrors logic from src/lib/actions/tasks.ts) ---
-
-type AccessLevel = 'full' | 'assigned_only' | null;
-
-async function isUserInContractorTeam(userId: string): Promise<boolean> {
-  const rows = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    with: { team: { columns: { excludeFromPublic: true } } },
-  });
-  return rows.some((tm) => tm.team.excludeFromPublic);
-}
-
-async function getBoardAccessLevel(
-  userId: string,
-  boardId: string,
-  isAdmin: boolean
-): Promise<AccessLevel> {
-  if (isAdmin) return 'full';
-
-  const board = await db.query.boards.findFirst({
-    where: eq(boards.id, boardId),
-    columns: { type: true, createdBy: true },
-  });
-  if (board?.type === 'personal') return board.createdBy === userId ? 'full' : null;
-
-  const isContractor = await isUserInContractorTeam(userId);
-  if (!isContractor) return 'full';
-
-  const directAccess = await db.query.boardAccess.findFirst({
-    where: and(eq(boardAccess.boardId, boardId), eq(boardAccess.userId, userId)),
-  });
-  if (directAccess) return directAccess.accessLevel;
-
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-  if (userTeams.length === 0) return null;
-
-  const teamAccess = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, boardId),
-      inArray(boardAccess.teamId, userTeams.map((t) => t.teamId))
-    ),
-  });
-  return teamAccess?.accessLevel ?? null;
 }
 
 // --- GET: Search tasks ---
@@ -106,7 +58,7 @@ export async function GET(request: NextRequest) {
     .limit(20);
 
   // Filter by board access
-  const boardAccessCache = new Map<string, AccessLevel>();
+  const boardAccessCache = new Map<string, BoardAccessLevel>();
   const accessible = [];
 
   for (const r of searchResults) {
@@ -185,7 +137,7 @@ export async function POST(request: NextRequest) {
       where: eq(boards.id, body.boardId),
       columns: { statusOptions: true },
     });
-    const statusOptions = (board as any)?.statusOptions as { id: string }[] | undefined;
+    const statusOptions = board?.statusOptions;
     status = statusOptions?.[0]?.id ?? 'todo';
   }
 
@@ -199,8 +151,8 @@ export async function POST(request: NextRequest) {
   // Build description as TiptapContent.
   // If conversationMeta is provided, render a frontConversation card node.
   // If plain description text is also provided, include it as paragraphs before the card.
-  let description: any = undefined;
-  const tiptapContent: any[] = [];
+  let description: TiptapContent | undefined;
+  const tiptapContent: TiptapNode[] = [];
 
   if (body.description?.trim()) {
     const rawDesc = body.description.trim();
@@ -208,7 +160,7 @@ export async function POST(request: NextRequest) {
 
     for (const para of paragraphs) {
       const urlPattern = /https?:\/\/[^\s]+/g;
-      const nodes: any[] = [];
+      const nodes: TiptapNode[] = [];
       let lastIndex = 0;
       let urlMatch;
       while ((urlMatch = urlPattern.exec(para)) !== null) {

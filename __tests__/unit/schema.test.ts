@@ -45,8 +45,12 @@ describe('Database Schema', () => {
       expect(schema.rollupSources).toBeDefined();
     });
 
+    it('exports boardProjects table', () => {
+      expect(schema.boardProjects).toBeDefined();
+    });
+
     it('has correct board type enum values', () => {
-      expect(schema.boardTypeEnum.enumValues).toEqual(['standard', 'rollup']);
+      expect(schema.boardTypeEnum.enumValues).toEqual(['standard', 'rollup', 'personal', 'project']);
     });
 
     it('has correct access level enum values', () => {

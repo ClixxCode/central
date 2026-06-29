@@ -1,12 +1,13 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { clients, boards, boardAccess, teamMembers, teams, statuses, sections } from '@/lib/db/schema';
-import { eq, and, inArray, or, isNotNull, asc } from 'drizzle-orm';
-import { getCurrentUser, requireAuth, requireAdmin, isAdmin } from '@/lib/auth/session';
+import { clients, boards, boardAccess, statuses, sections } from '@/lib/db/schema';
+import { eq, inArray, asc } from 'drizzle-orm';
+import { getCurrentUser, requireAuth, requireAdmin } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createClientSchema, updateClientSchema, type CreateClientInput, type UpdateClientInput } from '@/lib/validations/client';
 import { mapClientForSummit, notifySummitClientChange } from '@/lib/clients/summit-sync';
+import { getExplicitAccessBoardIds, isUserInContractorTeam } from './board-access';
 
 import type { ClientMetadata, AccountTeamMember } from '@/lib/db/schema';
 
@@ -28,7 +29,7 @@ export interface ClientWithBoards {
   boards: {
     id: string;
     name: string;
-    type: 'standard' | 'rollup' | 'personal';
+    type: 'standard' | 'rollup' | 'personal' | 'project';
   }[];
   leadUser?: {
     id: string;
@@ -44,48 +45,10 @@ export interface ActionResult<T = void> {
   data?: T;
 }
 
-/**
- * Check if user is in a contractor team (excludeFromPublic = true)
- * Contractor teams need explicit board_access entries to see boards
- */
-async function isUserInContractorTeam(userId: string): Promise<boolean> {
-  const userTeamsWithDetails = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    with: {
-      team: {
-        columns: { excludeFromPublic: true },
-      },
-    },
-  });
+type ClientBoard = ClientWithBoards['boards'][number];
 
-  return userTeamsWithDetails.some((tm) => tm.team.excludeFromPublic);
-}
-
-/**
- * Get board IDs that a user has explicit access to (directly or via team membership)
- * Used for contractors who need explicit access entries
- */
-async function getExplicitAccessBoardIds(userId: string): Promise<string[]> {
-  // Get user's team IDs
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-  const teamIds = userTeams.map((t) => t.teamId);
-
-  // Build the where clause for board access
-  const conditions = [eq(boardAccess.userId, userId)];
-  if (teamIds.length > 0) {
-    conditions.push(inArray(boardAccess.teamId, teamIds));
-  }
-
-  // Get boards with direct access or via teams
-  const accessEntries = await db.query.boardAccess.findMany({
-    where: or(...conditions),
-    columns: { boardId: true },
-  });
-
-  return [...new Set(accessEntries.map((a) => a.boardId))];
+function filterTopLevelClientBoards<T extends ClientBoard>(clientBoards: T[]): T[] {
+  return clientBoards.filter((board) => board.type !== 'project');
 }
 
 /**
@@ -145,7 +108,7 @@ export async function listClients(): Promise<ActionResult<ClientWithBoards[]>> {
           createdBy: client.createdBy,
           createdAt: client.createdAt,
           accountTeam: client.accountTeam,
-          boards: client.boards,
+          boards: filterTopLevelClientBoards(client.boards),
           leadUser: client.leadUser,
         })),
       };
@@ -191,7 +154,7 @@ export async function listClients(): Promise<ActionResult<ClientWithBoards[]>> {
           createdBy: client.createdBy,
           createdAt: client.createdAt,
           accountTeam: client.accountTeam,
-          boards: client.boards,
+          boards: filterTopLevelClientBoards(client.boards),
           leadUser: client.leadUser,
         })),
       };
@@ -251,7 +214,7 @@ export async function listClients(): Promise<ActionResult<ClientWithBoards[]>> {
       createdBy: client.createdBy,
       createdAt: client.createdAt,
       accountTeam: client.accountTeam,
-      boards: accessibleBoards
+      boards: filterTopLevelClientBoards(accessibleBoards)
         .filter((b) => b.clientId === client.id)
         .map((b) => ({ id: b.id, name: b.name, type: b.type })),
       leadUser: client.leadUser,
@@ -317,7 +280,7 @@ export async function getClient(slug: string): Promise<ActionResult<ClientWithBo
           createdBy: client.createdBy,
           createdAt: client.createdAt,
           accountTeam: client.accountTeam,
-          boards: client.boards,
+          boards: filterTopLevelClientBoards(client.boards),
           leadUser: client.leadUser,
         },
       };
@@ -342,7 +305,7 @@ export async function getClient(slug: string): Promise<ActionResult<ClientWithBo
           createdBy: client.createdBy,
           createdAt: client.createdAt,
           accountTeam: client.accountTeam,
-          boards: client.boards,
+          boards: filterTopLevelClientBoards(client.boards),
           leadUser: client.leadUser,
         },
       };
@@ -350,7 +313,9 @@ export async function getClient(slug: string): Promise<ActionResult<ClientWithBo
 
     // Contractors: filter to boards with explicit access
     const accessibleBoardIds = await getExplicitAccessBoardIds(user.id);
-    const accessibleBoards = client.boards.filter((b) => accessibleBoardIds.includes(b.id));
+    const accessibleBoards = filterTopLevelClientBoards(
+      client.boards.filter((b) => accessibleBoardIds.includes(b.id))
+    );
 
     // If contractor has no access to any boards in this client, return null
     if (accessibleBoards.length === 0) {
@@ -501,10 +466,10 @@ export async function createClient(input: CreateClientInput): Promise<ActionResu
 
 /**
  * Update a client (admin only)
- */
+  */
 export async function updateClient(id: string, input: UpdateClientInput): Promise<ActionResult<ClientWithBoards>> {
   try {
-    const user = await requireAdmin();
+    await requireAdmin();
 
     // Validate input
     const validation = updateClientSchema.safeParse(input);

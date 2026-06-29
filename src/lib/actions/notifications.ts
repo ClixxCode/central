@@ -9,8 +9,6 @@ import {
   clients,
   comments,
   taskAssignees,
-  teamMembers,
-  boardAccess,
 } from '@/lib/db/schema';
 import type { TiptapContent } from '@/lib/db/schema/tasks';
 import { eq, and, isNull, desc, inArray, sql } from 'drizzle-orm';
@@ -34,6 +32,7 @@ import {
   shouldDispatchNotificationDeliveryViaQueue,
   type SlackNotificationDeliveryPayload,
 } from '@/lib/queues/notification-delivery';
+import { getBoardAccessLevel } from './board-access';
 
 // Helper to get parent task title for subtask notifications
 async function getParentTaskTitle(parentTaskId: string | null): Promise<string | null> {
@@ -460,7 +459,7 @@ export async function createMentionNotification(input: {
   // Get mentioned user details
   const mentionedUser = await db.query.users.findFirst({
     where: eq(users.id, input.mentionedUserId),
-    columns: { id: true, name: true, email: true, deactivatedAt: true },
+    columns: { id: true, name: true, email: true, role: true, deactivatedAt: true },
   });
 
   if (!mentioner || !mentionedUser) {
@@ -501,36 +500,14 @@ export async function createMentionNotification(input: {
   const parentTitle = await getParentTaskTitle(task.parentTaskId);
   const statusDetails = getTaskStatusDetails(task.status, task.statusOptions ?? []);
 
-  // Check if mentioned user has access to the board
-  // Non-contractors have access to all boards; contractors need explicit access
-  const mentionedUserTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, input.mentionedUserId),
-    with: { team: { columns: { excludeFromPublic: true } } },
-  });
-  const isContractor = mentionedUserTeams.some((tm) => tm.team.excludeFromPublic);
+  const mentionedUserAccessLevel = await getBoardAccessLevel(
+    mentionedUser.id,
+    task.boardId,
+    mentionedUser.role === 'admin'
+  );
 
-  if (isContractor) {
-    // Check for explicit board access (direct or via team)
-    const userTeamIds = mentionedUserTeams.map((tm) => tm.teamId);
-    const hasDirectAccess = await db.query.boardAccess.findFirst({
-      where: and(
-        eq(boardAccess.boardId, task.boardId),
-        eq(boardAccess.userId, input.mentionedUserId)
-      ),
-    });
-    const hasTeamAccess = userTeamIds.length > 0
-      ? await db.query.boardAccess.findFirst({
-          where: and(
-            eq(boardAccess.boardId, task.boardId),
-            inArray(boardAccess.teamId, userTeamIds)
-          ),
-        })
-      : null;
-
-    if (!hasDirectAccess && !hasTeamAccess) {
-      // Contractor doesn't have board access — skip notification
-      return { success: false };
-    }
+  if (!mentionedUserAccessLevel) {
+    return { success: false };
   }
 
   const mentionerName = mentioner.name || mentioner.email;

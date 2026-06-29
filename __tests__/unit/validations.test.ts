@@ -11,6 +11,10 @@ import {
   statusOptionSchema,
   sectionOptionSchema,
 } from '@/lib/validations/board';
+import {
+  createBoardProjectSchema,
+  updateBoardProjectPositionsSchema,
+} from '@/lib/validations/board-project';
 
 describe('Client Validations', () => {
   describe('createClientSchema', () => {
@@ -314,6 +318,61 @@ describe('Board Validations', () => {
         userId: '550e8400-e29b-41d4-a716-446655440001',
         accessLevel: 'admin',
       });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('createBoardProjectSchema', () => {
+    it('validates valid project card data', () => {
+      const result = createBoardProjectSchema.safeParse({
+        parentBoardId: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Website Refresh',
+        status: 'todo',
+        section: 'marketing',
+        position: 1000,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects invalid parent board ID', () => {
+      const result = createBoardProjectSchema.safeParse({
+        parentBoardId: 'not-a-uuid',
+        name: 'Website Refresh',
+        status: 'todo',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects empty project name', () => {
+      const result = createBoardProjectSchema.safeParse({
+        parentBoardId: '550e8400-e29b-41d4-a716-446655440000',
+        name: '',
+        status: 'todo',
+      });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('updateBoardProjectPositionsSchema', () => {
+    it('validates project card position updates', () => {
+      const result = updateBoardProjectPositionsSchema.safeParse([
+        {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          status: 'in-progress',
+          section: null,
+          position: 2000,
+        },
+      ]);
+
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects empty project card updates', () => {
+      const result = updateBoardProjectPositionsSchema.safeParse([]);
 
       expect(result.success).toBe(false);
     });

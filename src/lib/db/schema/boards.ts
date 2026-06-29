@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, jsonb, boolean, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, jsonb, boolean, check, integer, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { users } from './users';
 import { clients } from './clients';
@@ -62,8 +62,57 @@ export const boardsRelations = relations(boards, ({ one, many }) => ({
   }),
   tasks: many(tasks),
   access: many(boardAccess),
+  nestedProjects: many(boardProjects, { relationName: 'parentBoard' }),
+  projectCard: one(boardProjects, {
+    fields: [boards.id],
+    references: [boardProjects.projectBoardId],
+    relationName: 'projectBoard',
+  }),
   rollupSources: many(rollupSources, { relationName: 'rollupBoard' }),
   sourceForRollups: many(rollupSources, { relationName: 'sourceBoard' }),
+}));
+
+// Board-nested project cards. The project board stores its own tasks, while this
+// row stores how that project appears on the parent board.
+export const boardProjects = pgTable(
+  'board_projects',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    parentBoardId: uuid('parent_board_id')
+      .notNull()
+      .references(() => boards.id, { onDelete: 'cascade' }),
+    projectBoardId: uuid('project_board_id')
+      .notNull()
+      .references(() => boards.id, { onDelete: 'cascade' }),
+    status: varchar('status', { length: 100 }).notNull(),
+    section: varchar('section', { length: 100 }),
+    position: integer('position').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    archivedAt: timestamp('archived_at'),
+  },
+  (table) => [
+    uniqueIndex('board_projects_project_board_id_unique').on(table.projectBoardId),
+    check('board_projects_distinct_boards_check', sql`${table.parentBoardId} <> ${table.projectBoardId}`),
+  ]
+);
+
+export const boardProjectsRelations = relations(boardProjects, ({ one }) => ({
+  parentBoard: one(boards, {
+    fields: [boardProjects.parentBoardId],
+    references: [boards.id],
+    relationName: 'parentBoard',
+  }),
+  projectBoard: one(boards, {
+    fields: [boardProjects.projectBoardId],
+    references: [boards.id],
+    relationName: 'projectBoard',
+  }),
+  createdByUser: one(users, {
+    fields: [boardProjects.createdBy],
+    references: [users.id],
+  }),
 }));
 
 // Board access permissions

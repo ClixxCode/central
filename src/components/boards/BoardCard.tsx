@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { MoreHorizontal, Settings, Trash2, LayoutList, Kanban } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,11 +17,11 @@ interface BoardCardProps {
   board: {
     id: string;
     name: string;
-    type: 'standard' | 'rollup' | 'personal';
+    type: 'standard' | 'rollup' | 'personal' | 'project';
   };
   clientSlug: string;
-  onSettings?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' }) => void;
-  onDelete?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' }) => void;
+  onSettings?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' | 'project' }) => void;
+  onDelete?: (board: { id: string; name: string; type: 'standard' | 'rollup' | 'personal' | 'project' }) => void;
 }
 
 export function BoardCard({ board, clientSlug, onSettings, onDelete }: BoardCardProps) {
@@ -44,10 +44,10 @@ export function BoardCard({ board, clientSlug, onSettings, onDelete }: BoardCard
                 {board.name}
               </h3>
               <Badge
-                variant={board.type === 'rollup' ? 'secondary' : 'outline'}
+                variant={board.type === 'rollup' || board.type === 'project' ? 'secondary' : 'outline'}
                 className="text-xs mt-1"
               >
-                {board.type === 'rollup' ? 'Rollup' : 'Standard'}
+                {board.type === 'rollup' ? 'Rollup' : board.type === 'project' ? 'Project' : 'Standard'}
               </Badge>
             </div>
           </Link>

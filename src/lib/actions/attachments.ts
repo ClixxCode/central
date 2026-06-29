@@ -1,10 +1,11 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { attachments } from '@/lib/db/schema';
+import { attachments, comments } from '@/lib/db/schema';
 import { getSession } from '@/lib/auth/session';
 import { eq, and, isNull } from 'drizzle-orm';
 import { del } from '@vercel/blob';
+import { canAccessTask } from './board-access';
 
 export interface Attachment {
   id: string;
@@ -19,6 +20,9 @@ export interface Attachment {
 export async function getTaskAttachments(taskId: string): Promise<Attachment[]> {
   const session = await getSession();
   if (!session) return [];
+
+  const access = await canAccessTask(session.user.id, taskId, session.user.role === 'admin');
+  if (!access.canAccess) return [];
 
   const result = await db
     .select()
@@ -49,6 +53,11 @@ export async function createTaskAttachment(input: {
   }
 
   try {
+    const access = await canAccessTask(session.user.id, input.taskId, session.user.role === 'admin');
+    if (!access.canAccess) {
+      return { success: false, error: 'Access denied to this task' };
+    }
+
     const [attachment] = await db
       .insert(attachments)
       .values({
@@ -96,6 +105,24 @@ export async function deleteTaskAttachment(
 
     if (!attachment) {
       return { success: false, error: 'Attachment not found' };
+    }
+
+    const taskId = attachment.taskId ?? (
+      attachment.commentId
+        ? (await db.query.comments.findFirst({
+            where: eq(comments.id, attachment.commentId),
+            columns: { taskId: true },
+          }))?.taskId
+        : null
+    );
+
+    if (!taskId) {
+      return { success: false, error: 'Attachment task not found' };
+    }
+
+    const access = await canAccessTask(session.user.id, taskId, session.user.role === 'admin');
+    if (!access.canAccess) {
+      return { success: false, error: 'Access denied to this task' };
     }
 
     // Delete from Vercel Blob

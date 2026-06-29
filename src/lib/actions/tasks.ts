@@ -6,7 +6,6 @@ import {
   taskAssignees,
   boards,
   boardAccess,
-  teamMembers,
   teams,
   users,
   clients,
@@ -32,6 +31,12 @@ import {
   shouldDispatchRecurringTasksViaQueue,
 } from '@/lib/queues/background-jobs';
 import { getSiteSettings } from './site-settings';
+import {
+  canAccessTask,
+  getBoardAccessLevel,
+  getBoardAccessSourceBoardId,
+  type BoardAccessLevel,
+} from './board-access';
 import { getOrgToday } from '@/lib/utils/timezone';
 import { randomBytes } from 'crypto';
 
@@ -178,7 +183,7 @@ export interface TaskSortOptions {
   direction: 'asc' | 'desc';
 }
 
-type AccessLevel = 'full' | 'assigned_only' | null;
+type AccessLevel = BoardAccessLevel;
 
 function getCompleteStatusIds(statusOptions: StatusOption[]): string[] {
   return statusOptions
@@ -190,128 +195,6 @@ function getCompleteStatusIds(statusOptions: StatusOption[]): string[] {
         s.label.toLowerCase().includes('done')
     )
     .map((s) => s.id);
-}
-
-/**
- * Check if user is in a contractor team (excludeFromPublic = true)
- * Contractor teams need explicit board_access entries to see boards
- */
-async function isUserInContractorTeam(userId: string): Promise<boolean> {
-  const userTeamsWithDetails = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    with: {
-      team: {
-        columns: { excludeFromPublic: true },
-      },
-    },
-  });
-
-  return userTeamsWithDetails.some((tm) => tm.team.excludeFromPublic);
-}
-
-/**
- * Get user's access level for a board
- * Returns null if no access, or the access level ('full' or 'assigned_only')
- * Boards are PUBLIC by default - non-contractors get 'full' access
- * Contractors need explicit board_access entries
- */
-async function getBoardAccessLevel(
-  userId: string,
-  boardId: string,
-  isAdmin: boolean
-): Promise<AccessLevel> {
-  // Admins have full access to all boards
-  if (isAdmin) {
-    return 'full';
-  }
-
-  // Check if this is a personal board
-  const board = await db.query.boards.findFirst({
-    where: eq(boards.id, boardId),
-    columns: { type: true, createdBy: true },
-  });
-  if (board?.type === 'personal') {
-    return board.createdBy === userId ? 'full' : null;
-  }
-
-  // Check if user is in a contractor team
-  const isContractor = await isUserInContractorTeam(userId);
-
-  // Non-contractors have full access to all boards (public by default)
-  if (!isContractor) {
-    return 'full';
-  }
-
-  // Contractors need explicit access entries
-  // Check direct user access
-  const directAccess = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, boardId),
-      eq(boardAccess.userId, userId)
-    ),
-  });
-
-  if (directAccess) {
-    return directAccess.accessLevel;
-  }
-
-  // Check team access
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-
-  if (userTeams.length === 0) {
-    return null;
-  }
-
-  const teamIds = userTeams.map((t) => t.teamId);
-
-  const teamAccess = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, boardId),
-      inArray(boardAccess.teamId, teamIds)
-    ),
-  });
-
-  return teamAccess?.accessLevel ?? null;
-}
-
-/**
- * Check if user can access a specific task
- */
-async function canAccessTask(
-  userId: string,
-  taskId: string,
-  isAdmin: boolean
-): Promise<{ canAccess: boolean; task?: typeof tasks.$inferSelect }> {
-  const task = await db.query.tasks.findFirst({
-    where: eq(tasks.id, taskId),
-  });
-
-  if (!task) {
-    return { canAccess: false };
-  }
-
-  const accessLevel = await getBoardAccessLevel(userId, task.boardId, isAdmin);
-
-  if (!accessLevel) {
-    return { canAccess: false };
-  }
-
-  if (accessLevel === 'full') {
-    return { canAccess: true, task };
-  }
-
-  // assigned_only - check if user is assigned to this task
-  const assignment = await db.query.taskAssignees.findFirst({
-    where: and(
-      eq(taskAssignees.taskId, taskId),
-      eq(taskAssignees.userId, userId)
-    ),
-  });
-
-  return { canAccess: !!assignment, task: assignment ? task : undefined };
 }
 
 /**
@@ -1822,6 +1705,11 @@ export async function getBoardAssignableUsers(boardId: string): Promise<{
     return { success: false, error: 'Access denied to this board' };
   }
 
+  const accessSourceBoardId = await getBoardAccessSourceBoardId(boardId);
+  if (!accessSourceBoardId) {
+    return { success: false, error: 'Board not found' };
+  }
+
   // Get all active users with their team memberships
   const allUsersWithTeams = await db
     .select({
@@ -1857,7 +1745,7 @@ export async function getBoardAssignableUsers(boardId: string): Promise<{
 
   // Direct access
   const directAccess = await db.query.boardAccess.findMany({
-    where: eq(boardAccess.boardId, boardId),
+    where: eq(boardAccess.boardId, accessSourceBoardId),
     columns: { userId: true, teamId: true },
   });
 

@@ -5,17 +5,13 @@ import {
   boardTemplates,
   templateTasks,
   boards,
-  boardAccess,
   tasks,
-  taskAssignees,
-  teamMembers,
-  users,
   clients,
   statuses,
   sections,
 } from '@/lib/db/schema';
 import type { StatusOption, SectionOption, TiptapContent, RecurringConfig } from '@/lib/db/schema';
-import { eq, and, or, inArray, asc, desc, sql, isNull } from 'drizzle-orm';
+import { eq, and, inArray, asc, desc, sql, isNull } from 'drizzle-orm';
 import { getCurrentUser, requireAuth, requireAdmin } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { randomBytes } from 'crypto';
@@ -40,7 +36,6 @@ import {
   type CreateBoardFromTemplateInput,
   type ApplyTemplateTasksInput,
   type CreateTemplateFromBoardInput,
-  type UpdateTemplateTaskPositionInput,
 } from '@/lib/validations/template';
 
 // Types
@@ -953,7 +948,6 @@ export async function applyTemplateTasksToBoard(
 ): Promise<ActionResult<{ taskCount: number }>> {
   try {
     const user = await requireAuth();
-    const isAdmin = user.role === 'admin';
 
     const validation = applyTemplateTasksSchema.safeParse(input);
     if (!validation.success) {
@@ -992,7 +986,7 @@ export async function applyTemplateTasksToBoard(
       .select({ maxPos: sql<number>`COALESCE(MAX(${tasks.position}), -1)` })
       .from(tasks)
       .where(and(eq(tasks.boardId, boardId), isNull(tasks.parentTaskId)));
-    let nextPosition = (maxPosResult[0]?.maxPos ?? -1) + 1;
+    const nextPosition = (maxPosResult[0]?.maxPos ?? -1) + 1;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

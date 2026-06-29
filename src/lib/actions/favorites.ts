@@ -3,7 +3,7 @@
 import { db } from '@/lib/db';
 import { favorites, favoriteFolders, boards, clients } from '@/lib/db/schema';
 import type { FavoriteWithDetails, FavoriteFolder, FavoritesData } from '@/lib/db/schema';
-import { eq, and, desc, isNull, max } from 'drizzle-orm';
+import { eq, and, isNull, max } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 
@@ -62,7 +62,7 @@ export async function listFavorites(): Promise<{
       clientSlug: f.clientSlug ?? undefined,
       clientColor: f.clientColor ?? undefined,
       clientIcon: f.clientIcon ?? undefined,
-      boardType: (f.boardType as 'standard' | 'rollup' | 'personal') ?? undefined,
+      boardType: (f.boardType as 'standard' | 'rollup' | 'personal' | 'project') ?? undefined,
       boardColor: f.boardColor ?? undefined,
       boardIcon: f.boardIcon ?? undefined,
     }));

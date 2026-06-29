@@ -6,6 +6,7 @@ import type { StatusOption, SectionOption, AccountTeamMember } from '@/lib/db/sc
 import { eq, and, not, inArray, or, asc } from 'drizzle-orm';
 import { getCurrentUser, requireAdmin, requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
+import { canAccessBoard, getExplicitAccessBoardIds, isUserInContractorTeam } from './board-access';
 import {
   createBoardSchema,
   updateBoardSchema,
@@ -38,7 +39,7 @@ export interface BoardAccessEntry {
 export interface BoardWithAccess {
   id: string;
   name: string;
-  type: 'standard' | 'rollup' | 'personal';
+  type: 'standard' | 'rollup' | 'personal' | 'project';
   clientId: string | null;
   color: string | null;
   icon: string | null;
@@ -64,7 +65,7 @@ export interface BoardWithAccess {
 export interface BoardSummary {
   id: string;
   name: string;
-  type: 'standard' | 'rollup' | 'personal';
+  type: 'standard' | 'rollup' | 'personal' | 'project';
   clientId: string | null;
   clientName: string | null;
   clientSlug: string | null;
@@ -74,110 +75,6 @@ export interface ActionResult<T = void> {
   success: boolean;
   error?: string;
   data?: T;
-}
-
-/**
- * Check if user is in a contractor team (excludeFromPublic = true)
- * Contractor teams need explicit board_access entries to see boards
- */
-async function isUserInContractorTeam(userId: string): Promise<boolean> {
-  const userTeamsWithDetails = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    with: {
-      team: {
-        columns: { excludeFromPublic: true },
-      },
-    },
-  });
-
-  return userTeamsWithDetails.some((tm) => tm.team.excludeFromPublic);
-}
-
-/**
- * Get board IDs that a user has explicit access to (directly or via team membership)
- * Used for contractors who need explicit access entries
- */
-async function getExplicitAccessBoardIds(userId: string): Promise<string[]> {
-  // Get user's team IDs
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-  const teamIds = userTeams.map((t) => t.teamId);
-
-  // Build the where clause for board access
-  const conditions = [eq(boardAccess.userId, userId)];
-  if (teamIds.length > 0) {
-    conditions.push(inArray(boardAccess.teamId, teamIds));
-  }
-
-  // Get boards with direct access or via teams
-  const accessEntries = await db.query.boardAccess.findMany({
-    where: or(...conditions),
-    columns: { boardId: true },
-  });
-
-  return [...new Set(accessEntries.map((a) => a.boardId))];
-}
-
-/**
- * Check if user has access to a board with optional required level
- * Boards are PUBLIC by default - everyone can access unless they're in a contractor team
- * Contractor teams (excludeFromPublic = true) need explicit board_access entries
- */
-async function canAccessBoard(
-  userId: string,
-  boardId: string,
-  requiredLevel?: 'full'
-): Promise<boolean> {
-  // Check if user is in a contractor team
-  const isContractor = await isUserInContractorTeam(userId);
-
-  // Non-contractors have full access to all boards (public by default)
-  if (!isContractor) {
-    // If requiredLevel is specified, non-contractors still get 'full' access
-    return true;
-  }
-
-  // Contractors need explicit access entries
-  // Get user's team IDs
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-  const teamIds = userTeams.map((t) => t.teamId);
-
-  // Check direct user access
-  const directAccess = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, boardId),
-      eq(boardAccess.userId, userId)
-    ),
-  });
-
-  if (directAccess) {
-    if (!requiredLevel || directAccess.accessLevel === requiredLevel) {
-      return true;
-    }
-  }
-
-  // Check team access
-  if (teamIds.length > 0) {
-    const teamAccess = await db.query.boardAccess.findFirst({
-      where: and(
-        eq(boardAccess.boardId, boardId),
-        inArray(boardAccess.teamId, teamIds)
-      ),
-    });
-
-    if (teamAccess) {
-      if (!requiredLevel || teamAccess.accessLevel === requiredLevel) {
-        return true;
-      }
-    }
-  }
-
-  return false;
 }
 
 /**
@@ -202,12 +99,12 @@ export async function listBoards(clientId?: string): Promise<ActionResult<BoardS
 
     const userIsAdmin = user.role === 'admin';
 
-    // Base condition: exclude personal boards from regular listings
-    const excludePersonal = not(eq(boards.type, 'personal'));
+    // Base condition: exclude non-top-level boards from regular listings.
+    const excludeNestedBoardTypes = not(inArray(boards.type, ['personal', 'project']));
 
     if (userIsAdmin) {
       // Admin: get all boards
-      const adminConditions = [excludePersonal];
+      const adminConditions = [excludeNestedBoardTypes];
       if (clientId) adminConditions.push(eq(boards.clientId, clientId));
 
       const allBoards = await db.query.boards.findMany({
@@ -238,7 +135,7 @@ export async function listBoards(clientId?: string): Promise<ActionResult<BoardS
 
     if (!isContractor) {
       // Non-contractors see all boards (public by default)
-      const publicConditions = [excludePersonal];
+      const publicConditions = [excludeNestedBoardTypes];
       if (clientId) publicConditions.push(eq(boards.clientId, clientId));
 
       const allBoards = await db.query.boards.findMany({
@@ -271,7 +168,7 @@ export async function listBoards(clientId?: string): Promise<ActionResult<BoardS
       return { success: true, data: [] };
     }
 
-    const conditions = [inArray(boards.id, accessibleBoardIds), excludePersonal];
+    const conditions = [inArray(boards.id, accessibleBoardIds), excludeNestedBoardTypes];
     if (clientId) {
       conditions.push(eq(boards.clientId, clientId));
     }
@@ -677,6 +574,10 @@ export async function addBoardAccess(input: AddBoardAccessInput): Promise<Action
 
     if (!board) {
       return { success: false, error: 'Board not found' };
+    }
+
+    if (board.type === 'project') {
+      return { success: false, error: 'Project boards inherit access from their parent board' };
     }
 
     // Verify user or team exists

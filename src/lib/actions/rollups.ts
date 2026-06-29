@@ -7,9 +7,6 @@ import {
   rollupSources,
   rollupOwners,
   rollupInvitations,
-  boardAccess,
-  teamMembers,
-  teams,
   tasks,
   taskAssignees,
   users,
@@ -35,6 +32,13 @@ import {
 import type { TaskFilters, TaskSortOptions } from './tasks';
 import { getSiteSettings } from './site-settings';
 import { getOrgToday } from '@/lib/utils/timezone';
+import {
+  getBoardAccessLevel,
+  getExplicitAccessBoardIds,
+  getUserTeamIds,
+  isUserInContractorTeam,
+  type BoardAccessLevel,
+} from './board-access';
 
 // Types
 export interface RollupBoardSummary {
@@ -115,106 +119,8 @@ export interface ActionResult<T = void> {
   data?: T;
 }
 
-/**
- * Check if user is in a contractor team (excludeFromPublic = true)
- * Contractor teams need explicit board_access entries to see boards
- */
-async function isUserInContractorTeam(userId: string): Promise<boolean> {
-  const userTeamsWithDetails = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    with: {
-      team: {
-        columns: { excludeFromPublic: true },
-      },
-    },
-  });
-
-  return userTeamsWithDetails.some((tm) => tm.team.excludeFromPublic);
-}
-
-// Helper: Get board IDs user has explicit access to (for contractors)
-async function getExplicitAccessBoardIds(userId: string): Promise<string[]> {
-  // Get user's team IDs
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-  const teamIds = userTeams.map((t) => t.teamId);
-
-  // Build the where clause for board access
-  const conditions = [eq(boardAccess.userId, userId)];
-  if (teamIds.length > 0) {
-    conditions.push(inArray(boardAccess.teamId, teamIds));
-  }
-
-  // Get boards with direct access or via teams
-  const accessEntries = await db.query.boardAccess.findMany({
-    where: or(...conditions),
-    columns: { boardId: true },
-  });
-
-  return [...new Set(accessEntries.map((a) => a.boardId))];
-}
-
 // Helper: Get user's access level for a board
-type AccessLevel = 'full' | 'assigned_only' | null;
-
-/**
- * Get user's access level for a board
- * Boards are PUBLIC by default - non-contractors get 'full' access
- * Contractors need explicit board_access entries
- */
-async function getBoardAccessLevel(
-  userId: string,
-  boardId: string,
-  isAdmin: boolean
-): Promise<AccessLevel> {
-  if (isAdmin) {
-    return 'full';
-  }
-
-  // Check if user is in a contractor team
-  const isContractor = await isUserInContractorTeam(userId);
-
-  // Non-contractors have full access to all boards (public by default)
-  if (!isContractor) {
-    return 'full';
-  }
-
-  // Contractors need explicit access entries
-  // Check direct user access
-  const directAccess = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, boardId),
-      eq(boardAccess.userId, userId)
-    ),
-  });
-
-  if (directAccess) {
-    return directAccess.accessLevel;
-  }
-
-  // Check team access
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-
-  if (userTeams.length === 0) {
-    return null;
-  }
-
-  const teamIds = userTeams.map((t) => t.teamId);
-
-  const teamAccess = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, boardId),
-      inArray(boardAccess.teamId, teamIds)
-    ),
-  });
-
-  return teamAccess?.accessLevel ?? null;
-}
+type AccessLevel = BoardAccessLevel;
 
 /**
  * Get rollup IDs a non-contractor user has access to via ownership or invitations.
@@ -228,11 +134,7 @@ async function getAccessibleRollupIds(userId: string): Promise<Set<string>> {
   });
 
   // Get user's team IDs
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-  const teamIds = userTeams.map((t) => t.teamId);
+  const teamIds = await getUserTeamIds(userId);
 
   // Build invitation conditions: direct user invite, team invite, or allUsers invite
   const inviteConditions = [

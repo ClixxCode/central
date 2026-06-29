@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { taskViews } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
+import { canAccessTask } from './board-access';
 
 /**
  * Record that the current user has viewed a task
@@ -15,6 +16,12 @@ export async function recordTaskView(taskId: string): Promise<{
 }> {
   try {
     const user = await requireAuth();
+    const isAdmin = user.role === 'admin';
+    const access = await canAccessTask(user.id, taskId, isAdmin);
+
+    if (!access.canAccess) {
+      return { success: false, error: 'Access denied to this task' };
+    }
 
     // Upsert the view record
     await db
@@ -53,6 +60,11 @@ export async function getTaskViewTimestamp(
   try {
     const user = await requireAuth();
     const targetUserId = userId ?? user.id;
+    const access = await canAccessTask(user.id, taskId, user.role === 'admin');
+
+    if (!access.canAccess) {
+      return { success: false, error: 'Access denied to this task' };
+    }
 
     const view = await db.query.taskViews.findFirst({
       where: and(
@@ -87,6 +99,14 @@ export async function getTaskViewTimestamps(
     const user = await requireAuth();
 
     const { inArray } = await import('drizzle-orm');
+    const accessChecks = await Promise.all(
+      taskIds.map((taskId) => canAccessTask(user.id, taskId, user.role === 'admin'))
+    );
+    const accessibleTaskIds = taskIds.filter((_, index) => accessChecks[index]?.canAccess);
+
+    if (accessibleTaskIds.length === 0) {
+      return { success: true, views: new Map() };
+    }
 
     const viewRecords = await db
       .select({
@@ -96,7 +116,7 @@ export async function getTaskViewTimestamps(
       .from(taskViews)
       .where(
         and(
-          inArray(taskViews.taskId, taskIds),
+          inArray(taskViews.taskId, accessibleTaskIds),
           eq(taskViews.userId, user.id)
         )
       );

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireTokenAuth } from '@/lib/extension/auth';
 import { corsHeaders, handlePreflight } from '@/lib/extension/cors';
 import { db } from '@/lib/db';
-import { users, teams, teamMembers, boardAccess } from '@/lib/db/schema';
+import { users, teams, boardAccess } from '@/lib/db/schema';
 import { eq, isNull } from 'drizzle-orm';
+import { getBoardAccessSourceBoardId } from '@/lib/actions/board-access';
 
 export async function OPTIONS(request: NextRequest) {
   return handlePreflight(request);
@@ -20,6 +21,11 @@ export async function GET(request: NextRequest) {
   const boardId = request.nextUrl.searchParams.get('boardId');
   if (!boardId) {
     return NextResponse.json({ error: 'boardId is required' }, { status: 400, headers });
+  }
+
+  const accessSourceBoardId = await getBoardAccessSourceBoardId(boardId);
+  if (!accessSourceBoardId) {
+    return NextResponse.json({ error: 'Board not found' }, { status: 404, headers });
   }
 
   // Get all active users
@@ -56,7 +62,7 @@ export async function GET(request: NextRequest) {
   const contractorsWithAccess = new Set<string>();
 
   const directAccess = await db.query.boardAccess.findMany({
-    where: eq(boardAccess.boardId, boardId),
+    where: eq(boardAccess.boardId, accessSourceBoardId),
     columns: { userId: true, teamId: true },
   });
 

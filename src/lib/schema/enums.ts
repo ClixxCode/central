@@ -4,7 +4,7 @@ export const userRoleEnum = pgEnum('user_role', ['admin', 'user']);
 
 export const authProviderEnum = pgEnum('auth_provider', ['google', 'credentials']);
 
-export const boardTypeEnum = pgEnum('board_type', ['standard', 'rollup', 'personal']);
+export const boardTypeEnum = pgEnum('board_type', ['standard', 'rollup', 'personal', 'project']);
 
 export const accessLevelEnum = pgEnum('access_level', ['full', 'assigned_only']);
 

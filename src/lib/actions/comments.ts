@@ -3,13 +3,9 @@
 import { db } from '@/lib/db';
 import {
   comments,
-  tasks,
-  taskAssignees,
   users,
   attachments,
   commentReactions,
-  boardAccess,
-  teamMembers,
 } from '@/lib/db/schema';
 import type { TiptapContent } from '@/lib/db/schema/tasks';
 import { eq, and, inArray } from 'drizzle-orm';
@@ -19,6 +15,7 @@ import { revalidatePath } from 'next/cache';
 import { randomBytes } from 'crypto';
 import { logBoardActivity } from './board-activity';
 import { COMMENT_REACTIONS, type CommentReactionType } from '@/lib/comments/reactions';
+import { canAccessTask } from './board-access';
 
 // Types
 export interface CommentAuthor {
@@ -81,113 +78,6 @@ export interface UpdateCommentInput {
   content?: TiptapContent;
 }
 
-type AccessLevel = 'full' | 'assigned_only' | null;
-
-/**
- * Check if user is in a contractor team (excludeFromPublic = true)
- * Contractor teams need explicit board_access entries to see boards
- */
-async function isUserInContractorTeam(userId: string): Promise<boolean> {
-  const userTeamsWithDetails = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    with: {
-      team: {
-        columns: { excludeFromPublic: true },
-      },
-    },
-  });
-
-  return userTeamsWithDetails.some((tm) => tm.team.excludeFromPublic);
-}
-
-/**
- * Get user's access level for a task's board
- * Boards are PUBLIC by default - non-contractors get 'full' access
- * Contractors need explicit board_access entries
- */
-async function getTaskAccessLevel(
-  userId: string,
-  taskId: string,
-  isAdmin: boolean
-): Promise<{ accessLevel: AccessLevel; task?: typeof tasks.$inferSelect }> {
-  const task = await db.query.tasks.findFirst({
-    where: eq(tasks.id, taskId),
-  });
-
-  if (!task) {
-    return { accessLevel: null };
-  }
-
-  // Admins have full access to all boards
-  if (isAdmin) {
-    return { accessLevel: 'full', task };
-  }
-
-  // Check if user is in a contractor team
-  const isContractor = await isUserInContractorTeam(userId);
-
-  // Non-contractors have full access to all boards (public by default)
-  if (!isContractor) {
-    return { accessLevel: 'full', task };
-  }
-
-  // Contractors need explicit access entries
-  // Check direct board access
-  const boardAccessResult = await db.query.boardAccess.findFirst({
-    where: and(
-      eq(boardAccess.boardId, task.boardId),
-      eq(boardAccess.userId, userId)
-    ),
-  });
-
-  if (boardAccessResult) {
-    if (boardAccessResult.accessLevel === 'full') {
-      return { accessLevel: 'full', task };
-    }
-    // assigned_only - check if user is assigned to task
-    const assignment = await db.query.taskAssignees.findFirst({
-      where: and(
-        eq(taskAssignees.taskId, taskId),
-        eq(taskAssignees.userId, userId)
-      ),
-    });
-    return { accessLevel: assignment ? 'assigned_only' : null, task: assignment ? task : undefined };
-  }
-
-  // Check team access
-  const userTeams = await db.query.teamMembers.findMany({
-    where: eq(teamMembers.userId, userId),
-    columns: { teamId: true },
-  });
-
-  if (userTeams.length > 0) {
-    const teamIds = userTeams.map((t) => t.teamId);
-    const teamAccess = await db.query.boardAccess.findFirst({
-      where: and(
-        eq(boardAccess.boardId, task.boardId),
-        inArray(boardAccess.teamId, teamIds)
-      ),
-    });
-
-    if (teamAccess) {
-      if (teamAccess.accessLevel === 'full') {
-        return { accessLevel: 'full', task };
-      }
-      // assigned_only via team
-      const assignment = await db.query.taskAssignees.findFirst({
-        where: and(
-          eq(taskAssignees.taskId, taskId),
-          eq(taskAssignees.userId, userId)
-        ),
-      });
-      return { accessLevel: assignment ? 'assigned_only' : null, task: assignment ? task : undefined };
-    }
-  }
-
-  // Contractors with no explicit access
-  return { accessLevel: null };
-}
-
 /**
  * List comments for a task
  */
@@ -200,9 +90,9 @@ export async function listComments(taskId: string): Promise<{
   const isAdmin = user.role === 'admin';
 
   // Check access to the task
-  const { accessLevel } = await getTaskAccessLevel(user.id, taskId, isAdmin);
+  const { canAccess } = await canAccessTask(user.id, taskId, isAdmin);
 
-  if (!accessLevel) {
+  if (!canAccess) {
     return { success: false, error: 'Access denied to this task' };
   }
 
@@ -331,9 +221,9 @@ export async function createComment(input: CreateCommentInput): Promise<{
   const isAdmin = user.role === 'admin';
 
   // Check access to the task
-  const { accessLevel, task } = await getTaskAccessLevel(user.id, input.taskId, isAdmin);
+  const { canAccess, task } = await canAccessTask(user.id, input.taskId, isAdmin);
 
-  if (!accessLevel || !task) {
+  if (!canAccess || !task) {
     return { success: false, error: 'Access denied to this task' };
   }
 
@@ -659,8 +549,8 @@ export async function toggleCommentReaction(input: {
     return { success: false, error: 'Comment not found' };
   }
 
-  const { accessLevel } = await getTaskAccessLevel(user.id, comment.taskId, isAdmin);
-  if (!accessLevel) {
+  const { canAccess } = await canAccessTask(user.id, comment.taskId, isAdmin);
+  if (!canAccess) {
     return { success: false, error: 'Access denied to this task' };
   }
 
