@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Menu, LogOut, Settings, User, Keyboard, Users, ShieldCheck, Building2, Plus, Moon, Sun, Monitor } from 'lucide-react';
@@ -21,6 +21,7 @@ import { KeyboardShortcutsModal } from '@/components/shortcuts';
 import { QuickAddDialog } from '@/components/quick-add';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { useFavorites } from '@/lib/hooks/useFavorites';
+import { useIsClient } from '@/hooks/useIsClient';
 import * as React from 'react';
 
 interface HeaderProps {
@@ -40,13 +41,12 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
   const { setSidebarOpen, sidebarOpen } = useUIStore();
   const { openQuickAdd, quickAddOpen, closeQuickAdd } = useQuickActionsStore();
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useIsClient();
   const { data: favoritesData } = useFavorites();
-  const favorites = favoritesData?.favorites ?? [];
 
   // Build favorite shortcuts (b then 1-9)
   const favoriteShortcuts = React.useMemo(() => {
+    const favorites = favoritesData?.favorites ?? [];
     return favorites.slice(0, 9).map((fav, index) => ({
       key: ['f', String(index + 1)] as string[],
       description: `Go to ${fav.name}`,
@@ -58,7 +58,7 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
         router.push(href);
       },
     }));
-  }, [favorites, router]);
+  }, [favoritesData?.favorites, router]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -155,7 +155,7 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
             size="icon-sm"
             onClick={openQuickAdd}
             title="Quick add task (n)"
-            className="cursor-pointer border-[#EB3E4B]/30 bg-[#EB3E4B]/10 text-foreground hover:bg-[#EB3E4B]/20 hover:text-foreground dark:border-[#EB3E4B]/30 dark:bg-[#EB3E4B]/10 dark:hover:bg-[#EB3E4B]/20"
+            className="cursor-pointer border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
           >
             <Plus className="h-4 w-4" />
           </Button>

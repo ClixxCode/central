@@ -15,7 +15,6 @@ import {
   Layers,
   PanelLeftClose,
   PanelLeft,
-  Star,
   MoreHorizontal,
   X,
   Building2,
@@ -191,9 +190,11 @@ function SortableFavoriteItem({
     id: favorite.id,
   });
 
-  if (isDragging) {
-    wasDragged.current = true;
-  }
+  useEffect(() => {
+    if (isDragging) {
+      wasDragged.current = true;
+    }
+  }, [isDragging]);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -209,7 +210,7 @@ function SortableFavoriteItem({
           'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors cursor-grab active:cursor-grabbing',
           isDragging && 'opacity-50',
           isActive
-            ? 'bg-blue-100 text-blue-700 font-medium'
+            ? 'bg-primary/10 text-primary font-medium'
             : 'text-muted-foreground hover:bg-accent'
         )}
         {...attributes}
@@ -550,7 +551,7 @@ interface SidebarProps {
   isContractor?: boolean;
 }
 
-export function Sidebar({ clients, isAdmin = false, isContractor = false }: SidebarProps) {
+export function Sidebar({ clients, isContractor = false }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isClient = useIsClient();
@@ -625,12 +626,12 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
     }
   };
 
-  // Exit edit mode when sidebar is collapsed
-  useEffect(() => {
-    if (sidebarCollapsed) {
+  const handleSidebarCollapseToggle = () => {
+    if (!sidebarCollapsed) {
       setEditMode(false);
     }
-  }, [sidebarCollapsed]);
+    toggleSidebarCollapse();
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -772,9 +773,9 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
   // This avoids the sidebar "sliding in" when localStorage state differs from SSR default
   if (!isClient) {
     return (
-      <aside className="flex flex-col border-r bg-muted/50 w-64">
+      <aside className="flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
         {/* Skeleton placeholder during SSR */}
-        <div className="flex h-14 items-center border-b px-4">
+        <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           <Skeleton className="h-8 w-8 rounded-lg" />
           <Skeleton className="ml-2 h-4 w-20" />
         </div>
@@ -808,12 +809,12 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          'flex flex-col shrink-0 h-full overflow-hidden border-r bg-muted/50 transition-all duration-300',
+          'flex flex-col shrink-0 h-full overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300',
           isCollapsed ? 'w-16' : 'w-64'
         )}
       >
         {/* Header */}
-        <div className="flex h-14 items-center justify-between border-b px-4">
+        <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
           {!isCollapsed && (
             <Link href="/my-tasks" className="flex items-center gap-2">
               <Image
@@ -828,7 +829,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
           <Button
             variant="ghost"
             size="icon"
-            onClick={toggleSidebarCollapse}
+            onClick={handleSidebarCollapseToggle}
             className={cn('h-8 w-8', isCollapsed && 'mx-auto')}
           >
             {isCollapsed ? (
@@ -957,7 +958,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
                     className={cn(
                       'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                       isActive
-                        ? 'bg-blue-100 text-blue-700 font-medium'
+                        ? 'bg-primary/10 text-primary font-medium'
                         : 'text-muted-foreground hover:bg-accent'
                     )}
                   >
@@ -1204,7 +1205,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
                         className={cn(
                           'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
                           isBoardActive
-                            ? 'bg-blue-100 text-blue-700 font-medium'
+                            ? 'bg-primary/10 text-primary font-medium'
                             : 'text-muted-foreground hover:bg-accent'
                         )}
                       >
@@ -1270,7 +1271,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
                                 className={cn(
                                   'flex items-center rounded-lg px-3 py-1.5 text-sm transition-colors',
                                   isBoardActive
-                                    ? 'bg-blue-100 text-blue-700 font-medium'
+                                    ? 'bg-primary/10 text-primary font-medium'
                                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                                 )}
                               >
