@@ -1,18 +1,20 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, FolderKanban, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TaskRow, TaskRowSkeleton } from './TaskRow';
+import { StatusSelect } from './StatusSelect';
+import { SectionSelect } from './SectionSelect';
+import { TaskDatePicker } from './DatePicker';
 import { useColumnResize } from '@/lib/hooks/useColumnResize';
 import { useSubtasks } from '@/lib/hooks/useTasks';
-import type { TaskWithAssignees, UpdateTaskInput, TaskSortOptions } from '@/lib/actions/tasks';
+import type { BoardItem, ProjectBoardItem, TaskWithAssignees, UpdateTaskInput, TaskSortOptions } from '@/lib/actions/tasks';
+import type { UpdateBoardProjectInput } from '@/lib/validations/board-project';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from './AssigneePicker';
 
 type SortField = TaskSortOptions['field'];
-type SortDirection = TaskSortOptions['direction'];
-
 interface ColumnConfig {
   title: boolean;
   status: boolean;
@@ -31,12 +33,15 @@ const defaultColumns: ColumnConfig = {
 
 interface BoardTableProps {
   tasks: TaskWithAssignees[];
+  items?: BoardItem[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
   onUpdateTask: (input: UpdateTaskInput) => void;
+  onUpdateProject?: (input: UpdateBoardProjectInput) => void;
   onDeleteTask: (taskId: string) => void;
   onOpenTaskModal?: (taskId: string) => void;
+  onOpenProject?: (projectBoardId: string) => void;
   onOpenSubtasks?: (taskId: string) => void;
   updatingTaskIds?: string[];
   isLoading?: boolean;
@@ -53,12 +58,15 @@ interface BoardTableProps {
 
 export function BoardTable({
   tasks,
+  items,
   statusOptions,
   sectionOptions,
   assignableUsers,
   onUpdateTask,
+  onUpdateProject,
   onDeleteTask,
   onOpenTaskModal,
+  onOpenProject,
   onOpenSubtasks,
   updatingTaskIds = [],
   isLoading = false,
@@ -73,6 +81,10 @@ export function BoardTable({
   onEnterSubtaskOnlyMode,
 }: BoardTableProps) {
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
+  const rows = React.useMemo<BoardItem[]>(
+    () => items ?? tasks.map((task) => ({ ...task, kind: 'task' as const })),
+    [items, tasks]
+  );
 
   const toggleExpanded = React.useCallback((taskId: string) => {
     setExpandedParents((prev) => {
@@ -211,7 +223,7 @@ export function BoardTable({
           </tr>
         </thead>
         <tbody>
-          {tasks.length === 0 ? (
+          {rows.length === 0 ? (
             <tr>
               <td
                 colSpan={visibleHeaders.length + 1}
@@ -221,7 +233,22 @@ export function BoardTable({
               </td>
             </tr>
           ) : (
-            tasks.map((task) => {
+            rows.map((item) => {
+              if (item.kind === 'project') {
+                return (
+                  <ProjectRow
+                    key={item.id}
+                    project={item}
+                    statusOptions={statusOptions}
+                    sectionOptions={sectionOptions}
+                    onUpdate={onUpdateProject}
+                    onOpenProject={onOpenProject}
+                    columns={columns}
+                  />
+                );
+              }
+
+              const task = item;
               const showInlineSubtasks = task.subtaskCount > 0 && !task.subtasksBreakoutEnabled;
               const openSubtasksSheet = task.subtaskCount > 0 && task.subtasksBreakoutEnabled;
               const isSubtaskOnlyParent = task.id === subtaskOnlyParentId;
@@ -248,7 +275,7 @@ export function BoardTable({
                     columns={columns}
                     isSelected={selectedTaskIds?.has(task.id)}
                     isMultiSelectMode={isMultiSelectMode}
-                    onMultiSelectClick={(e) => onTaskMultiSelect?.(task.id, e.shiftKey, tasks.map((t) => t.id))}
+                    onMultiSelectClick={(e) => onTaskMultiSelect?.(task.id, e.shiftKey, rows.filter((row) => row.kind === 'task').map((row) => row.id))}
                     isFaded={isFadedBySubtaskOnlyMode}
                     isSubtaskOnlyParent={isSubtaskOnlyParent}
                     subtaskOnlyHighlightColor={statusColor}
@@ -276,6 +303,81 @@ export function BoardTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ProjectRow({
+  project,
+  statusOptions,
+  sectionOptions,
+  onUpdate,
+  onOpenProject,
+  columns,
+}: {
+  project: ProjectBoardItem;
+  statusOptions: StatusOption[];
+  sectionOptions: SectionOption[];
+  onUpdate?: (input: UpdateBoardProjectInput) => void;
+  onOpenProject?: (projectBoardId: string) => void;
+  columns: ColumnConfig;
+}) {
+  return (
+    <tr className="group border-b bg-primary/[0.02] transition-colors hover:bg-primary/[0.05]">
+      {columns.title && (
+        <td className="px-3 py-2">
+          <button
+            type="button"
+            onClick={() => onOpenProject?.(project.projectBoardId)}
+            className="flex min-w-0 items-center gap-2 rounded text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={project.title}
+          >
+            <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <FolderKanban className="size-4" />
+            </span>
+            <span className="min-w-0 truncate">{project.title}</span>
+            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground">
+              <ListChecks className="size-3" />
+              {project.completedTaskCount}/{project.taskCount}
+            </span>
+          </button>
+        </td>
+      )}
+      {columns.status && (
+        <td className="px-3 py-2">
+          <StatusSelect
+            value={project.status}
+            onChange={(status) => onUpdate?.({ id: project.id, status })}
+            options={statusOptions}
+            size="sm"
+            disabled={!onUpdate}
+          />
+        </td>
+      )}
+      {columns.section && (
+        <td className="px-3 py-2">
+          <SectionSelect
+            value={project.section}
+            onChange={(section) => onUpdate?.({ id: project.id, section })}
+            options={sectionOptions}
+            disabled={!onUpdate}
+          />
+        </td>
+      )}
+      {columns.assignees && <td className="px-3 py-2 text-sm text-muted-foreground" />}
+      {columns.dueDate && (
+        <td className="px-3 py-2">
+          <TaskDatePicker
+            date={project.dueDate}
+            onDateChange={(dueDate) => onUpdate?.({ id: project.id, dueDate })}
+            flexibility="not_set"
+            onFlexibilityChange={() => undefined}
+            disabled={!onUpdate}
+            showFlexibility={false}
+          />
+        </td>
+      )}
+      <td className="px-3 py-2 w-12" />
+    </tr>
   );
 }
 

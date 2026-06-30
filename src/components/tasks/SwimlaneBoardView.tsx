@@ -6,10 +6,10 @@ import { BoardTable } from './BoardTable';
 import { TaskModal } from './TaskModal';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
-import { useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
+import { useUpdateTask, useUpdateProject, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
 import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 import { isCompleteStatus } from '@/lib/utils/status';
-import type { TaskWithAssignees, CreateTaskInput, UpdateTaskInput } from '@/lib/actions/tasks';
+import type { BoardItem, TaskWithAssignees, UpdateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from './AssigneePicker';
 import { getDateBucketDefinitions, groupByDateBucket } from '@/lib/utils/date-buckets';
@@ -18,10 +18,10 @@ interface SwimlaneBoardViewProps {
   boardId: string;
   clientSlug?: string;
   tasks: TaskWithAssignees[];
+  items?: BoardItem[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
-  onCreateTask?: (input: Omit<CreateTaskInput, 'boardId'>) => void;
   /** Optional task ID to open initially (from URL params) */
   initialTaskId?: string | null;
   /** Optional comment ID to highlight (from URL params) */
@@ -30,6 +30,7 @@ interface SwimlaneBoardViewProps {
   onTaskModalClose?: () => void;
   /** Called immediately before opening the task modal */
   onTaskModalOpen?: () => void;
+  onOpenProject?: (projectBoardId: string) => void;
   /** Multi-select state */
   selectedTaskIds?: Set<string>;
   onTaskMultiSelect?: (taskId: string, shiftKey: boolean, orderedTaskIds: string[]) => void;
@@ -44,14 +45,15 @@ export function SwimlaneBoardView({
   boardId,
   clientSlug,
   tasks,
+  items,
   statusOptions,
   sectionOptions,
   assignableUsers,
-  onCreateTask,
   initialTaskId,
   highlightedCommentId,
   onTaskModalClose,
   onTaskModalOpen,
+  onOpenProject,
   selectedTaskIds,
   onTaskMultiSelect,
   isMultiSelectMode,
@@ -62,9 +64,14 @@ export function SwimlaneBoardView({
   const { isSwimlaneCollapsed, toggleSwimlane, getBoardTableColumns, getSwimlaneSortConfig, setSwimlaneSortConfig } = useBoardViewStore();
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
   const updateTask = useUpdateTask();
+  const updateProject = useUpdateProject();
   const deleteTask = useDeleteTask();
   const bulkArchive = useBulkArchiveDone(boardId);
   const { isAdmin } = useCurrentUser();
+  const boardItems = React.useMemo<BoardItem[]>(
+    () => items ?? tasks.map((task) => ({ ...task, kind: 'task' as const })),
+    [items, tasks]
+  );
 
   // Swimlane sort config (persisted per board)
   const swimlaneSort = getSwimlaneSortConfig(boardId);
@@ -108,19 +115,18 @@ export function SwimlaneBoardView({
     onTaskModalClose?.();
   }, [onTaskModalClose]);
 
-  // Group tasks by status
-  const tasksByStatus = React.useMemo(() => {
-    const grouped: Record<string, TaskWithAssignees[]> = {};
+  // Group items by status
+  const itemsByStatus = React.useMemo(() => {
+    const grouped: Record<string, BoardItem[]> = {};
 
     // Initialize all statuses
     statusOptions.forEach((status) => {
       grouped[status.id] = [];
     });
 
-    // Group tasks
-    tasks.forEach((task) => {
-      if (grouped[task.status]) {
-        grouped[task.status].push(task);
+    boardItems.forEach((item) => {
+      if (grouped[item.status]) {
+        grouped[item.status].push(item);
       }
     });
 
@@ -130,7 +136,7 @@ export function SwimlaneBoardView({
     });
 
     return grouped;
-  }, [tasks, statusOptions]);
+  }, [boardItems, statusOptions]);
 
   // Get selected task for modal - check board tasks first, then fetch individually (for subtasks)
   const boardTask = React.useMemo(
@@ -154,8 +160,8 @@ export function SwimlaneBoardView({
   // Group tasks by date bucket
   const tasksByDate = React.useMemo(() => {
     if (groupBy !== 'date') return {};
-    return groupByDateBucket(tasks);
-  }, [tasks, groupBy]);
+    return groupByDateBucket(boardItems);
+  }, [boardItems, groupBy]);
 
   // Build synthetic StatusOptions from date buckets
   const dateBucketStatusOptions: StatusOption[] = React.useMemo(
@@ -166,14 +172,14 @@ export function SwimlaneBoardView({
   // Group tasks by section
   const tasksBySection = React.useMemo(() => {
     if (groupBy !== 'section') return {};
-    const grouped: Record<string, TaskWithAssignees[]> = {};
+    const grouped: Record<string, BoardItem[]> = {};
 
     sectionOptions.forEach((s) => { grouped[s.id] = []; });
     grouped['__no_section__'] = [];
 
-    tasks.forEach((task) => {
-      const key = task.section && grouped[task.section] ? task.section : '__no_section__';
-      grouped[key].push(task);
+    boardItems.forEach((item) => {
+      const key = item.section && grouped[item.section] ? item.section : '__no_section__';
+      grouped[key].push(item);
     });
 
     Object.values(grouped).forEach((items) => {
@@ -181,7 +187,7 @@ export function SwimlaneBoardView({
     });
 
     return grouped;
-  }, [tasks, sectionOptions, groupBy]);
+  }, [boardItems, sectionOptions, groupBy]);
 
   // Build synthetic StatusOptions from sections
   const sectionLaneOptions: StatusOption[] = React.useMemo(
@@ -202,7 +208,7 @@ export function SwimlaneBoardView({
     ? tasksByDate
     : groupBy === 'section'
       ? tasksBySection
-      : tasksByStatus;
+      : itemsByStatus;
 
   // In date mode, skip empty buckets. In section mode, hide empty "No Section" lane.
   const visibleLanes = React.useMemo(
@@ -216,7 +222,7 @@ export function SwimlaneBoardView({
 
   // Sort tasks within each lane according to swimlane sort config
   const sortedGroupedTasks = React.useMemo(() => {
-    const result: Record<string, TaskWithAssignees[]> = {};
+    const result: Record<string, BoardItem[]> = {};
     for (const lane of visibleLanes) {
       const laneTasks = [...(groupedTasks[lane.id] || [])];
       laneTasks.sort((a, b) => {
@@ -274,14 +280,14 @@ export function SwimlaneBoardView({
     <>
       <div className="space-y-4">
         {visibleLanes.map((status) => {
-          const swimlaneTasks = sortedGroupedTasks[status.id] || [];
-          const taskIds = swimlaneTasks.map((t) => t.id);
+          const swimlaneItems = sortedGroupedTasks[status.id] || [];
+          const taskIds = swimlaneItems.map((item) => item.id);
 
           return (
             <Swimlane
               key={status.id}
               status={status}
-              taskCount={swimlaneTasks.length}
+              taskCount={swimlaneItems.length}
               isCollapsed={isSwimlaneCollapsed(boardId, status.id)}
               onToggleCollapse={() => toggleSwimlane(boardId, status.id)}
               taskIds={taskIds}
@@ -290,13 +296,16 @@ export function SwimlaneBoardView({
               disableDnd
             >
               <BoardTable
-                tasks={swimlaneTasks}
+                tasks={swimlaneItems.filter((item): item is Extract<BoardItem, { kind: 'task' }> => item.kind === 'task')}
+                items={swimlaneItems}
                 statusOptions={statusOptions}
                 sectionOptions={sectionOptions}
                 assignableUsers={assignableUsers}
                 onUpdateTask={handleUpdateTask}
+                onUpdateProject={(input) => updateProject.mutate(input)}
                 onDeleteTask={handleDeleteTask}
                 onOpenTaskModal={openTaskModal}
+                onOpenProject={onOpenProject}
                 onOpenSubtasks={(taskId) => openTaskModal(taskId, 'subtasks')}
                 updatingTaskIds={updatingTaskIds}
                 sort={swimlaneSort}

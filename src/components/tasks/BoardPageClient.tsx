@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Plus, SlidersHorizontal, ChevronDown, Columns3, CalendarDays, LayoutGrid } from 'lucide-react';
+import { FolderPlus, Plus, SlidersHorizontal, ChevronDown, Columns3, CalendarDays, LayoutGrid } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,15 +19,17 @@ import { KanbanBoardView } from './KanbanBoardView';
 import { ViewToggleButtons } from './ViewToggle';
 import { TaskFilterBar } from './TaskFilterBar';
 import { TaskModal } from './TaskModal';
+import { CreateProjectDialog } from './CreateProjectDialog';
 import { MultiSelectFloatingBar, type BulkEditPayload } from './MultiSelectFloatingBar';
 import { SubtaskOnlyFloatingBar } from './SubtaskOnlyFloatingBar';
 import { MoveTasksDialog } from './MoveTasksDialog';
 import { useBoardViewStore, type GroupBy } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
 import {
-  useTasks,
+  useBoardItems,
   useCreateTask,
   useUpdateTask,
+  useUpdateProject,
   useDeleteTask,
   useAssignableUsers,
   useTask,
@@ -37,7 +39,7 @@ import {
   taskKeys,
 } from '@/lib/hooks/useTasks';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
-import type { TaskFilters, TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
+import type { BoardItem, TaskFilters, TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import { trackEvent } from '@/lib/analytics';
 
@@ -51,7 +53,6 @@ interface BoardPageClientProps {
 
 export function BoardPageClient({
   boardId,
-  boardName,
   clientSlug,
   statusOptions,
   sectionOptions,
@@ -75,6 +76,7 @@ export function BoardPageClient({
   });
   // Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
 
   // URL-based task/comment params (for opening task modal from notifications)
   const urlTaskId = searchParams.get('task');
@@ -107,12 +109,17 @@ export function BoardPageClient({
   }, [viewMode, boardId]);
 
   // Fetch data
-  const { data: tasks = [], isLoading: isLoadingTasks } = useTasks(boardId, filters, sort);
+  const { data: boardItems = [], isLoading: isLoadingBoardItems } = useBoardItems(boardId, filters, sort);
+  const tasks = React.useMemo(
+    () => boardItems.filter((item): item is Extract<BoardItem, { kind: 'task' }> => item.kind === 'task'),
+    [boardItems]
+  );
   const { data: assignableUsers = [], isLoading: isLoadingUsers } = useAssignableUsers(boardId);
 
   // Mutations
   const createTask = useCreateTask(boardId);
   const updateTask = useUpdateTask();
+  const updateProject = useUpdateProject();
   const deleteTask = useDeleteTask();
   const bulkUpdate = useBulkUpdateTasks();
   const bulkDuplicate = useBulkDuplicateTasks();
@@ -123,7 +130,14 @@ export function BoardPageClient({
     channel: `board-tasks-${boardId}`,
     table: 'tasks',
     filter: `board_id=eq.${boardId}`,
-    queryKeys: [taskKeys.lists(), taskKeys.details()],
+    queryKeys: [taskKeys.lists(), taskKeys.boardItemLists(), taskKeys.details()],
+  });
+
+  useRealtimeInvalidation({
+    channel: `board-projects-${boardId}`,
+    table: 'board_projects',
+    filter: `parent_board_id=eq.${boardId}`,
+    queryKeys: [taskKeys.boardItemLists()],
   });
 
   // ─── Multi-select state ───────────────────────────────────
@@ -181,12 +195,12 @@ export function BoardPageClient({
 
     const parentTask = tasks.find((task) => task.id === subtaskOnlyParentId);
     if (
-      (!isLoadingTasks && !parentTask) ||
+      (!isLoadingBoardItems && !parentTask) ||
       (parentTask && (!parentTask.subtasksBreakoutEnabled || parentTask.subtaskCount === 0))
     ) {
       exitSubtaskOnlyMode();
     }
-  }, [exitSubtaskOnlyMode, isLoadingTasks, subtaskOnlyParentId, tasks]);
+  }, [exitSubtaskOnlyMode, isLoadingBoardItems, subtaskOnlyParentId, tasks]);
 
   // Escape key listener
   React.useEffect(() => {
@@ -217,11 +231,19 @@ export function BoardPageClient({
             }
           } else {
             // Fallback: just toggle
-            next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+            if (next.has(taskId)) {
+              next.delete(taskId);
+            } else {
+              next.add(taskId);
+            }
           }
         } else {
           // Toggle single task
-          next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+          if (next.has(taskId)) {
+            next.delete(taskId);
+          } else {
+            next.add(taskId);
+          }
         }
 
         lastSelectedIdRef.current = taskId;
@@ -380,7 +402,7 @@ export function BoardPageClient({
     return hidden;
   }, [swimlaneCardItems]);
 
-  const isLoading = isLoadingTasks || isLoadingUsers;
+  const isLoading = isLoadingBoardItems || isLoadingUsers;
 
   return (
     <div className="space-y-4">
@@ -471,10 +493,16 @@ export function BoardPageClient({
         </div>
 
         {/* Actions */}
-        <Button onClick={() => setIsCreateModalOpen(true)} size="sm">
-          <Plus className="mr-1 size-4" />
-          New Task
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setIsCreateProjectOpen(true)} size="sm" variant="outline">
+            <FolderPlus className="mr-1 size-4" />
+            New Project
+          </Button>
+          <Button onClick={() => setIsCreateModalOpen(true)} size="sm">
+            <Plus className="mr-1 size-4" />
+            New Task
+          </Button>
+        </div>
       </div>
 
       {/* Board View */}
@@ -485,12 +513,15 @@ export function BoardPageClient({
       ) : viewMode === 'table' ? (
         <BoardTable
           tasks={tasks}
+          items={boardItems}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
           onUpdateTask={(input) => updateTask.mutate(input)}
+          onUpdateProject={(input) => updateProject.mutate(input)}
           onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
           onOpenTaskModal={openTaskModal}
+          onOpenProject={(projectBoardId) => router.push(`/clients/${clientSlug}/boards/${projectBoardId}`)}
           onOpenSubtasks={(taskId) => openTaskModal(taskId, 'subtasks')}
           updatingTaskIds={updatingTaskIds}
           sort={sort}
@@ -507,14 +538,15 @@ export function BoardPageClient({
           boardId={boardId}
           clientSlug={clientSlug}
           tasks={tasks}
+          items={boardItems}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
-          onCreateTask={handleCreateTask}
           initialTaskId={urlTaskId}
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
           onTaskModalOpen={exitSubtaskOnlyMode}
+          onOpenProject={(projectBoardId) => router.push(`/clients/${clientSlug}/boards/${projectBoardId}`)}
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
@@ -527,14 +559,15 @@ export function BoardPageClient({
           boardId={boardId}
           clientSlug={clientSlug}
           tasks={tasks}
+          items={boardItems}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
-          onCreateTask={handleCreateTask}
           initialTaskId={urlTaskId}
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
           onTaskModalOpen={exitSubtaskOnlyMode}
+          onOpenProject={(projectBoardId) => router.push(`/clients/${clientSlug}/boards/${projectBoardId}`)}
           hiddenItems={swimlaneHiddenItems}
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
@@ -554,6 +587,15 @@ export function BoardPageClient({
         assignableUsers={assignableUsers}
         onCreate={handleCreateTask}
         mode="create"
+      />
+
+      <CreateProjectDialog
+        open={isCreateProjectOpen}
+        onOpenChange={setIsCreateProjectOpen}
+        boardId={boardId}
+        clientSlug={clientSlug}
+        statusOptions={statusOptions}
+        sectionOptions={sectionOptions}
       />
 
       {/* Task Detail Modal (for table view and URL-based opening) */}

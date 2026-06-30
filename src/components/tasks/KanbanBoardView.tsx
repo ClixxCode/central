@@ -5,15 +5,16 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { DndProvider, type DragEndEvent, type UniqueIdentifier } from '@/components/dnd';
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanTaskCard } from './KanbanTaskCard';
+import { ProjectCard } from './ProjectCard';
 import { ExpandedSubtasks } from './ExpandedSubtasks';
 import { CompleteParentDialog } from './CompleteParentDialog';
 import { TaskModal } from './TaskModal';
-import { useUpdateTaskPositions, useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
+import { useUpdateBoardItemPositions, useUpdateTask, useDeleteTask, useTask, useBulkArchiveDone } from '@/lib/hooks/useTasks';
 import { useCurrentUser } from '@/lib/hooks/useCurrentUser';
 import { useDragToScroll } from '@/lib/hooks/useDragToScroll';
 import { useQuickActionsStore } from '@/lib/stores';
 import { isCompleteStatus } from '@/lib/utils/status';
-import type { TaskWithAssignees, CreateTaskInput } from '@/lib/actions/tasks';
+import type { BoardItem, TaskWithAssignees, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from './AssigneePicker';
 import { getDateBucketDefinitions, groupByDateBucket } from '@/lib/utils/date-buckets';
@@ -22,6 +23,7 @@ interface KanbanBoardViewProps {
   boardId: string;
   clientSlug?: string;
   tasks: TaskWithAssignees[];
+  items?: BoardItem[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
@@ -34,6 +36,7 @@ interface KanbanBoardViewProps {
   onTaskModalClose?: () => void;
   /** Called immediately before opening the task modal */
   onTaskModalOpen?: () => void;
+  onOpenProject?: (projectBoardId: string) => void;
   /** Set of card item IDs to hide (e.g. 'section', 'dueDate', 'assignees') */
   hiddenItems?: Set<string>;
   /** Multi-select state */
@@ -50,14 +53,15 @@ export function KanbanBoardView({
   boardId,
   clientSlug,
   tasks,
+  items,
   statusOptions,
   sectionOptions,
   assignableUsers,
-  onCreateTask,
   initialTaskId,
   highlightedCommentId,
   onTaskModalClose,
   onTaskModalOpen,
+  onOpenProject,
   hiddenItems,
   selectedTaskIds,
   onTaskMultiSelect,
@@ -66,12 +70,16 @@ export function KanbanBoardView({
   onEnterSubtaskOnlyMode,
   groupBy = 'status',
 }: KanbanBoardViewProps) {
-  const updateTaskPositions = useUpdateTaskPositions();
+  const updateBoardItemPositions = useUpdateBoardItemPositions();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const bulkArchive = useBulkArchiveDone(boardId);
   const { isAdmin } = useCurrentUser();
   const openQuickAddWithContext = useQuickActionsStore((s) => s.openQuickAddWithContext);
+  const boardItems = React.useMemo<BoardItem[]>(
+    () => items ?? tasks.map((task) => ({ ...task, kind: 'task' as const })),
+    [items, tasks]
+  );
 
   // Drag-to-scroll for mouse users without trackpads
   const scrollRef = useDragToScroll();
@@ -93,7 +101,7 @@ export function KanbanBoardView({
   const [pendingIncompleteCount, setPendingIncompleteCount] = React.useState(0);
   const pendingDnDRef = React.useRef<{
     taskId: string;
-    updates: { id: string; position: number; status?: string }[];
+    updates: { id: string; kind: BoardItem['kind']; position: number; status?: string }[];
     incompleteCount: number;
   } | null>(null);
 
@@ -135,19 +143,18 @@ export function KanbanBoardView({
     onTaskModalClose?.();
   }, [onTaskModalClose]);
 
-  // Group tasks by status
-  const tasksByStatus = React.useMemo(() => {
-    const grouped: Record<string, TaskWithAssignees[]> = {};
+  // Group board items by status
+  const itemsByStatus = React.useMemo(() => {
+    const grouped: Record<string, BoardItem[]> = {};
 
     // Initialize all statuses
     statusOptions.forEach((status) => {
       grouped[status.id] = [];
     });
 
-    // Group tasks
-    tasks.forEach((task) => {
-      if (grouped[task.status]) {
-        grouped[task.status].push(task);
+    boardItems.forEach((item) => {
+      if (grouped[item.status]) {
+        grouped[item.status].push(item);
       }
     });
 
@@ -157,7 +164,7 @@ export function KanbanBoardView({
     });
 
     return grouped;
-  }, [tasks, statusOptions]);
+  }, [boardItems, statusOptions]);
 
   // Get selected task for modal - check board tasks first, then fetch individually (for subtasks)
   const boardTask = React.useMemo(
@@ -179,71 +186,68 @@ export function KanbanBoardView({
       const overId = over.id as string;
 
       // Find the task being dragged
-      const activeTask = tasks.find((t) => t.id === activeId);
-      if (!activeTask) return;
+      const activeItem = boardItems.find((item) => item.id === activeId);
+      if (!activeItem) return;
+      const activeTask = activeItem.kind === 'task' ? activeItem : null;
 
       // Determine the target status
       let targetStatus = overId;
-      const overTask = tasks.find((t) => t.id === overId);
-      if (overTask) {
-        targetStatus = overTask.status;
+      const overItem = boardItems.find((item) => item.id === overId);
+      if (overItem) {
+        targetStatus = overItem.status;
       }
 
       // Check if status is a valid status option
       const isValidStatus = statusOptions.some((s) => s.id === targetStatus);
-      if (!isValidStatus && !overTask) return;
+      if (!isValidStatus && !overItem) return;
 
-      const sourceStatus = activeTask.status;
-      const newStatus = overTask ? overTask.status : targetStatus;
+      const sourceStatus = activeItem.status;
+      const newStatus = overItem ? overItem.status : targetStatus;
 
-      // Get tasks in source and target columns
-      const sourceTasks = [...tasksByStatus[sourceStatus]];
-      const targetTasks = sourceStatus === newStatus
-        ? sourceTasks
-        : [...tasksByStatus[newStatus]];
+      const sourceItems = [...itemsByStatus[sourceStatus]];
+      const targetItems = sourceStatus === newStatus
+        ? sourceItems
+        : [...itemsByStatus[newStatus]];
 
-      // Find indices
-      const activeIndex = sourceTasks.findIndex((t) => t.id === activeId);
+      const activeIndex = sourceItems.findIndex((item) => item.id === activeId);
 
       if (sourceStatus === newStatus) {
-        // Reorder within same column
-        const overIndex = overTask
-          ? targetTasks.findIndex((t) => t.id === overId)
-          : targetTasks.length;
+        const overIndex = overItem
+          ? targetItems.findIndex((item) => item.id === overId)
+          : targetItems.length;
 
         if (activeIndex === overIndex) return;
 
-        const reorderedTasks = arrayMove(sourceTasks, activeIndex, overIndex);
+        const reorderedItems = arrayMove(sourceItems, activeIndex, overIndex);
 
-        // Calculate position updates
-        const updates = reorderedTasks.map((task, index) => ({
-          id: task.id,
+        const updates = reorderedItems.map((item, index) => ({
+          id: item.id,
+          kind: item.kind,
           position: index * 1000,
         }));
 
-        updateTaskPositions.mutate(updates);
+        updateBoardItemPositions.mutate(updates);
       } else {
-        // Move between columns
-        sourceTasks.splice(activeIndex, 1);
+        sourceItems.splice(activeIndex, 1);
 
-        const overIndex = overTask
-          ? targetTasks.findIndex((t) => t.id === overId)
-          : targetTasks.length;
+        const overIndex = overItem
+          ? targetItems.findIndex((item) => item.id === overId)
+          : targetItems.length;
 
-        const updates: { id: string; position: number; status?: string }[] = [];
+        const updates: { id: string; kind: BoardItem['kind']; position: number; status?: string }[] = [];
 
-        // Update moved task's position and status
         updates.push({
           id: activeId,
+          kind: activeItem.kind,
           position: overIndex * 1000,
           status: newStatus,
         });
 
-        // Reindex target tasks after insertion point
-        targetTasks.forEach((task, index) => {
+        targetItems.forEach((item, index) => {
           if (index >= overIndex) {
             updates.push({
-              id: task.id,
+              id: item.id,
+              kind: item.kind,
               position: (index + 1) * 1000,
             });
           }
@@ -269,22 +273,25 @@ export function KanbanBoardView({
           return;
         }
 
-        updateTaskPositions.mutate(updates);
+        updateBoardItemPositions.mutate(updates);
       }
     },
-    [tasks, statusOptions, tasksByStatus, updateTaskPositions]
+    [boardItems, statusOptions, itemsByStatus, updateBoardItemPositions]
   );
 
   const renderOverlay = React.useCallback(
     (activeId: UniqueIdentifier | null) => {
       if (!activeId) return null;
 
-      const task = tasks.find((t) => t.id === activeId);
-      if (!task) return null;
+      const item = boardItems.find((row) => row.id === activeId);
+      if (!item) return null;
+      if (item.kind === 'project') {
+        return <ProjectCard project={item} sectionOptions={sectionOptions} isOverlay hiddenItems={hiddenItems} />;
+      }
 
       return (
         <KanbanTaskCard
-          task={task}
+          task={item}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
           isOverlay
@@ -292,7 +299,7 @@ export function KanbanBoardView({
         />
       );
     },
-    [tasks, sectionOptions, assignableUsers, hiddenItems]
+    [boardItems, sectionOptions, assignableUsers, hiddenItems]
   );
 
   // Sort status options by position
@@ -307,8 +314,8 @@ export function KanbanBoardView({
   // Group tasks by date bucket
   const tasksByDate = React.useMemo(() => {
     if (groupBy !== 'date') return {};
-    return groupByDateBucket(tasks);
-  }, [tasks, groupBy]);
+    return groupByDateBucket(boardItems);
+  }, [boardItems, groupBy]);
 
   // Build synthetic StatusOptions from date buckets (same shape as StatusOption)
   const dateBucketStatusOptions: StatusOption[] = React.useMemo(
@@ -319,15 +326,15 @@ export function KanbanBoardView({
   // Group tasks by section
   const tasksBySection = React.useMemo(() => {
     if (groupBy !== 'section') return {};
-    const grouped: Record<string, TaskWithAssignees[]> = {};
+    const grouped: Record<string, BoardItem[]> = {};
 
     // Initialize all sections + unsectioned bucket
     sectionOptions.forEach((s) => { grouped[s.id] = []; });
     grouped['__no_section__'] = [];
 
-    tasks.forEach((task) => {
-      const key = task.section && grouped[task.section] ? task.section : '__no_section__';
-      grouped[key].push(task);
+    boardItems.forEach((item) => {
+      const key = item.section && grouped[item.section] ? item.section : '__no_section__';
+      grouped[key].push(item);
     });
 
     Object.values(grouped).forEach((items) => {
@@ -335,7 +342,7 @@ export function KanbanBoardView({
     });
 
     return grouped;
-  }, [tasks, sectionOptions, groupBy]);
+  }, [boardItems, sectionOptions, groupBy]);
 
   // Build synthetic StatusOptions from sections
   const sectionColumnOptions: StatusOption[] = React.useMemo(
@@ -356,7 +363,7 @@ export function KanbanBoardView({
     ? tasksByDate
     : groupBy === 'section'
       ? tasksBySection
-      : tasksByStatus;
+      : itemsByStatus;
 
   // In date mode, skip empty buckets. In section mode, hide empty "No Section" bucket.
   const visibleColumns = React.useMemo(
@@ -373,19 +380,32 @@ export function KanbanBoardView({
       <DndProvider onDragEnd={groupBy === 'status' ? handleDragEnd : () => {}} renderOverlay={groupBy === 'status' ? renderOverlay : () => null}>
         <div ref={scrollRef} className="flex h-[calc(100vh-12rem)] gap-4 overflow-x-auto pb-4">
           {visibleColumns.map((status) => {
-            const columnTasks = groupedTasks[status.id] || [];
-            const taskIds = columnTasks.map((t) => t.id);
+            const columnItems = groupedTasks[status.id] || [];
+            const taskIds = columnItems.map((item) => item.id);
 
             return (
               <KanbanColumn
                 key={status.id}
                 status={status}
-                taskCount={columnTasks.length}
+                taskCount={columnItems.length}
                 taskIds={taskIds}
                 onAddTask={groupBy === 'status' ? () => openQuickAddWithContext(boardId, status.id) : undefined}
                 onArchiveAll={groupBy === 'status' && isAdmin && isCompleteStatus(status.id, statusOptions) ? () => bulkArchive.mutate() : undefined}
               >
-                {columnTasks.map((task) => {
+                {columnItems.map((item) => {
+                  if (item.kind === 'project') {
+                    return (
+                      <ProjectCard
+                        key={item.id}
+                        project={item}
+                        sectionOptions={sectionOptions}
+                        hiddenItems={hiddenItems}
+                        onClick={() => onOpenProject?.(item.projectBoardId)}
+                      />
+                    );
+                  }
+
+                  const task = item;
                   const showInlineSubtasks = task.subtaskCount > 0 && !task.subtasksBreakoutEnabled;
                   const openSubtasksSheet = task.subtaskCount > 0 && task.subtasksBreakoutEnabled;
                   const isSubtaskOnlyParent = task.id === subtaskOnlyParentId;
@@ -403,7 +423,9 @@ export function KanbanBoardView({
                         onClick={(e) => {
                           if (isFadedBySubtaskOnlyMode) return;
                           if (isMultiSelectMode || e.shiftKey) {
-                            const columnTaskIds = columnTasks.map((t) => t.id);
+                            const columnTaskIds = columnItems
+                              .filter((columnItem) => columnItem.kind === 'task')
+                              .map((columnItem) => columnItem.id);
                             onTaskMultiSelect?.(task.id, e.shiftKey, columnTaskIds);
                           } else {
                             openTaskModal(task.id);
@@ -473,7 +495,7 @@ export function KanbanBoardView({
         onConfirm={(completeSubtasks) => {
           const pending = pendingDnDRef.current;
           if (pending) {
-            updateTaskPositions.mutate(pending.updates);
+            updateBoardItemPositions.mutate(pending.updates);
             if (completeSubtasks) {
               updateTask.mutate({ id: pending.taskId, completeSubtasks: true });
             }
