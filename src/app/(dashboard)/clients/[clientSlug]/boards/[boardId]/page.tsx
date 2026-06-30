@@ -82,6 +82,11 @@ export default async function BoardPage({ params }: Props) {
         podName={board.client?.podName}
         accountTeam={board.client?.accountTeam ?? []}
         accountServices={board.client?.accountServices ?? []}
+        parentBoard={board.projectCard ? {
+          id: board.projectCard.parentBoardId,
+          name: board.projectCard.parentBoardName,
+          clientSlug: board.projectCard.parentBoardClientSlug,
+        } : null}
       />
 
       {/* Board Content */}
@@ -89,6 +94,7 @@ export default async function BoardPage({ params }: Props) {
         boardId={boardId}
         boardName={board.name}
         clientSlug={clientSlug}
+        boardType={board.type}
         statusOptions={board.statusOptions}
         sectionOptions={board.sectionOptions}
       />

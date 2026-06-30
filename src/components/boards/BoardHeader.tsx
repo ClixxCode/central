@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Settings, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/shared/FavoriteButton';
 import { PULSE_BASE_URL } from '@/lib/ui/account-status';
@@ -28,6 +28,11 @@ interface BoardHeaderProps {
   podName?: string | null;
   accountTeam?: AccountTeamMember[];
   accountServices?: string[];
+  parentBoard?: {
+    id: string;
+    name: string;
+    clientSlug?: string | null;
+  } | null;
 }
 
 // Lifecycle status → pill styling. Falls back to neutral for unknown values.
@@ -94,15 +99,29 @@ export function BoardHeader({
   podName,
   accountTeam = [],
   accountServices = [],
+  parentBoard,
 }: BoardHeaderProps) {
   const management = accountTeam.filter((m) => m.group === 'management');
   const delivery = accountTeam.filter((m) => m.group === 'delivery');
+  const parentHref =
+    parentBoard && (parentBoard.clientSlug ?? clientSlug)
+      ? `/clients/${parentBoard.clientSlug ?? clientSlug}/boards/${parentBoard.id}`
+      : null;
 
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{boardName}</h1>
+          {parentHref && (
+            <Link
+              href={parentHref}
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline"
+            >
+              <ArrowLeft className="size-3.5" />
+              {parentBoard?.name}
+            </Link>
+          )}
           {accountStatus && (
             <Pill label={titleCase(accountStatus)} className={STATUS_STYLES[accountStatus]} />
           )}

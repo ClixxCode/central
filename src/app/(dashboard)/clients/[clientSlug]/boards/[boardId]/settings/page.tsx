@@ -35,6 +35,7 @@ export default async function SettingsPage({ params }: Props) {
       clientSlug={clientSlug}
       initialData={result.data}
       isAdmin={isAdmin}
+      canEdit={canEdit}
     />
   );
 }

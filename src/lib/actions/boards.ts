@@ -39,6 +39,7 @@ export interface BoardAccessEntry {
 export interface BoardWithAccess {
   id: string;
   name: string;
+  description: string | null;
   type: 'standard' | 'rollup' | 'personal' | 'project';
   clientId: string | null;
   color: string | null;
@@ -60,6 +61,12 @@ export interface BoardWithAccess {
     accountServices: string[];
   } | null;
   access: BoardAccessEntry[];
+  projectCard: {
+    id: string;
+    parentBoardId: string;
+    parentBoardName: string;
+    parentBoardClientSlug: string | null;
+  } | null;
 }
 
 export interface BoardSummary {
@@ -237,6 +244,19 @@ export async function getBoard(boardId: string): Promise<ActionResult<BoardWithA
             accountServices: true,
           },
         },
+        projectCard: {
+          columns: { id: true, parentBoardId: true },
+          with: {
+            parentBoard: {
+              columns: { id: true, name: true },
+              with: {
+                client: {
+                  columns: { slug: true },
+                },
+              },
+            },
+          },
+        },
         access: {
           with: {
             user: {
@@ -259,6 +279,7 @@ export async function getBoard(boardId: string): Promise<ActionResult<BoardWithA
       data: {
         id: board.id,
         name: board.name,
+        description: board.description ?? null,
         type: board.type,
         clientId: board.clientId,
         color: board.color ?? null,
@@ -268,6 +289,14 @@ export async function getBoard(boardId: string): Promise<ActionResult<BoardWithA
         createdBy: board.createdBy,
         createdAt: board.createdAt,
         client: board.client,
+        projectCard: board.projectCard
+          ? {
+              id: board.projectCard.id,
+              parentBoardId: board.projectCard.parentBoardId,
+              parentBoardName: board.projectCard.parentBoard.name,
+              parentBoardClientSlug: board.projectCard.parentBoard.client?.slug ?? null,
+            }
+          : null,
         access: board.access.map((a) => ({
           id: a.id,
           userId: a.userId,
@@ -361,6 +390,7 @@ export async function createBoard(input: CreateBoardInput): Promise<ActionResult
       data: {
         id: newBoard.id,
         name: newBoard.name,
+        description: newBoard.description ?? null,
         type: newBoard.type,
         clientId: newBoard.clientId,
         color: newBoard.color ?? null,
@@ -382,6 +412,7 @@ export async function createBoard(input: CreateBoardInput): Promise<ActionResult
           accountServices: [],
         },
         access: [],
+        projectCard: null,
       },
     };
   } catch (error) {
@@ -441,6 +472,19 @@ export async function updateBoard(
             accountServices: true,
           },
         },
+        projectCard: {
+          columns: { id: true, parentBoardId: true },
+          with: {
+            parentBoard: {
+              columns: { id: true, name: true },
+              with: {
+                client: {
+                  columns: { slug: true },
+                },
+              },
+            },
+          },
+        },
         access: {
           with: {
             user: {
@@ -481,6 +525,7 @@ export async function updateBoard(
       data: {
         id: updatedBoard.id,
         name: updatedBoard.name,
+        description: updatedBoard.description ?? null,
         type: updatedBoard.type,
         clientId: updatedBoard.clientId,
         color: updatedBoard.color ?? null,
@@ -490,6 +535,14 @@ export async function updateBoard(
         createdBy: updatedBoard.createdBy,
         createdAt: updatedBoard.createdAt,
         client: existingBoard.client,
+        projectCard: existingBoard.projectCard
+          ? {
+              id: existingBoard.projectCard.id,
+              parentBoardId: existingBoard.projectCard.parentBoardId,
+              parentBoardName: existingBoard.projectCard.parentBoard.name,
+              parentBoardClientSlug: existingBoard.projectCard.parentBoard.client?.slug ?? null,
+            }
+          : null,
         access: existingBoard.access.map((a) => ({
           id: a.id,
           userId: a.userId,
@@ -845,6 +898,7 @@ export async function getOrCreatePersonalBoard(): Promise<ActionResult<BoardWith
         data: {
           id: existing.id,
           name: existing.name,
+          description: existing.description ?? null,
           type: existing.type,
           clientId: existing.clientId,
           color: existing.color ?? null,
@@ -854,6 +908,7 @@ export async function getOrCreatePersonalBoard(): Promise<ActionResult<BoardWith
           createdBy: existing.createdBy,
           createdAt: existing.createdAt,
           client: existing.client,
+          projectCard: null,
           access: existing.access.map((a) => ({
             id: a.id,
             userId: a.userId,
@@ -915,6 +970,7 @@ export async function getOrCreatePersonalBoard(): Promise<ActionResult<BoardWith
       data: {
         id: newBoard.id,
         name: newBoard.name,
+        description: newBoard.description ?? null,
         type: newBoard.type,
         clientId: null,
         color: newBoard.color ?? null,
@@ -925,6 +981,7 @@ export async function getOrCreatePersonalBoard(): Promise<ActionResult<BoardWith
         createdAt: newBoard.createdAt,
         client: null,
         access: [],
+        projectCard: null,
       },
     };
   } catch (error) {
@@ -980,6 +1037,7 @@ export async function updatePersonalBoard(input: UpdateBoardInput): Promise<Acti
       data: {
         id: updatedBoard.id,
         name: updatedBoard.name,
+        description: updatedBoard.description ?? null,
         type: updatedBoard.type,
         clientId: null,
         color: updatedBoard.color ?? null,
@@ -990,6 +1048,7 @@ export async function updatePersonalBoard(input: UpdateBoardInput): Promise<Acti
         createdAt: updatedBoard.createdAt,
         client: null,
         access: [],
+        projectCard: null,
       },
     };
   } catch (error) {

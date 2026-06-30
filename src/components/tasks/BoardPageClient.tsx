@@ -47,6 +47,7 @@ interface BoardPageClientProps {
   boardId: string;
   boardName: string;
   clientSlug: string;
+  boardType?: 'standard' | 'rollup' | 'personal' | 'project';
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
 }
@@ -54,6 +55,7 @@ interface BoardPageClientProps {
 export function BoardPageClient({
   boardId,
   clientSlug,
+  boardType = 'standard',
   statusOptions,
   sectionOptions,
 }: BoardPageClientProps) {
@@ -403,6 +405,7 @@ export function BoardPageClient({
   }, [swimlaneCardItems]);
 
   const isLoading = isLoadingBoardItems || isLoadingUsers;
+  const canCreateProjects = boardType !== 'project' && boardType !== 'personal';
 
   return (
     <div className="space-y-4">
@@ -494,10 +497,12 @@ export function BoardPageClient({
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          <Button onClick={() => setIsCreateProjectOpen(true)} size="sm" variant="outline">
-            <FolderPlus className="mr-1 size-4" />
-            New Project
-          </Button>
+          {canCreateProjects && (
+            <Button onClick={() => setIsCreateProjectOpen(true)} size="sm" variant="outline">
+              <FolderPlus className="mr-1 size-4" />
+              New Project
+            </Button>
+          )}
           <Button onClick={() => setIsCreateModalOpen(true)} size="sm">
             <Plus className="mr-1 size-4" />
             New Task
@@ -589,14 +594,16 @@ export function BoardPageClient({
         mode="create"
       />
 
-      <CreateProjectDialog
-        open={isCreateProjectOpen}
-        onOpenChange={setIsCreateProjectOpen}
-        boardId={boardId}
-        clientSlug={clientSlug}
-        statusOptions={statusOptions}
-        sectionOptions={sectionOptions}
-      />
+      {canCreateProjects && (
+        <CreateProjectDialog
+          open={isCreateProjectOpen}
+          onOpenChange={setIsCreateProjectOpen}
+          boardId={boardId}
+          clientSlug={clientSlug}
+          statusOptions={statusOptions}
+          sectionOptions={sectionOptions}
+        />
+      )}
 
       {/* Task Detail Modal (for table view and URL-based opening) */}
       <TaskModal

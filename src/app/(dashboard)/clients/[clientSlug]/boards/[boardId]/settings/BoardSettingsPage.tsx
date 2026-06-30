@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, Info, LayoutTemplate } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ interface BoardSettingsPageProps {
   clientSlug: string;
   initialData: BoardWithAccess;
   isAdmin: boolean;
+  canEdit: boolean;
 }
 
 export function BoardSettingsPage({
@@ -30,6 +31,7 @@ export function BoardSettingsPage({
   clientSlug,
   initialData,
   isAdmin,
+  canEdit,
 }: BoardSettingsPageProps) {
   const router = useRouter();
   const { data: board } = useBoard(boardId);
@@ -38,6 +40,11 @@ export function BoardSettingsPage({
   const { data: tasks } = useTasks(boardId);
 
   const displayBoard = board ?? initialData;
+  const isProjectBoard = displayBoard.type === 'project';
+  const parentBoard = displayBoard.projectCard;
+  const parentBoardHref = parentBoard
+    ? `/clients/${parentBoard.parentBoardClientSlug ?? clientSlug}/boards/${parentBoard.parentBoardId}`
+    : null;
 
   const [name, setName] = useState(displayBoard.name);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -94,7 +101,9 @@ export function BoardSettingsPage({
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Board Settings</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {isProjectBoard ? 'Project Settings' : 'Board Settings'}
+        </h1>
         <Link
           href={`/clients/${clientSlug}`}
           className="text-sm text-muted-foreground hover:text-foreground mt-1 inline-block"
@@ -104,21 +113,43 @@ export function BoardSettingsPage({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue={isAdmin ? 'general' : 'activity'}>
+      <Tabs defaultValue={canEdit ? 'general' : 'activity'}>
         <TabsList>
-          {isAdmin && <TabsTrigger value="general">General</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="access">Access</TabsTrigger>}
+          {canEdit && <TabsTrigger value="general">General</TabsTrigger>}
+          {isAdmin && !isProjectBoard && <TabsTrigger value="access">Access</TabsTrigger>}
           <TabsTrigger value="activity">Activity Log</TabsTrigger>
           {isAdmin && <TabsTrigger value="archived">Archived Tasks</TabsTrigger>}
         </TabsList>
 
-        {/* General Tab (Admin only) */}
-        {isAdmin && <TabsContent value="general" className="mt-6 space-y-6">
+        {/* General Tab */}
+        {canEdit && <TabsContent value="general" className="mt-6 space-y-6">
+          {isProjectBoard && parentBoard && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Info className="size-4" />
+                  Project Board
+                </CardTitle>
+                <CardDescription>
+                  This board appears as a project card on{' '}
+                  {parentBoardHref ? (
+                    <Link href={parentBoardHref} className="font-medium text-foreground hover:underline">
+                      {parentBoard.parentBoardName}
+                    </Link>
+                  ) : (
+                    parentBoard.parentBoardName
+                  )}
+                  . Access is inherited from the parent board.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
-              <CardTitle>Board Name</CardTitle>
+              <CardTitle>{isProjectBoard ? 'Project Name' : 'Board Name'}</CardTitle>
               <CardDescription>
-                Change the name of this board.
+                Change the name of this {isProjectBoard ? 'project board' : 'board'}.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -147,7 +178,7 @@ export function BoardSettingsPage({
             <CardHeader>
               <CardTitle>Status Options</CardTitle>
               <CardDescription>
-                Configure the workflow statuses for tasks on this board. Drag to reorder.
+                Configure the workflow statuses for tasks on this {isProjectBoard ? 'project board' : 'board'}. Drag to reorder.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -163,7 +194,7 @@ export function BoardSettingsPage({
             <CardHeader>
               <CardTitle>Section Options</CardTitle>
               <CardDescription>
-                Add sections to organize tasks into groups (e.g., by project or category).
+                Add sections to organize tasks into groups.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -175,50 +206,58 @@ export function BoardSettingsPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Save as Template</CardTitle>
-              <CardDescription>
-                Create a reusable template from this board&apos;s configuration and tasks.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" onClick={() => setSaveAsTemplateOpen(true)}>
-                <LayoutTemplate className="mr-2 size-4" />
-                Save as Template
-              </Button>
-            </CardContent>
-          </Card>
+          {isAdmin && !isProjectBoard && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Save as Template</CardTitle>
+                  <CardDescription>
+                    Create a reusable template from this board&apos;s configuration and tasks.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button variant="outline" onClick={() => setSaveAsTemplateOpen(true)}>
+                    <LayoutTemplate className="mr-2 size-4" />
+                    Save as Template
+                  </Button>
+                </CardContent>
+              </Card>
 
-          <SaveBoardAsTemplateDialog
-            open={saveAsTemplateOpen}
-            onOpenChange={setSaveAsTemplateOpen}
-            boardId={boardId}
-            boardName={displayBoard.name}
-            taskCount={tasks?.length}
-          />
+              <SaveBoardAsTemplateDialog
+                open={saveAsTemplateOpen}
+                onOpenChange={setSaveAsTemplateOpen}
+                boardId={boardId}
+                boardName={displayBoard.name}
+                taskCount={tasks?.length}
+              />
+            </>
+          )}
 
-          <Card className="border-destructive bg-destructive/10">
-            <CardHeader>
-              <CardTitle>Delete Board</CardTitle>
-              <CardDescription>
-                Permanently delete this board and all of its tasks, comments, and attachments.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-                Delete Board
-              </Button>
-            </CardContent>
-          </Card>
+          {isAdmin && !isProjectBoard && (
+            <>
+              <Card className="border-destructive bg-destructive/10">
+                <CardHeader>
+                  <CardTitle>Delete Board</CardTitle>
+                  <CardDescription>
+                    Permanently delete this board and all of its tasks, comments, and attachments.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                    Delete Board
+                  </Button>
+                </CardContent>
+              </Card>
 
-          <DeleteBoardDialog
-            open={deleteOpen}
-            onOpenChange={setDeleteOpen}
-            board={displayBoard}
-            onConfirm={handleDeleteBoard}
-            isPending={deleteBoard.isPending}
-          />
+              <DeleteBoardDialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                board={displayBoard}
+                onConfirm={handleDeleteBoard}
+                isPending={deleteBoard.isPending}
+              />
+            </>
+          )}
         </TabsContent>}
 
         {/* Activity Log Tab */}
@@ -237,7 +276,7 @@ export function BoardSettingsPage({
         </TabsContent>
 
         {/* Access Tab (Admin only) */}
-        {isAdmin && (
+        {isAdmin && !isProjectBoard && (
           <TabsContent value="access" className="mt-6">
             <Card>
               <CardHeader>
