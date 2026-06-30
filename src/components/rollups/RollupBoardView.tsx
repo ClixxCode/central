@@ -17,7 +17,7 @@ import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useUpdateTask, useUpdateTaskPositions, useDeleteTask, useTask } from '@/lib/hooks/useTasks';
-import type { RollupTaskWithAssignees, RollupBoardWithSources } from '@/lib/actions/rollups';
+import type { RollupBoardItem, RollupTaskWithAssignees, RollupBoardWithSources } from '@/lib/actions/rollups';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from '@/components/tasks/AssigneePicker';
 import { ExpandedSubtasks } from '@/components/tasks/ExpandedSubtasks';
@@ -38,12 +38,12 @@ interface BoardGroup {
   accountStatus: string | null;
   accountTeam: RollupTaskWithAssignees['accountTeam'];
   accountServices: string[];
-  tasks: RollupTaskWithAssignees[];
+  tasks: RollupBoardItem[];
 }
 
 interface RollupBoardViewProps {
   rollupBoard: RollupBoardWithSources;
-  tasks: RollupTaskWithAssignees[];
+  tasks: RollupBoardItem[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
@@ -101,10 +101,10 @@ export function RollupBoardView({
           clientSlug: task.clientSlug ?? '',
           clientColor: task.clientColor ?? null,
           clientIcon: task.clientIcon ?? null,
-          pulseAccountId: task.pulseAccountId ?? null,
-          accountStatus: task.accountStatus ?? null,
-          accountTeam: task.accountTeam ?? [],
-          accountServices: task.accountServices ?? [],
+          pulseAccountId: 'pulseAccountId' in task ? task.pulseAccountId ?? null : null,
+          accountStatus: 'accountStatus' in task ? task.accountStatus ?? null : null,
+          accountTeam: 'accountTeam' in task ? task.accountTeam ?? [] : [],
+          accountServices: 'accountServices' in task ? task.accountServices ?? [] : [],
           tasks: [task],
         });
       }
@@ -183,7 +183,7 @@ export function RollupBoardView({
 
   // Group tasks by status (for kanban view)
   const tasksByStatus = React.useMemo(() => {
-    const grouped: Record<string, RollupTaskWithAssignees[]> = {};
+    const grouped: Record<string, RollupBoardItem[]> = {};
 
     // Initialize all statuses
     statusOptions.forEach((status) => {
@@ -216,7 +216,7 @@ export function RollupBoardView({
 
   // Get selected task for modal — check rollup tasks first, then fetch individually (for subtasks)
   const rollupTask = React.useMemo(
-    () => tasks.find((t) => t.id === selectedTaskId),
+    () => tasks.find((t): t is RollupTaskWithAssignees => t.kind === 'task' && t.id === selectedTaskId),
     [tasks, selectedTaskId]
   );
   const { data: fetchedTask } = useTask(selectedTaskId ?? '', {
@@ -232,11 +232,25 @@ export function RollupBoardView({
 
   // Navigate to source board
   const navigateToSourceBoard = React.useCallback(
-    (task: RollupTaskWithAssignees | TableTask) => {
+    (task: RollupBoardItem | TableTask) => {
       const clientSlug = 'clientSlug' in task ? task.clientSlug : undefined;
       if (clientSlug) {
-        router.push(`/clients/${clientSlug}/boards/${task.boardId}`);
+        const boardId = 'kind' in task && task.kind === 'project' ? task.projectBoardId : task.boardId;
+        router.push(`/clients/${clientSlug}/boards/${boardId}`);
       }
+    },
+    [router]
+  );
+
+  const handleItemClick = React.useCallback(
+    (item: RollupBoardItem) => {
+      if (item.kind === 'project') {
+        if (item.clientSlug) {
+          router.push(`/clients/${item.clientSlug}/boards/${item.projectBoardId}`);
+        }
+        return;
+      }
+      setSelectedTaskId(item.id);
     },
     [router]
   );
@@ -291,7 +305,10 @@ export function RollupBoardView({
           tasks={sortedTasks as TableTask[]}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
-          onTaskClick={setSelectedTaskId}
+          onTaskClick={(itemId) => {
+            const item = sortedTasks.find((task) => task.id === itemId);
+            if (item) handleItemClick(item);
+          }}
           onNavigateToSource={navigateToSourceBoard}
           sort={tableSort}
           onSortChange={setTableSort}
@@ -338,7 +355,10 @@ export function RollupBoardView({
                 statusOptions={statusOptions}
                 sectionOptions={sectionOptions}
                 assignableUsers={assignableUsers}
-                onTaskClick={setSelectedTaskId}
+                onTaskClick={(itemId) => {
+                  const item = columnTasks.find((task) => task.id === itemId);
+                  if (item) handleItemClick(item);
+                }}
                 onNavigateToSource={navigateToSourceBoard}
                 hiddenCardItems={hiddenCardItems}
                 selectedTaskIds={selectedTaskIds}
@@ -401,7 +421,10 @@ export function RollupBoardView({
                     assignableUsers={assignableUsers}
                     isCollapsed={reviewMode ? false : isCollapsed}
                     onToggleCollapse={() => toggleSwimlane(rollupBoard.id, group.boardId)}
-                    onTaskClick={setSelectedTaskId}
+                    onTaskClick={(itemId) => {
+                      const item = group.tasks.find((task) => task.id === itemId);
+                      if (item) handleItemClick(item);
+                    }}
                     onNavigateToBoard={() => {
                       if (group.clientSlug) {
                         router.push(`/clients/${group.clientSlug}/boards/${group.boardId}`);
@@ -514,7 +537,7 @@ function RollupBoardSwimlane({
 
   // Group tasks by status within this board, sorted by position
   const tasksByStatus = React.useMemo(() => {
-    const grouped: Record<string, RollupTaskWithAssignees[]> = {};
+    const grouped: Record<string, RollupBoardItem[]> = {};
     statusOptions.forEach((status) => {
       grouped[status.id] = [];
     });
@@ -539,12 +562,12 @@ function RollupBoardSwimlane({
       const overId = over.id as string;
 
       // Find the task being dragged
-      const activeTask = group.tasks.find((t) => t.id === activeId);
+      const activeTask = group.tasks.find((t) => t.kind === 'task' && t.id === activeId);
       if (!activeTask) return;
 
       // Determine target status - could be dropping on a status column or on another task
       let targetStatus = overId;
-      const overTask = group.tasks.find((t) => t.id === overId);
+      const overTask = group.tasks.find((t) => t.kind === 'task' && t.id === overId);
       if (overTask) {
         targetStatus = overTask.status;
       }
@@ -697,7 +720,10 @@ function RollupBoardSwimlane({
           <div className="flex gap-2 overflow-x-auto p-4">
             {statusOptions.map((status) => {
               const columnTasks = tasksByStatus[status.id] || [];
-              const taskIds = columnTasks.map((t) => t.id);
+              const itemIds = columnTasks.map((item) => item.id);
+              const taskIds = columnTasks
+                .filter((item): item is RollupTaskWithAssignees => item.kind === 'task')
+                .map((task) => task.id);
 
               return (
                 <div
@@ -720,7 +746,7 @@ function RollupBoardSwimlane({
                   {/* Tasks - scrollable with max height for ~5 cards */}
                   <DroppableContainer
                     id={status.id}
-                    items={taskIds}
+                    items={itemIds}
                     className={cn("overflow-y-auto p-2 min-h-[100px]", reviewMode && "min-h-[calc(100vh-14rem)]")}
                   >
                     <div
@@ -740,21 +766,21 @@ function RollupBoardSwimlane({
                                 sectionOptions={sectionOptions}
                                 assignableUsers={assignableUsers}
                                 onClick={(e: React.MouseEvent) => {
-                                  if (isMultiSelectMode || e.shiftKey) {
+                                  if (task.kind === 'task' && (isMultiSelectMode || e.shiftKey)) {
                                     onTaskMultiSelect?.(task.id, e.shiftKey, taskIds);
                                   } else {
                                     onTaskClick(task.id);
                                   }
                                 }}
-                                isSelected={selectedTaskIds?.has(task.id)}
+                                isSelected={task.kind === 'task' && selectedTaskIds?.has(task.id)}
                                 showClientBadge={false}
                                 variant="kanban"
-                                onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
+                                onToggleSubtasks={task.kind === 'task' && task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                                 isExpanded={expandedParents.has(task.id)}
                                 hiddenItems={hiddenCardItems}
                               />
                             </SortableTask>
-                            {expandedParents.has(task.id) && (
+                            {task.kind === 'task' && expandedParents.has(task.id) && (
                               <ExpandedSubtasks
                                 parentTaskId={task.id}
                                 statusOptions={statusOptions}
@@ -873,12 +899,12 @@ function ReviewFloatingBar({
 // Rollup Kanban Column Component
 interface RollupKanbanColumnProps {
   status: StatusOption;
-  tasks: RollupTaskWithAssignees[];
+  tasks: RollupBoardItem[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
   onTaskClick: (taskId: string) => void;
-  onNavigateToSource: (task: RollupTaskWithAssignees) => void;
+  onNavigateToSource: (task: RollupBoardItem) => void;
   hiddenCardItems?: Set<string>;
   selectedTaskIds?: Set<string>;
   isMultiSelectMode?: boolean;
@@ -934,7 +960,9 @@ function RollupKanbanColumn({
             </p>
           ) : (
             tasks.map((task) => {
-              const columnTaskIds = tasks.map((t) => t.id);
+              const columnTaskIds = tasks
+                .filter((item): item is RollupTaskWithAssignees => item.kind === 'task')
+                .map((item) => item.id);
               return (
               <React.Fragment key={task.id}>
                 <RollupTaskCard
@@ -942,20 +970,20 @@ function RollupKanbanColumn({
                   sectionOptions={sectionOptions}
                   assignableUsers={assignableUsers}
                   onClick={(e: React.MouseEvent) => {
-                    if (isMultiSelectMode || e.shiftKey) {
+                    if (task.kind === 'task' && (isMultiSelectMode || e.shiftKey)) {
                       onTaskMultiSelect?.(task.id, e.shiftKey, columnTaskIds);
                     } else {
                       onTaskClick(task.id);
                     }
                   }}
-                  isSelected={selectedTaskIds?.has(task.id)}
+                  isSelected={task.kind === 'task' && selectedTaskIds?.has(task.id)}
                   onNavigateToSource={() => onNavigateToSource(task)}
                   variant="kanban"
-                  onToggleSubtasks={task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
+                  onToggleSubtasks={task.kind === 'task' && task.subtaskCount > 0 ? () => toggleExpanded(task.id) : undefined}
                   isExpanded={expandedParents.has(task.id)}
                   hiddenItems={hiddenCardItems}
                 />
-                {expandedParents.has(task.id) && (
+                {task.kind === 'task' && expandedParents.has(task.id) && (
                   <ExpandedSubtasks
                     parentTaskId={task.id}
                     statusOptions={statusOptions}

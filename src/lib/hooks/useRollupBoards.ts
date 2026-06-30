@@ -15,7 +15,6 @@ import {
   updateRollupRule,
   type RollupBoardSummary,
   type RollupBoardWithSources,
-  type RollupTaskWithAssignees,
 } from '@/lib/actions/rollups';
 import type {
   CreateRollupBoardInput,
@@ -24,7 +23,6 @@ import type {
   UpdateRollupRuleInput,
 } from '@/lib/validations/rollup';
 import type { TaskFilters, TaskSortOptions } from '@/lib/actions/tasks';
-import type { StatusOption, SectionOption } from '@/lib/db/schema';
 
 // Query Keys
 export const rollupKeys = {

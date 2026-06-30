@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, ExternalLink, Plus, Clock, CalendarCheck, CalendarDays, Calendar, CalendarOff } from 'lucide-react';
-import { format, parseISO, startOfWeek, endOfWeek, addWeeks } from 'date-fns';
+import { format, endOfWeek, addWeeks } from 'date-fns';
 import { TaskModal } from './TaskModal';
 import { RollupTaskCard } from '@/components/rollups/RollupTaskCard';
 import { TaskTable, type TableTask } from '@/components/shared/TaskTable';
@@ -611,6 +611,7 @@ function MyWorkBoardSwimlane({
         <div className="opacity-90">
           <RollupTaskCard
             task={{
+              kind: 'task',
               ...task,
               boardId: task.board.id,
               boardName: task.board.name,
@@ -732,6 +733,7 @@ function MyWorkBoardSwimlane({
                             <SortableTask id={task.id}>
                               <RollupTaskCard
                                 task={{
+                                  kind: 'task',
                                   ...task,
                                   boardId: task.board.id,
                                   boardName: task.board.name,

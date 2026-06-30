@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import {
   boards,
+  boardProjects,
   clients,
   rollupSources,
   rollupOwners,
@@ -67,6 +68,7 @@ export interface RollupBoardWithSources {
 }
 
 export interface RollupTaskWithAssignees {
+  kind: 'task';
   id: string;
   shortId: string | null;
   boardId: string;
@@ -113,6 +115,42 @@ export interface RollupTaskWithAssignees {
   archivedAt: Date | null;
 }
 
+export interface RollupProjectBoardItem {
+  kind: 'project';
+  id: string;
+  boardId: string;
+  boardName: string;
+  clientId: string | null;
+  clientName: string | null;
+  clientSlug: string | null;
+  clientColor: string | null;
+  clientIcon: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  section: string | null;
+  dueDate: string | null;
+  position: number;
+  createdAt: Date;
+  updatedAt: Date;
+  archivedAt: Date | null;
+  projectBoardId: string;
+  parentBoardId: string;
+  taskCount: number;
+  completedTaskCount: number;
+  internalStatusOptions: StatusOption[];
+  internalSectionOptions: SectionOption[];
+  assignees: {
+    id: string;
+    email: string;
+    name: string | null;
+    avatarUrl: string | null;
+    deactivatedAt: Date | null;
+  }[];
+}
+
+export type RollupBoardItem = RollupTaskWithAssignees | RollupProjectBoardItem;
+
 export interface ActionResult<T = void> {
   success: boolean;
   error?: string;
@@ -121,6 +159,18 @@ export interface ActionResult<T = void> {
 
 // Helper: Get user's access level for a board
 type AccessLevel = BoardAccessLevel;
+
+function getCompleteStatusIds(statusOptions: StatusOption[]): string[] {
+  return statusOptions
+    .filter(
+      (status) =>
+        status.id === 'complete' ||
+        status.id === 'done' ||
+        status.label.toLowerCase().includes('complete') ||
+        status.label.toLowerCase().includes('done')
+    )
+    .map((status) => status.id);
+}
 
 /**
  * Get rollup IDs a non-contractor user has access to via ownership or invitations.
@@ -684,7 +734,7 @@ export async function getRollupTasks(
   filters?: TaskFilters,
   sort?: TaskSortOptions
 ): Promise<ActionResult<{
-  tasks: RollupTaskWithAssignees[];
+  tasks: RollupBoardItem[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
 }>> {
@@ -1088,9 +1138,156 @@ export async function getRollupTasks(
           accountStatus: s.sourceBoard.client?.accountStatus ?? null,
           accountTeam: s.sourceBoard.client?.accountTeam ?? [],
           accountServices: s.sourceBoard.client?.accountServices ?? [],
+          statusOptions: (s.sourceBoard as { statusOptions?: StatusOption[] }).statusOptions ?? [],
         },
       ])
     );
+
+    const projectRows = await db
+      .select({
+        id: boardProjects.id,
+        parentBoardId: boardProjects.parentBoardId,
+        projectBoardId: boardProjects.projectBoardId,
+        status: boardProjects.status,
+        section: boardProjects.section,
+        dueDate: boardProjects.dueDate,
+        position: boardProjects.position,
+        createdAt: boardProjects.createdAt,
+        updatedAt: boardProjects.updatedAt,
+        archivedAt: boardProjects.archivedAt,
+        title: boards.name,
+        description: boards.description,
+        clientId: boards.clientId,
+        color: boards.color,
+        icon: boards.icon,
+        internalStatusOptions: boards.statusOptions,
+        internalSectionOptions: boards.sectionOptions,
+      })
+      .from(boardProjects)
+      .innerJoin(boards, eq(boards.id, boardProjects.projectBoardId))
+      .where(and(inArray(boardProjects.parentBoardId, sourceBoardIds), isNull(boardProjects.archivedAt)));
+
+    const projectBoardIds = projectRows.map((project) => project.projectBoardId);
+    const projectTaskCounts =
+      projectBoardIds.length > 0
+        ? await db
+            .select({
+              boardId: tasks.boardId,
+              status: tasks.status,
+              count: sql<number>`COUNT(*)::int`,
+            })
+            .from(tasks)
+            .where(and(inArray(tasks.boardId, projectBoardIds), isNull(tasks.archivedAt)))
+            .groupBy(tasks.boardId, tasks.status)
+        : [];
+
+    const countsByProjectBoard = new Map<string, { total: number; byStatus: Map<string, number> }>();
+    for (const countRow of projectTaskCounts) {
+      const existing = countsByProjectBoard.get(countRow.boardId) ?? {
+        total: 0,
+        byStatus: new Map<string, number>(),
+      };
+      existing.total += countRow.count;
+      existing.byStatus.set(countRow.status, countRow.count);
+      countsByProjectBoard.set(countRow.boardId, existing);
+    }
+
+    const todayStr = filters?.overdue
+      ? getOrgToday((await getSiteSettings()).data?.timezone)
+      : undefined;
+
+    const projectItems: RollupProjectBoardItem[] = projectRows
+      .filter((project) => accessLevels.get(project.parentBoardId) === 'full')
+      .map((project) => {
+        const boardInfo = boardLookup.get(project.parentBoardId)!;
+        const counts = countsByProjectBoard.get(project.projectBoardId);
+        const completeStatusIds = getCompleteStatusIds(project.internalStatusOptions);
+        const completedTaskCount = completeStatusIds.reduce(
+          (total, statusId) => total + (counts?.byStatus.get(statusId) ?? 0),
+          0
+        );
+
+        return {
+          kind: 'project' as const,
+          id: project.id,
+          boardId: project.parentBoardId,
+          boardName: boardInfo.boardName,
+          clientId: boardInfo.clientId,
+          clientName: boardInfo.clientName,
+          clientSlug: boardInfo.clientSlug,
+          clientColor: boardInfo.clientColor,
+          clientIcon: boardInfo.clientIcon,
+          title: project.title,
+          description: project.description ?? null,
+          status: project.status,
+          section: project.section,
+          dueDate: project.dueDate,
+          position: project.position,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+          archivedAt: project.archivedAt,
+          projectBoardId: project.projectBoardId,
+          parentBoardId: project.parentBoardId,
+          taskCount: counts?.total ?? 0,
+          completedTaskCount,
+          internalStatusOptions: project.internalStatusOptions,
+          internalSectionOptions: project.internalSectionOptions ?? [],
+          assignees: [],
+        };
+      })
+      .filter((project) => {
+        if (filters?.assigneeId) {
+          return filters.assigneeMode === 'is_not';
+        }
+
+        if (filters?.status) {
+          const selectedIds = Array.isArray(filters.status) ? filters.status : [filters.status];
+          const expandedIds = new Set<string>();
+          for (const id of selectedIds) {
+            const label = statusIdToLabel.get(id);
+            if (label) {
+              for (const equivalentId of labelToStatusIds.get(label) ?? []) {
+                expandedIds.add(equivalentId);
+              }
+            } else {
+              expandedIds.add(id);
+            }
+          }
+          const matches = expandedIds.has(project.status);
+          if (filters.statusMode === 'is_not' ? matches : !matches) return false;
+        }
+
+        if (filters?.section) {
+          const sections = Array.isArray(filters.section) ? filters.section : [filters.section];
+          const hasNoSection = sections.includes('__none__');
+          const selectedSections = sections.filter((section) => section !== '__none__');
+          const expandedSectionIds = new Set<string>();
+          for (const id of selectedSections) {
+            const label = sectionIdToLabel.get(id);
+            if (label) {
+              for (const equivalentId of labelToSectionIds.get(label) ?? []) {
+                expandedSectionIds.add(equivalentId);
+              }
+            } else {
+              expandedSectionIds.add(id);
+            }
+          }
+          const matches =
+            (project.section === null && hasNoSection) ||
+            (project.section !== null && expandedSectionIds.has(project.section));
+          if (filters.sectionMode === 'is_not' ? matches : !matches) return false;
+        }
+
+        if (filters?.overdue) {
+          const boardInfo = boardLookup.get(project.parentBoardId);
+          const doneStatusIds = getCompleteStatusIds(boardInfo?.statusOptions ?? []);
+          if (!project.dueDate || !todayStr || project.dueDate >= todayStr || doneStatusIds.includes(project.status)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
 
     // Filter tasks based on access level (assigned_only)
     const filteredTasks = allTasks.filter((task) => {
@@ -1129,6 +1326,7 @@ export async function getRollupTasks(
         : false;
 
       return {
+        kind: 'task',
         id: task.id,
         shortId: task.shortId ?? null,
         boardId: task.boardId,
@@ -1198,18 +1396,45 @@ export async function getRollupTasks(
 
     // Normalize task statuses/sections to canonical IDs so tasks from different boards
     // with the same status label are grouped together in kanban/swimlane views
-    for (const task of resultTasks) {
-      const canonical = canonicalStatusId.get(task.status);
-      if (canonical && canonical !== task.status) {
-        task.status = canonical;
+    const resultItems: RollupBoardItem[] = [...resultTasks, ...projectItems];
+
+    for (const item of resultItems) {
+      const canonical = canonicalStatusId.get(item.status);
+      if (canonical && canonical !== item.status) {
+        item.status = canonical;
       }
-      if (task.section) {
-        const canonicalSec = canonicalSectionId.get(task.section);
-        if (canonicalSec && canonicalSec !== task.section) {
-          task.section = canonicalSec;
+      if (item.section) {
+        const canonicalSec = canonicalSectionId.get(item.section);
+        if (canonicalSec && canonicalSec !== item.section) {
+          item.section = canonicalSec;
         }
       }
     }
+
+    resultItems.sort((a, b) => {
+      const direction = sort?.direction === 'desc' ? -1 : 1;
+      let comparison = 0;
+      switch (sort?.field) {
+        case 'dueDate':
+          comparison = (a.dueDate ?? '').localeCompare(b.dueDate ?? '');
+          break;
+        case 'createdAt':
+          comparison = a.createdAt.getTime() - b.createdAt.getTime();
+          break;
+        case 'title':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case 'position':
+        default:
+          comparison = a.position - b.position;
+          break;
+      }
+      if (comparison !== 0) return comparison * direction;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
 
     // Sort options by position
     const statusOptions = Array.from(statusOptionsMap.values()).sort(
@@ -1222,7 +1447,7 @@ export async function getRollupTasks(
     return {
       success: true,
       data: {
-        tasks: resultTasks,
+        tasks: resultItems,
         statusOptions,
         sectionOptions,
       },

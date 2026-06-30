@@ -1,20 +1,20 @@
 'use client';
 
 import * as React from 'react';
-import { GripVertical, Calendar, ExternalLink, Star, Repeat } from 'lucide-react';
+import { GripVertical, Calendar, ExternalLink, Star, Repeat, FolderKanban, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AssigneeAvatars, type AssigneeUser } from '@/components/tasks/AssigneePicker';
 import { DateDisplay } from '@/components/tasks/DatePicker';
 import { Badge } from '@/components/ui/badge';
 import { SubtaskIndicator } from '@/components/tasks/SubtaskIndicator';
 import { TaskActivityIndicators } from '@/components/tasks/TaskActivityIndicators';
-import type { RollupTaskWithAssignees } from '@/lib/actions/rollups';
+import type { RollupBoardItem } from '@/lib/actions/rollups';
 import type { SectionOption } from '@/lib/db/schema';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { BuildBadge } from '@/components/builds/BuildBadge';
 
 interface RollupTaskCardProps {
-  task: RollupTaskWithAssignees;
+  task: RollupBoardItem;
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
   onClick?: (e: React.MouseEvent) => void;
@@ -33,7 +33,6 @@ interface RollupTaskCardProps {
 export function RollupTaskCard({
   task,
   sectionOptions,
-  assignableUsers,
   onClick,
   onNavigateToSource,
   showClientBadge = true,
@@ -50,11 +49,97 @@ export function RollupTaskCard({
   const showSection = !hiddenItems?.has('section');
   const showDueDate = !hiddenItems?.has('dueDate');
   const showAssignees = !hiddenItems?.has('assignees');
+  const completed = task.kind === 'project' ? task.completedTaskCount : 0;
+  const total = task.kind === 'project' ? task.taskCount : 0;
+  const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   const handleNavigate = (e: React.MouseEvent) => {
     e.stopPropagation();
     onNavigateToSource?.();
   };
+
+  if (task.kind === 'project') {
+    return (
+      <div
+        className={cn(
+          'relative rounded-lg border border-primary/25 bg-primary/[0.03] p-3 shadow-sm transition-all',
+          'hover:border-primary/60 hover:bg-primary/[0.06] hover:shadow-md',
+          onClick && 'cursor-pointer',
+          isSelected && 'ring-2 ring-primary border-primary bg-primary/5'
+        )}
+        onClick={onClick}
+      >
+        <div className="flex items-start gap-2">
+          <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <FolderKanban className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            {showClientBadge && task.clientName && (
+              <Badge
+                variant="outline"
+                className="mb-2 text-xs font-normal"
+                style={
+                  task.clientColor
+                    ? {
+                        backgroundColor: `${task.clientColor}15`,
+                        borderColor: task.clientColor,
+                        color: task.clientColor,
+                      }
+                    : undefined
+                }
+              >
+                <ClientIcon icon={task.clientIcon} color={task.clientColor} size="xs" className="mr-1" />
+                {task.clientName}
+              </Badge>
+            )}
+            {showSection && section && (
+              <span
+                className="mb-1 inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+                style={{ backgroundColor: `${section.color}20`, color: section.color }}
+              >
+                {section.label}
+              </span>
+            )}
+            <p className="truncate text-sm font-semibold leading-tight" title={task.title}>
+              {task.title}
+            </p>
+          </div>
+          {onNavigateToSource && (
+            <button
+              type="button"
+              onClick={handleNavigate}
+              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              title={`Open ${task.title}`}
+            >
+              <ExternalLink className="size-3" />
+            </button>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          {showDueDate && task.dueDate ? (
+            <div className="flex min-w-0 items-center gap-1">
+              <Calendar className="size-3 shrink-0" />
+              <DateDisplay date={task.dueDate} flexibility="not_set" />
+            </div>
+          ) : (
+            <div />
+          )}
+          <div className="flex shrink-0 items-center gap-1">
+            <ListChecks className="size-3" />
+            <span>{completed}/{total}</span>
+          </div>
+        </div>
+
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-[width]"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (variant === 'kanban') {
     return (

@@ -48,6 +48,16 @@ export function RollupPageClient({
     queryKeys: [rollupKeys.tasks()],
     enabled: sourceBoardIds.length > 0,
   });
+  const projectRealtimeFilter = sourceBoardIds.length > 0
+    ? `parent_board_id=in.(${sourceBoardIds.join(',')})`
+    : undefined;
+  useRealtimeInvalidation({
+    channel: `rollup-projects-${rollupBoard.id}`,
+    table: 'board_projects',
+    filter: projectRealtimeFilter,
+    queryKeys: [rollupKeys.tasks()],
+    enabled: sourceBoardIds.length > 0,
+  });
 
   // Filter and sort state
   const [filters, setFilters] = React.useState<TaskFilters>({});
@@ -59,9 +69,9 @@ export function RollupPageClient({
   // Fetch tasks
   const { data, isLoading } = useRollupTasks(rollupBoard.id, filters, sort);
 
-  const tasks = data?.tasks ?? [];
-  const statusOptions = data?.statusOptions ?? [];
-  const sectionOptions = data?.sectionOptions ?? [];
+  const tasks = React.useMemo(() => data?.tasks ?? [], [data?.tasks]);
+  const statusOptions = React.useMemo(() => data?.statusOptions ?? [], [data?.statusOptions]);
+  const sectionOptions = React.useMemo(() => data?.sectionOptions ?? [], [data?.sectionOptions]);
 
   // Compute hidden card items set for swimlane view
   const swimlaneHiddenItems = React.useMemo(() => {
@@ -128,10 +138,18 @@ export function RollupPageClient({
               next.add(orderedTaskIds[i]);
             }
           } else {
-            next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+            if (next.has(taskId)) {
+              next.delete(taskId);
+            } else {
+              next.add(taskId);
+            }
           }
         } else {
-          next.has(taskId) ? next.delete(taskId) : next.add(taskId);
+          if (next.has(taskId)) {
+            next.delete(taskId);
+          } else {
+            next.add(taskId);
+          }
         }
 
         lastSelectedIdRef.current = taskId;
