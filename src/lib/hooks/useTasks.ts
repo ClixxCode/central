@@ -4,21 +4,30 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   listTasks,
+  listBoardItems,
   listSubtasks,
   getTask,
   createTask,
+  createProject,
   updateTask,
+  updateProject,
   deleteTask,
+  deleteProject,
   updateTaskPositions,
+  updateBoardItemPositions,
   getBoardAssignableUsers,
   archiveTask,
+  archiveProject,
   unarchiveTask,
+  unarchiveProject,
   bulkArchiveDone,
   listArchivedTasks,
   bulkUpdateTasks,
   bulkDuplicateTasks,
   bulkDeleteTasks,
   TaskWithAssignees,
+  BoardItem,
+  ProjectBoardItem,
   CreateTaskInput,
   UpdateTaskInput,
   TaskFilters,
@@ -27,6 +36,11 @@ import {
   ArchivedTaskSummary,
   BulkUpdateTasksInput,
 } from '@/lib/actions/tasks';
+import type {
+  CreateBoardProjectInput,
+  UpdateBoardProjectInput,
+  BoardItemPositionUpdateInput,
+} from '@/lib/validations/board-project';
 import posthog from 'posthog-js';
 import { trackEvent } from '@/lib/analytics';
 
@@ -43,6 +57,9 @@ export const taskKeys = {
   lists: () => [...taskKeys.all, 'list'] as const,
   list: (boardId: string, filters?: TaskFilters, sort?: TaskSortOptions) =>
     [...taskKeys.lists(), boardId, { filters, sort }] as const,
+  boardItems: (boardId: string, filters?: TaskFilters, sort?: TaskSortOptions) =>
+    [...taskKeys.all, 'boardItems', boardId, { filters, sort }] as const,
+  boardItemLists: () => [...taskKeys.all, 'boardItems'] as const,
   details: () => [...taskKeys.all, 'detail'] as const,
   detail: (taskId: string) => [...taskKeys.details(), taskId] as const,
   assignableUsers: (boardId: string) =>
@@ -72,6 +89,28 @@ export function useTasks(
       return result.tasks!;
     },
     enabled: options?.enabled ?? true,
+  });
+}
+
+/**
+ * Hook to fetch mixed board items for a parent board.
+ */
+export function useBoardItems(
+  boardId: string,
+  filters?: TaskFilters,
+  sort?: TaskSortOptions,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: taskKeys.boardItems(boardId, filters, sort),
+    queryFn: async () => {
+      const result = await listBoardItems(boardId, filters, sort);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to fetch board items');
+      }
+      return result.items!;
+    },
+    enabled: options?.enabled ?? !!boardId,
   });
 }
 
@@ -189,6 +228,28 @@ export function useCreateTask(boardId: string) {
     },
     onSettled: () => {
       // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
+    },
+  });
+}
+
+export function useCreateProject(parentBoardId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: Omit<CreateBoardProjectInput, 'parentBoardId'>) => {
+      const result = await createProject({ ...input, parentBoardId });
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to create project');
+      }
+      return result.project!;
+    },
+    onSuccess: () => {
+      toast.success('Project created');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
   });
@@ -338,9 +399,69 @@ export function useUpdateTask() {
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(variables.id) });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
       queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
       // Invalidate subtask caches (status changes affect completed counts)
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'subtasks'] });
+    },
+  });
+}
+
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: UpdateBoardProjectInput) => {
+      const result = await updateProject(input);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to update project');
+      }
+      return result.project!;
+    },
+    onMutate: async (updatedProject) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.boardItemLists() });
+      const previousItems = queryClient.getQueriesData<BoardItem[]>({
+        queryKey: taskKeys.boardItemLists(),
+      });
+
+      queryClient.setQueriesData<BoardItem[]>(
+        { queryKey: taskKeys.boardItemLists() },
+        (old) => {
+          if (!old) return old;
+          return old.map((item) => {
+            if (item.kind !== 'project' || item.id !== updatedProject.id) return item;
+            const patch: Partial<ProjectBoardItem> = {
+              ...(updatedProject.name !== undefined && { title: updatedProject.name }),
+              ...(updatedProject.description !== undefined && { description: updatedProject.description }),
+              ...(updatedProject.status !== undefined && { status: updatedProject.status }),
+              ...(updatedProject.section !== undefined && { section: updatedProject.section }),
+              ...(updatedProject.dueDate !== undefined && { dueDate: updatedProject.dueDate }),
+              ...(updatedProject.position !== undefined && { position: updatedProject.position }),
+              ...(updatedProject.internalStatusOptions !== undefined && {
+                internalStatusOptions: updatedProject.internalStatusOptions,
+              }),
+              ...(updatedProject.internalSectionOptions !== undefined && {
+                internalSectionOptions: updatedProject.internalSectionOptions,
+              }),
+              updatedAt: new Date(),
+            };
+            return { ...item, ...patch };
+          });
+        }
+      );
+
+      return { previousItems };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousItems) {
+        for (const [queryKey, data] of context.previousItems) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      toast.error(err.message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
     },
   });
 }
@@ -363,6 +484,7 @@ export function useDeleteTask() {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) });
       await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: taskKeys.boardItemLists() });
       await queryClient.cancelQueries({ queryKey: ['myTasks'] });
       await queryClient.cancelQueries({ queryKey: ['rollups', 'tasks'] });
       await queryClient.cancelQueries({ queryKey: [...taskKeys.all, 'archived'] });
@@ -373,6 +495,9 @@ export function useDeleteTask() {
       );
       const previousTasks = queryClient.getQueriesData<TaskWithAssignees[]>({
         queryKey: taskKeys.lists(),
+      });
+      const previousBoardItems = queryClient.getQueriesData<BoardItem[]>({
+        queryKey: taskKeys.boardItemLists(),
       });
       const previousMyTasks = queryClient.getQueriesData({
         queryKey: ['myTasks'],
@@ -387,6 +512,14 @@ export function useDeleteTask() {
         (old) => {
           if (!old) return old;
           return old.filter((task) => task.id !== taskId);
+        }
+      );
+
+      queryClient.setQueriesData<BoardItem[]>(
+        { queryKey: taskKeys.boardItemLists() },
+        (old) => {
+          if (!old) return old;
+          return old.filter((item) => item.kind !== 'task' || item.id !== taskId);
         }
       );
 
@@ -428,7 +561,7 @@ export function useDeleteTask() {
       // Remove from detail cache
       queryClient.removeQueries({ queryKey: taskKeys.detail(taskId) });
 
-      return { previousTask, previousTasks, previousMyTasks, previousRollupTasks };
+      return { previousTask, previousTasks, previousBoardItems, previousMyTasks, previousRollupTasks };
     },
     onSuccess: () => {
       toast.success('Task deleted');
@@ -441,6 +574,11 @@ export function useDeleteTask() {
       }
       if (context?.previousTasks) {
         for (const [queryKey, data] of context.previousTasks) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      if (context?.previousBoardItems) {
+        for (const [queryKey, data] of context.previousBoardItems) {
           queryClient.setQueryData(queryKey, data);
         }
       }
@@ -458,12 +596,53 @@ export function useDeleteTask() {
     onSettled: () => {
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
       // Invalidate subtask caches (deleting a subtask affects parent counts)
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'subtasks'] });
       // Invalidate My Tasks, rollup, and archived caches
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
       queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const result = await deleteProject(projectId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to delete project');
+      }
+      return projectId;
+    },
+    onMutate: async (projectId) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.boardItemLists() });
+      const previousItems = queryClient.getQueriesData<BoardItem[]>({
+        queryKey: taskKeys.boardItemLists(),
+      });
+      queryClient.setQueriesData<BoardItem[]>(
+        { queryKey: taskKeys.boardItemLists() },
+        (old) => old?.filter((item) => item.kind !== 'project' || item.id !== projectId)
+      );
+      return { previousItems };
+    },
+    onSuccess: () => {
+      toast.success('Project deleted');
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousItems) {
+        for (const [queryKey, data] of context.previousItems) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      toast.error(err.message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
   });
 }
@@ -475,7 +654,7 @@ export function useUpdateTaskPositions() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (updates: { id: string; position: number; status?: string }[]) => {
+    mutationFn: async (updates: { id: string; position: number; status?: string; section?: string | null }[]) => {
       const result = await updateTaskPositions(updates);
       if (!result.success) {
         throw new Error(result.error ?? 'Failed to update positions');
@@ -485,11 +664,15 @@ export function useUpdateTaskPositions() {
     onMutate: async (updates) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: taskKeys.boardItemLists() });
       await queryClient.cancelQueries({ queryKey: ['rollups', 'tasks'] });
 
       // Snapshot the previous values
       const previousTasks = queryClient.getQueriesData<TaskWithAssignees[]>({
         queryKey: taskKeys.lists(),
+      });
+      const previousBoardItems = queryClient.getQueriesData<BoardItem[]>({
+        queryKey: taskKeys.boardItemLists(),
       });
       const previousRollupTasks = queryClient.getQueriesData({
         queryKey: ['rollups', 'tasks'],
@@ -497,7 +680,7 @@ export function useUpdateTaskPositions() {
 
       // Create a map of updates for quick lookup
       const updateMap = new Map(
-        updates.map((u) => [u.id, { position: u.position, status: u.status }])
+        updates.map((u) => [u.id, { position: u.position, status: u.status, section: u.section }])
       );
 
       // Optimistically update task lists
@@ -512,10 +695,30 @@ export function useUpdateTaskPositions() {
                 ...task,
                 position: update.position,
                 status: update.status ?? task.status,
+                section: update.section !== undefined ? update.section : task.section,
                 updatedAt: new Date(),
               };
             }
             return task;
+          });
+        }
+      );
+
+      queryClient.setQueriesData<BoardItem[]>(
+        { queryKey: taskKeys.boardItemLists() },
+        (old) => {
+          if (!old) return old;
+          return old.map((item) => {
+            if (item.kind !== 'task') return item;
+            const update = updateMap.get(item.id);
+            if (!update) return item;
+            return {
+              ...item,
+              position: update.position,
+              status: update.status ?? item.status,
+              section: update.section !== undefined ? update.section : item.section,
+              updatedAt: new Date(),
+            };
           });
         }
       );
@@ -534,6 +737,7 @@ export function useUpdateTaskPositions() {
                   ...task,
                   position: update.position,
                   status: update.status ?? task.status,
+                  section: update.section !== undefined ? update.section : task.section,
                 };
               }
               return task;
@@ -542,7 +746,7 @@ export function useUpdateTaskPositions() {
         }
       );
 
-      return { previousTasks, previousRollupTasks };
+      return { previousTasks, previousBoardItems, previousRollupTasks };
     },
     onError: (err, variables, context) => {
       // Rollback on error
@@ -556,13 +760,74 @@ export function useUpdateTaskPositions() {
           queryClient.setQueryData(queryKey, data);
         }
       }
+      if (context?.previousBoardItems) {
+        for (const [queryKey, data] of context.previousBoardItems) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
     },
     onSettled: () => {
       // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
       queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
       // Invalidate subtask caches (subtask reordering)
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'subtasks'] });
+    },
+  });
+}
+
+export function useUpdateBoardItemPositions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: BoardItemPositionUpdateInput[]) => {
+      const result = await updateBoardItemPositions(updates);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to update positions');
+      }
+      return updates;
+    },
+    onMutate: async (updates) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.boardItemLists() });
+      await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
+      const previousItems = queryClient.getQueriesData<BoardItem[]>({
+        queryKey: taskKeys.boardItemLists(),
+      });
+      const updateMap = new Map(updates.map((update) => [update.id, update]));
+
+      queryClient.setQueriesData<BoardItem[]>(
+        { queryKey: taskKeys.boardItemLists() },
+        (old) => {
+          if (!old) return old;
+          return old.map((item) => {
+            const update = updateMap.get(item.id);
+            if (!update) return item;
+            return {
+              ...item,
+              position: update.position,
+              status: update.status ?? item.status,
+              ...(update.section !== undefined && { section: update.section }),
+              updatedAt: new Date(),
+            };
+          });
+        }
+      );
+
+      return { previousItems };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousItems) {
+        for (const [queryKey, data] of context.previousItems) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      toast.error(err.message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
     },
   });
 }
@@ -648,9 +913,29 @@ export function useArchiveTask() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.details() });
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+    },
+  });
+}
+
+export function useArchiveProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const result = await archiveProject(projectId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to archive project');
+      }
+    },
+    onSuccess: () => {
+      toast.success('Project archived');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
     },
   });
 }
@@ -673,9 +958,29 @@ export function useUnarchiveTask() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.details() });
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+    },
+  });
+}
+
+export function useUnarchiveProject() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const result = await unarchiveProject(projectId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to unarchive project');
+      }
+    },
+    onSuccess: () => {
+      toast.success('Project unarchived');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: taskKeys.boardItemLists() });
     },
   });
 }

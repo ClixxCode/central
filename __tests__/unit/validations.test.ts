@@ -13,6 +13,8 @@ import {
 } from '@/lib/validations/board';
 import {
   createBoardProjectSchema,
+  updateBoardProjectSchema,
+  updateBoardItemPositionsSchema,
   updateBoardProjectPositionsSchema,
 } from '@/lib/validations/board-project';
 
@@ -328,9 +330,18 @@ describe('Board Validations', () => {
       const result = createBoardProjectSchema.safeParse({
         parentBoardId: '550e8400-e29b-41d4-a716-446655440000',
         name: 'Website Refresh',
+        description: 'Launch project board',
         status: 'todo',
         section: 'marketing',
+        dueDate: '2026-07-15',
         position: 1000,
+        internalStatusOptions: [
+          { id: 'todo', label: 'To Do', color: '#6B7280', position: 0 },
+          { id: 'done', label: 'Done', color: '#10B981', position: 1 },
+        ],
+        internalSectionOptions: [
+          { id: 'phase-1', label: 'Phase 1', color: '#3B82F6', position: 0 },
+        ],
       });
 
       expect(result.success).toBe(true);
@@ -357,6 +368,26 @@ describe('Board Validations', () => {
     });
   });
 
+  describe('updateBoardProjectSchema', () => {
+    it('validates project metadata and internal workflow updates', () => {
+      const result = updateBoardProjectSchema.safeParse({
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Website Refresh v2',
+        description: null,
+        status: 'done',
+        section: null,
+        dueDate: null,
+        position: 3000,
+        internalStatusOptions: [
+          { id: 'todo', label: 'To Do', color: '#6B7280', position: 0 },
+          { id: 'done', label: 'Done', color: '#10B981', position: 1 },
+        ],
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe('updateBoardProjectPositionsSchema', () => {
     it('validates project card position updates', () => {
       const result = updateBoardProjectPositionsSchema.safeParse([
@@ -375,6 +406,28 @@ describe('Board Validations', () => {
       const result = updateBoardProjectPositionsSchema.safeParse([]);
 
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('updateBoardItemPositionsSchema', () => {
+    it('validates mixed task and project item position updates', () => {
+      const result = updateBoardItemPositionsSchema.safeParse([
+        {
+          kind: 'task',
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          status: 'todo',
+          position: 1000,
+        },
+        {
+          kind: 'project',
+          id: '550e8400-e29b-41d4-a716-446655440001',
+          status: 'in-progress',
+          section: 'marketing',
+          position: 2000,
+        },
+      ]);
+
+      expect(result.success).toBe(true);
     });
   });
 });

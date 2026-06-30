@@ -5,10 +5,13 @@ import {
   tasks,
   taskAssignees,
   boards,
+  boardProjects,
   boardAccess,
   teams,
   users,
   clients,
+  statuses,
+  sections,
   comments,
   attachments,
   taskViews,
@@ -37,6 +40,14 @@ import {
   getBoardAccessSourceBoardId,
   type BoardAccessLevel,
 } from './board-access';
+import {
+  createBoardProjectSchema,
+  updateBoardProjectSchema,
+  updateBoardItemPositionsSchema,
+  type CreateBoardProjectInput,
+  type UpdateBoardProjectInput,
+  type BoardItemPositionUpdateInput,
+} from '@/lib/validations/board-project';
 import { getOrgToday } from '@/lib/utils/timezone';
 import { randomBytes } from 'crypto';
 
@@ -195,6 +206,136 @@ function getCompleteStatusIds(statusOptions: StatusOption[]): string[] {
         s.label.toLowerCase().includes('done')
     )
     .map((s) => s.id);
+}
+
+export type TaskBoardItem = TaskWithAssignees & {
+  kind: 'task';
+};
+
+export interface ProjectBoardItem {
+  id: string;
+  kind: 'project';
+  title: string;
+  description: string | null;
+  status: string;
+  section: string | null;
+  position: number;
+  dueDate: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  archivedAt: Date | null;
+  projectBoardId: string;
+  parentBoardId: string;
+  taskCount: number;
+  completedTaskCount: number;
+  internalStatusOptions: StatusOption[];
+  internalSectionOptions: SectionOption[];
+  clientId: string | null;
+  color: string | null;
+  icon: string | null;
+}
+
+export type BoardItem = TaskBoardItem | ProjectBoardItem;
+
+async function getDefaultBoardWorkflowOptions(): Promise<{
+  statusOptions: StatusOption[] | undefined;
+  sectionOptions: SectionOption[] | undefined;
+}> {
+  const [globalStatuses, globalSections] = await Promise.all([
+    db.query.statuses.findMany({ orderBy: [asc(statuses.position)] }),
+    db.query.sections.findMany({ orderBy: [asc(sections.position)] }),
+  ]);
+
+  return {
+    statusOptions:
+      globalStatuses.length > 0
+        ? globalStatuses.map((status) => ({
+            id: status.id,
+            label: status.label,
+            color: status.color,
+            position: status.position,
+          }))
+        : undefined,
+    sectionOptions:
+      globalSections.length > 0
+        ? globalSections.map((section) => ({
+            id: section.id,
+            label: section.label,
+            color: section.color,
+            position: section.position,
+          }))
+        : undefined,
+  };
+}
+
+function sortBoardItems(items: BoardItem[], sort?: TaskSortOptions): BoardItem[] {
+  const sortField = sort?.field ?? 'position';
+  const direction = sort?.direction === 'desc' ? -1 : 1;
+
+  return [...items].sort((a, b) => {
+    let compare = 0;
+
+    switch (sortField) {
+      case 'dueDate':
+        compare = (a.dueDate ?? '').localeCompare(b.dueDate ?? '');
+        break;
+      case 'createdAt':
+        compare = a.createdAt.getTime() - b.createdAt.getTime();
+        break;
+      case 'title':
+        compare = a.title.localeCompare(b.title);
+        break;
+      case 'status':
+        compare = a.status.localeCompare(b.status);
+        break;
+      case 'position':
+      default:
+        compare = a.position - b.position;
+        break;
+    }
+
+    if (compare !== 0) return compare * direction;
+    return a.createdAt.getTime() - b.createdAt.getTime();
+  });
+}
+
+function projectMatchesFilters(
+  project: ProjectBoardItem,
+  filters: TaskFilters | undefined,
+  parentStatusOptions: StatusOption[],
+  todayStr?: string
+): boolean {
+  if (!filters) return true;
+
+  if (filters.assigneeId) {
+    return false;
+  }
+
+  if (filters.status) {
+    const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
+    const matches = statuses.includes(project.status);
+    if (filters.statusMode === 'is_not' ? matches : !matches) return false;
+  }
+
+  if (filters.section) {
+    const sections = Array.isArray(filters.section) ? filters.section : [filters.section];
+    const hasNoSection = sections.includes('__none__');
+    const actualSections = sections.filter((section) => section !== '__none__');
+    const matches =
+      (project.section === null && hasNoSection) ||
+      (project.section !== null && actualSections.includes(project.section));
+
+    if (filters.sectionMode === 'is_not' ? matches : !matches) return false;
+  }
+
+  if (filters.overdue) {
+    const doneStatusIds = getCompleteStatusIds(parentStatusOptions);
+    if (!project.dueDate || !todayStr || project.dueDate >= todayStr || doneStatusIds.includes(project.status)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 /**
@@ -638,6 +779,475 @@ export async function listTasks(
   });
 
   return { success: true, tasks: tasksWithAssignees };
+}
+
+/**
+ * List parent board items as regular tasks plus nested project cards.
+ * Project board internals remain isolated and are loaded through listTasks(projectBoardId).
+ */
+export async function listBoardItems(
+  boardId: string,
+  filters?: TaskFilters,
+  sort?: TaskSortOptions
+): Promise<{
+  success: boolean;
+  items?: BoardItem[];
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+  if (!accessLevel) {
+    return { success: false, error: 'Access denied to this board' };
+  }
+
+  const taskResult = await listTasks(boardId, filters, sort);
+  if (!taskResult.success) {
+    return { success: false, error: taskResult.error };
+  }
+
+  const parentBoard = await db.query.boards.findFirst({
+    where: eq(boards.id, boardId),
+    columns: { statusOptions: true },
+  });
+
+  const projectRows = await db
+    .select({
+      id: boardProjects.id,
+      parentBoardId: boardProjects.parentBoardId,
+      projectBoardId: boardProjects.projectBoardId,
+      status: boardProjects.status,
+      section: boardProjects.section,
+      dueDate: boardProjects.dueDate,
+      position: boardProjects.position,
+      createdAt: boardProjects.createdAt,
+      updatedAt: boardProjects.updatedAt,
+      archivedAt: boardProjects.archivedAt,
+      title: boards.name,
+      description: boards.description,
+      clientId: boards.clientId,
+      color: boards.color,
+      icon: boards.icon,
+      internalStatusOptions: boards.statusOptions,
+      internalSectionOptions: boards.sectionOptions,
+    })
+    .from(boardProjects)
+    .innerJoin(boards, eq(boards.id, boardProjects.projectBoardId))
+    .where(and(eq(boardProjects.parentBoardId, boardId), isNull(boardProjects.archivedAt)));
+
+  const projectBoardIds = projectRows.map((project) => project.projectBoardId);
+  const projectTaskCounts =
+    projectBoardIds.length > 0
+      ? await db
+          .select({
+            boardId: tasks.boardId,
+            status: tasks.status,
+            count: sql<number>`COUNT(*)::int`,
+          })
+          .from(tasks)
+          .where(and(inArray(tasks.boardId, projectBoardIds), isNull(tasks.archivedAt)))
+          .groupBy(tasks.boardId, tasks.status)
+      : [];
+
+  const countsByProjectBoard = new Map<string, { total: number; byStatus: Map<string, number> }>();
+  for (const countRow of projectTaskCounts) {
+    const existing = countsByProjectBoard.get(countRow.boardId) ?? {
+      total: 0,
+      byStatus: new Map<string, number>(),
+    };
+    existing.total += countRow.count;
+    existing.byStatus.set(countRow.status, countRow.count);
+    countsByProjectBoard.set(countRow.boardId, existing);
+  }
+
+  const todayStr = filters?.overdue
+    ? getOrgToday((await getSiteSettings()).data?.timezone)
+    : undefined;
+
+  const projectItems: ProjectBoardItem[] = projectRows.map((project) => {
+    const counts = countsByProjectBoard.get(project.projectBoardId);
+    const completeStatusIds = getCompleteStatusIds(project.internalStatusOptions);
+    const completedTaskCount = completeStatusIds.reduce(
+      (total, statusId) => total + (counts?.byStatus.get(statusId) ?? 0),
+      0
+    );
+
+    return {
+      id: project.id,
+      kind: 'project',
+      title: project.title,
+      description: project.description ?? null,
+      status: project.status,
+      section: project.section,
+      position: project.position,
+      dueDate: project.dueDate,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      archivedAt: project.archivedAt,
+      projectBoardId: project.projectBoardId,
+      parentBoardId: project.parentBoardId,
+      taskCount: counts?.total ?? 0,
+      completedTaskCount,
+      internalStatusOptions: project.internalStatusOptions,
+      internalSectionOptions: project.internalSectionOptions ?? [],
+      clientId: project.clientId,
+      color: project.color,
+      icon: project.icon,
+    };
+  });
+
+  const filteredProjectItems = projectItems.filter((project) =>
+    projectMatchesFilters(project, filters, parentBoard?.statusOptions ?? [], todayStr)
+  );
+
+  return {
+    success: true,
+    items: sortBoardItems([
+      ...(taskResult.tasks ?? []).map((task) => ({ ...task, kind: 'task' as const })),
+      ...filteredProjectItems,
+    ], sort),
+  };
+}
+
+async function requireFullBoardAccessForMutation(
+  userId: string,
+  boardId: string,
+  isAdmin: boolean
+): Promise<boolean> {
+  return (await getBoardAccessLevel(userId, boardId, isAdmin)) === 'full';
+}
+
+async function getProjectCardById(id: string) {
+  return db.query.boardProjects.findFirst({
+    where: or(eq(boardProjects.id, id), eq(boardProjects.projectBoardId, id)),
+    with: {
+      parentBoard: {
+        columns: { id: true, clientId: true, name: true, type: true, statusOptions: true },
+        with: { client: { columns: { slug: true } } },
+      },
+      projectBoard: {
+        columns: {
+          id: true,
+          name: true,
+          description: true,
+          clientId: true,
+          type: true,
+          statusOptions: true,
+          sectionOptions: true,
+          color: true,
+          icon: true,
+        },
+      },
+    },
+  });
+}
+
+async function buildProjectBoardItem(projectCardId: string): Promise<ProjectBoardItem | null> {
+  const project = await getProjectCardById(projectCardId);
+  if (!project?.projectBoard) return null;
+
+  const taskCounts = await db
+    .select({
+      status: tasks.status,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.boardId, project.projectBoardId), isNull(tasks.archivedAt)))
+    .groupBy(tasks.status);
+
+  const completeStatusIds = getCompleteStatusIds(project.projectBoard.statusOptions);
+  const taskCount = taskCounts.reduce((total, row) => total + row.count, 0);
+  const completedTaskCount = taskCounts.reduce(
+    (total, row) => total + (completeStatusIds.includes(row.status) ? row.count : 0),
+    0
+  );
+
+  return {
+    id: project.id,
+    kind: 'project',
+    title: project.projectBoard.name,
+    description: project.projectBoard.description ?? null,
+    status: project.status,
+    section: project.section,
+    position: project.position,
+    dueDate: project.dueDate,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    archivedAt: project.archivedAt,
+    projectBoardId: project.projectBoardId,
+    parentBoardId: project.parentBoardId,
+    taskCount,
+    completedTaskCount,
+    internalStatusOptions: project.projectBoard.statusOptions,
+    internalSectionOptions: project.projectBoard.sectionOptions ?? [],
+    clientId: project.projectBoard.clientId,
+    color: project.projectBoard.color,
+    icon: project.projectBoard.icon,
+  };
+}
+
+/**
+ * Create a nested project board and its parent-board project card.
+ */
+export async function createProject(input: CreateBoardProjectInput): Promise<{
+  success: boolean;
+  project?: ProjectBoardItem;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  const validation = createBoardProjectSchema.safeParse(input);
+  if (!validation.success) {
+    return { success: false, error: validation.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const data = validation.data;
+  const canEditParent = await requireFullBoardAccessForMutation(user.id, data.parentBoardId, isAdmin);
+  if (!canEditParent) {
+    return { success: false, error: 'Permission denied' };
+  }
+
+  const parentBoard = await db.query.boards.findFirst({
+    where: eq(boards.id, data.parentBoardId),
+    with: { client: { columns: { slug: true } } },
+  });
+
+  if (!parentBoard) {
+    return { success: false, error: 'Parent board not found' };
+  }
+
+  if (parentBoard.type === 'project' || parentBoard.type === 'personal') {
+    return { success: false, error: 'Projects can only be created on top-level boards' };
+  }
+
+  const defaults = await getDefaultBoardWorkflowOptions();
+  const maxTaskPosition = await db
+    .select({ maxPos: sql<number>`COALESCE(MAX(${tasks.position}), -1)` })
+    .from(tasks)
+    .where(and(eq(tasks.boardId, data.parentBoardId), isNull(tasks.parentTaskId), isNull(tasks.archivedAt)));
+  const maxProjectPosition = await db
+    .select({ maxPos: sql<number>`COALESCE(MAX(${boardProjects.position}), -1)` })
+    .from(boardProjects)
+    .where(and(eq(boardProjects.parentBoardId, data.parentBoardId), isNull(boardProjects.archivedAt)));
+  const position =
+    data.position ??
+    Math.max(maxTaskPosition[0]?.maxPos ?? -1, maxProjectPosition[0]?.maxPos ?? -1) + 1;
+
+  const created = await db.transaction(async (tx) => {
+    const [projectBoard] = await tx
+      .insert(boards)
+      .values({
+        clientId: parentBoard.clientId,
+        name: data.name,
+        description: data.description ?? null,
+        type: 'project',
+        statusOptions: data.internalStatusOptions ?? defaults.statusOptions,
+        sectionOptions: data.internalSectionOptions ?? defaults.sectionOptions ?? [],
+        createdBy: user.id,
+      })
+      .returning();
+
+    const [projectCard] = await tx
+      .insert(boardProjects)
+      .values({
+        parentBoardId: data.parentBoardId,
+        projectBoardId: projectBoard.id,
+        status: data.status,
+        section: data.section ?? null,
+        dueDate: data.dueDate ?? null,
+        position,
+        createdBy: user.id,
+      })
+      .returning();
+
+    return projectCard;
+  });
+
+  if (parentBoard.client) {
+    revalidatePath(`/clients/${parentBoard.client.slug}/boards/${data.parentBoardId}`);
+  }
+
+  const project = await buildProjectBoardItem(created.id);
+  return project
+    ? { success: true, project }
+    : { success: false, error: 'Failed to load created project' };
+}
+
+export async function updateProject(input: UpdateBoardProjectInput): Promise<{
+  success: boolean;
+  project?: ProjectBoardItem;
+  error?: string;
+}> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  const validation = updateBoardProjectSchema.safeParse(input);
+  if (!validation.success) {
+    return { success: false, error: validation.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const data = validation.data;
+  const existingProject = await getProjectCardById(data.id);
+  if (!existingProject) {
+    return { success: false, error: 'Project not found' };
+  }
+
+  const canEditParent = await requireFullBoardAccessForMutation(user.id, existingProject.parentBoardId, isAdmin);
+  if (!canEditParent) {
+    return { success: false, error: 'Permission denied' };
+  }
+
+  await db.transaction(async (tx) => {
+    const boardUpdate: Partial<typeof boards.$inferInsert> = {};
+    if (data.name !== undefined) boardUpdate.name = data.name;
+    if (data.description !== undefined) boardUpdate.description = data.description;
+    if (data.internalStatusOptions !== undefined) boardUpdate.statusOptions = data.internalStatusOptions;
+    if (data.internalSectionOptions !== undefined) boardUpdate.sectionOptions = data.internalSectionOptions;
+
+    if (Object.keys(boardUpdate).length > 0) {
+      await tx.update(boards).set(boardUpdate).where(eq(boards.id, existingProject.projectBoardId));
+    }
+
+    const cardUpdate: Partial<typeof boardProjects.$inferInsert> = { updatedAt: new Date() };
+    if (data.status !== undefined) cardUpdate.status = data.status;
+    if (data.section !== undefined) cardUpdate.section = data.section;
+    if (data.dueDate !== undefined) cardUpdate.dueDate = data.dueDate;
+    if (data.position !== undefined) cardUpdate.position = data.position;
+
+    if (Object.keys(cardUpdate).length > 1) {
+      await tx.update(boardProjects).set(cardUpdate).where(eq(boardProjects.id, existingProject.id));
+    }
+  });
+
+  if (existingProject.parentBoard.client) {
+    revalidatePath(`/clients/${existingProject.parentBoard.client.slug}/boards/${existingProject.parentBoardId}`);
+    revalidatePath(`/clients/${existingProject.parentBoard.client.slug}/boards/${existingProject.projectBoardId}`);
+  }
+
+  const project = await buildProjectBoardItem(existingProject.id);
+  return project
+    ? { success: true, project }
+    : { success: false, error: 'Failed to load updated project' };
+}
+
+export async function archiveProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+  const project = await getProjectCardById(projectId);
+
+  if (!project) {
+    return { success: false, error: 'Project not found' };
+  }
+
+  const canEditParent = await requireFullBoardAccessForMutation(user.id, project.parentBoardId, isAdmin);
+  if (!canEditParent) {
+    return { success: false, error: 'Permission denied' };
+  }
+
+  if (!getCompleteStatusIds(project.parentBoard.statusOptions).includes(project.status)) {
+    return { success: false, error: 'Only completed projects can be archived' };
+  }
+
+  await db
+    .update(boardProjects)
+    .set({ archivedAt: new Date(), updatedAt: new Date() })
+    .where(eq(boardProjects.id, project.id));
+
+  return { success: true };
+}
+
+export async function unarchiveProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+  const project = await getProjectCardById(projectId);
+
+  if (!project) {
+    return { success: false, error: 'Project not found' };
+  }
+
+  const canEditParent = await requireFullBoardAccessForMutation(user.id, project.parentBoardId, isAdmin);
+  if (!canEditParent) {
+    return { success: false, error: 'Permission denied' };
+  }
+
+  await db
+    .update(boardProjects)
+    .set({ archivedAt: null, updatedAt: new Date() })
+    .where(eq(boardProjects.id, project.id));
+
+  return { success: true };
+}
+
+export async function deleteProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+  const project = await getProjectCardById(projectId);
+
+  if (!project) {
+    return { success: false, error: 'Project not found' };
+  }
+
+  const canEditParent = await requireFullBoardAccessForMutation(user.id, project.parentBoardId, isAdmin);
+  if (!canEditParent) {
+    return { success: false, error: 'Permission denied' };
+  }
+
+  // Deleting the project board cascades to board_projects and all internal tasks.
+  await db.delete(boards).where(eq(boards.id, project.projectBoardId));
+
+  return { success: true };
+}
+
+export async function updateBoardItemPositions(
+  updates: BoardItemPositionUpdateInput[]
+): Promise<{ success: boolean; error?: string }> {
+  const validation = updateBoardItemPositionsSchema.safeParse(updates);
+  if (!validation.success) {
+    return { success: false, error: validation.error.issues[0]?.message ?? 'Invalid input' };
+  }
+
+  const taskUpdates = validation.data
+    .filter((update) => update.kind === 'task')
+    .map(({ id, position, status, section }) => ({ id, position, status, section }));
+  const projectUpdates = validation.data.filter((update) => update.kind === 'project');
+
+  if (taskUpdates.length > 0) {
+    const result = await updateTaskPositions(taskUpdates);
+    if (!result.success) return result;
+  }
+
+  if (projectUpdates.length === 0) {
+    return { success: true };
+  }
+
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  for (const update of projectUpdates) {
+    const project = await getProjectCardById(update.id);
+    if (!project) {
+      return { success: false, error: 'Project not found' };
+    }
+
+    const canEditParent = await requireFullBoardAccessForMutation(user.id, project.parentBoardId, isAdmin);
+    if (!canEditParent) {
+      return { success: false, error: 'Permission denied' };
+    }
+
+    await db
+      .update(boardProjects)
+      .set({
+        position: update.position,
+        ...(update.status !== undefined && { status: update.status }),
+        ...(update.section !== undefined && { section: update.section }),
+        updatedAt: new Date(),
+      })
+      .where(eq(boardProjects.id, project.id));
+  }
+
+  return { success: true };
 }
 
 /**
@@ -1555,7 +2165,7 @@ export async function listSubtasks(parentTaskId: string): Promise<{
  * Update task positions (for drag-and-drop reordering)
  */
 export async function updateTaskPositions(
-  updates: { id: string; position: number; status?: string }[]
+  updates: { id: string; position: number; status?: string; section?: string | null }[]
 ): Promise<{
   success: boolean;
   error?: string;
@@ -1604,6 +2214,7 @@ export async function updateTaskPositions(
         .set({
           position: update.position,
           status: update.status,
+          section: update.section,
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, update.id))

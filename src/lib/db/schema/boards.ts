@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, jsonb, boolean, check, integer, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, jsonb, boolean, check, integer, uniqueIndex, date } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { users } from './users';
 import { clients } from './clients';
@@ -34,6 +34,7 @@ export const boards = pgTable('boards', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: uuid('client_id').references(() => clients.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 255 }).notNull(),
+  description: varchar('description', { length: 1000 }),
   type: boardTypeEnum('type').notNull().default('standard'),
   statusOptions: jsonb('status_options').$type<StatusOption[]>().notNull().default([
     { id: 'todo', label: 'To Do', color: '#6B7280', position: 0 },
@@ -86,6 +87,7 @@ export const boardProjects = pgTable(
       .references(() => boards.id, { onDelete: 'cascade' }),
     status: varchar('status', { length: 100 }).notNull(),
     section: varchar('section', { length: 100 }),
+    dueDate: date('due_date'),
     position: integer('position').notNull().default(0),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
