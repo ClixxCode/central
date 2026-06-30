@@ -421,4 +421,77 @@ describe('Rollup Task Aggregation Logic', () => {
       expect(filtered[0].id).toBe('1');
     });
   });
+
+  describe('Project card aggregation', () => {
+    interface MockRollupItem {
+      id: string;
+      kind: 'task' | 'project';
+      boardId: string;
+      status: string;
+      section: string | null;
+      position: number;
+      assigneeIds: string[];
+    }
+
+    const filterItemsByAccess = (
+      items: MockRollupItem[],
+      accessLevels: Map<string, 'full' | 'assigned_only'>,
+      userId: string
+    ): MockRollupItem[] => {
+      return items.filter((item) => {
+        const level = accessLevels.get(item.boardId);
+        if (level === 'full') return true;
+        if (item.kind === 'task' && level === 'assigned_only') {
+          return item.assigneeIds.includes(userId);
+        }
+        return false;
+      });
+    };
+
+    it('includes project cards only for full source-board access', () => {
+      const items: MockRollupItem[] = [
+        { id: 'task-1', kind: 'task', boardId: 'board-1', status: 'todo', section: null, position: 0, assigneeIds: ['user-1'] },
+        { id: 'project-1', kind: 'project', boardId: 'board-1', status: 'todo', section: null, position: 1, assigneeIds: [] },
+        { id: 'project-2', kind: 'project', boardId: 'board-2', status: 'todo', section: null, position: 0, assigneeIds: [] },
+      ];
+      const accessLevels = new Map([
+        ['board-1', 'full' as const],
+        ['board-2', 'assigned_only' as const],
+      ]);
+
+      const filtered = filterItemsByAccess(items, accessLevels, 'user-1');
+
+      expect(filtered.map((item) => item.id)).toEqual(['task-1', 'project-1']);
+    });
+
+    it('groups mixed task and project items by canonical status', () => {
+      const items: MockRollupItem[] = [
+        { id: 'task-1', kind: 'task', boardId: 'board-1', status: 'todo', section: null, position: 2, assigneeIds: [] },
+        { id: 'project-1', kind: 'project', boardId: 'board-1', status: 'todo', section: null, position: 1, assigneeIds: [] },
+        { id: 'task-2', kind: 'task', boardId: 'board-2', status: 'done', section: null, position: 0, assigneeIds: [] },
+      ];
+      const grouped: Record<string, MockRollupItem[]> = { todo: [], done: [] };
+      for (const item of items) {
+        grouped[item.status].push(item);
+      }
+      Object.values(grouped).forEach((group) => group.sort((a, b) => a.position - b.position));
+
+      expect(grouped.todo.map((item) => item.id)).toEqual(['project-1', 'task-1']);
+      expect(grouped.done.map((item) => item.id)).toEqual(['task-2']);
+    });
+
+    it('keeps assignee filters task-only while allowing is_not to retain unassigned projects', () => {
+      const items: MockRollupItem[] = [
+        { id: 'task-1', kind: 'task', boardId: 'board-1', status: 'todo', section: null, position: 0, assigneeIds: ['user-1'] },
+        { id: 'task-2', kind: 'task', boardId: 'board-1', status: 'todo', section: null, position: 1, assigneeIds: ['user-2'] },
+        { id: 'project-1', kind: 'project', boardId: 'board-1', status: 'todo', section: null, position: 2, assigneeIds: [] },
+      ];
+
+      const assignedToUser = items.filter((item) => item.kind === 'task' && item.assigneeIds.includes('user-1'));
+      const notAssignedToUser = items.filter((item) => item.kind === 'project' || !item.assigneeIds.includes('user-1'));
+
+      expect(assignedToUser.map((item) => item.id)).toEqual(['task-1']);
+      expect(notAssignedToUser.map((item) => item.id)).toEqual(['task-2', 'project-1']);
+    });
+  });
 });

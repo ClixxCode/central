@@ -80,6 +80,8 @@ vi.mock('@/lib/stores/personalRollupStore', () => ({
     isClientCollapsed: mockIsClientCollapsed,
     setAllClientsCollapsed: mockSetAllClientsCollapsed,
     areAllClientsCollapsed: mockAreAllClientsCollapsed,
+    tableSort: { field: 'position', direction: 'asc' },
+    setTableSort: vi.fn(),
   }),
 }));
 
@@ -122,6 +124,12 @@ vi.mock('@/lib/hooks/useMyTasks', () => ({
 }));
 
 vi.mock('@/lib/hooks/useTasks', () => ({
+  useTask: () => ({
+    data: undefined,
+  }),
+  useAssignableUsers: () => ({
+    data: [],
+  }),
   useDeleteTask: () => ({
     mutate: vi.fn(),
   }),
@@ -452,7 +460,7 @@ describe('PersonalRollupToolbar', () => {
     const tasksByClient = createMockTasksByClient();
     render(<PersonalRollupToolbar tasksByClient={tasksByClient} />);
 
-    expect(screen.getByText('Columns')).toBeInTheDocument();
+    expect(screen.getByText('Card Items')).toBeInTheDocument();
   });
 
   it('renders boards button', () => {
