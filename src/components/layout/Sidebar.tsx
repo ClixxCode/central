@@ -5,13 +5,9 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  LayoutDashboard,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
   Plus,
-  FolderKanban,
-  LayoutTemplate,
   Layers,
   PanelLeftClose,
   PanelLeft,
@@ -74,6 +70,14 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  APP_SHELL_NAV_ITEMS,
+  DEFAULT_APP_NAV_ORDER,
+  getAvailableAppNavPreferenceLabels,
+  getOrderedAppNavItems,
+  isAppNavPreferenceLabel,
+  type AppNavPreferenceLabel,
+} from './app-nav';
 
 interface Client {
   id: string;
@@ -491,8 +495,6 @@ function SortableFolderItem({
   );
 }
 
-const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Builds', 'Schedule', 'Templates'];
-
 interface SortableNavEditItemProps {
   id: string;
   label: string;
@@ -580,7 +582,7 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
   const [draftHiddenNav, setDraftHiddenNav] = useState<string[]>([]);
-  const [draftNavOrder, setDraftNavOrder] = useState<string[]>(DEFAULT_NAV_ORDER);
+  const [draftNavOrder, setDraftNavOrder] = useState<string[]>([...DEFAULT_APP_NAV_ORDER]);
 
   // Folder creation state
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -596,7 +598,7 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
   const enterEditMode = () => {
     setDraftHiddenNav(sidebarPrefs?.hiddenNavItems ?? []);
     const savedOrder = sidebarPrefs?.navOrder;
-    setDraftNavOrder(savedOrder && savedOrder.length > 0 ? savedOrder : DEFAULT_NAV_ORDER);
+    setDraftNavOrder(savedOrder && savedOrder.length > 0 ? savedOrder : [...DEFAULT_APP_NAV_ORDER]);
     setEditMode(true);
   };
 
@@ -735,34 +737,20 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
 
   const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
   const savedNavOrder = sidebarPrefs?.navOrder;
-  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_NAV_ORDER;
-
-  const navItemDefs: Record<string, { href: string; label: string; icon: LucideIcon; alwaysVisible: boolean }> = {
-    'My Work': { href: '/my-tasks', label: 'My Work', icon: LayoutDashboard, alwaysVisible: true },
-    'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
-    'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
-    'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
-    'Builds': { href: '/agentic-builds', label: 'Builds', icon: Hammer, alwaysVisible: false },
-    'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
-  };
-
-  // Build available items based on settings, then sort by saved order
-  const availableLabels = new Set(Object.keys(navItemDefs));
-  if (!calPrefs?.showScheduleInSidebar) availableLabels.delete('Schedule');
-
-  const allNavItems = navOrder
-    .filter((label) => availableLabels.has(label))
-    .map((label) => navItemDefs[label]);
-
-  // Include any items not yet in the saved order (e.g. newly added items)
-  for (const label of availableLabels) {
-    if (!navOrder.includes(label)) {
-      allNavItems.push(navItemDefs[label]);
-    }
-  }
-
+  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_APP_NAV_ORDER;
+  const showScheduleInSidebar = !!calPrefs?.showScheduleInSidebar;
+  const availableLabels = new Set(getAvailableAppNavPreferenceLabels(showScheduleInSidebar));
+  const allNavItems = getOrderedAppNavItems({
+    navOrder,
+    showScheduleInSidebar,
+    surface: 'desktop',
+  });
+  const draftAvailableNavOrder = draftNavOrder.filter(
+    (label): label is AppNavPreferenceLabel =>
+      isAppNavPreferenceLabel(label) && availableLabels.has(label)
+  );
   const navItems = allNavItems.filter(
-    (item) => item.alwaysVisible || !hiddenNavItems.includes(item.label)
+    (item) => item.alwaysVisible || !hiddenNavItems.includes(item.preferenceLabel)
   );
 
   const showClientsSection = !hiddenNavItems.includes('ClientList');
@@ -861,19 +849,18 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
                   onDragEnd={handleNavEditDragEnd}
                 >
                   <SortableContext
-                    items={draftNavOrder.filter((label) => availableLabels.has(label))}
+                    items={draftAvailableNavOrder}
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="space-y-1">
-                      {draftNavOrder
-                        .filter((label) => availableLabels.has(label))
+                      {draftAvailableNavOrder
                         .map((label) => {
-                          const def = navItemDefs[label];
+                          const def = APP_SHELL_NAV_ITEMS[label];
                           return (
                             <SortableNavEditItem
                               key={label}
                               id={label}
-                              label={def.label}
+                              label={def.desktopLabel}
                               icon={def.icon}
                               alwaysVisible={def.alwaysVisible}
                               isHidden={draftHiddenNav.includes(label)}
@@ -925,7 +912,7 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
           {/* Main Navigation */}
           <nav className="space-y-1">
             {navItems.map((item) => {
-              const isActive = item.label === 'Clients' ? pathname === '/clients' : pathname === item.href;
+              const isActive = item.preferenceLabel === 'Clients' ? pathname === '/clients' : pathname === item.href;
               const Icon = item.icon;
 
               if (isCollapsed) {
@@ -949,7 +936,7 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
                 );
               }
 
-              const isMyWork = item.label === 'My Work';
+              const isMyWork = item.preferenceLabel === 'My Work';
 
               return (
                 <div key={item.href} className={cn(isMyWork && 'group relative')}>

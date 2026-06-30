@@ -2,7 +2,12 @@
 
 import { useMemo } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Sidebar, Header, MobileNav } from '@/components/layout';
+import {
+  MainWorkShell,
+  MobileDashboardNav,
+  OuterAppSidebar,
+  TopShellHeader,
+} from '@/components/layout';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
 import { StoreHydration } from '@/lib/stores/StoreHydration';
 import { signOutUser } from '@/lib/actions/auth';
@@ -78,24 +83,16 @@ export function DashboardShell({
       )}
       <div className="flex flex-1 overflow-hidden">
         <StoreHydration />
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex h-full">
-          <Sidebar clients={clients} isAdmin={isAdmin} isContractor={isContractor} />
-        </div>
-
-        {/* Mobile Navigation */}
-        <MobileNav clients={clients} isAdmin={isAdmin} isContractor={isContractor} />
-
-        {/* Main Content */}
+        <OuterAppSidebar clients={clients} isAdmin={isAdmin} isContractor={isContractor} />
+        <MobileDashboardNav clients={clients} isAdmin={isAdmin} isContractor={isContractor} />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <Header user={user} isAdmin={isAdmin} onSignOut={handleSignOut} />
-          <main
-            className="flex-1 overflow-auto bg-background p-4 lg:p-6"
-            data-shell-section={shellContext.section}
-            data-shell-nav-item={shellContext.activeNavItem ?? undefined}
-          >
-            {children}
-          </main>
+          <TopShellHeader
+            user={user}
+            isAdmin={isAdmin}
+            onSignOut={handleSignOut}
+            shellContext={shellContext}
+          />
+          <MainWorkShell shellContext={shellContext}>{children}</MainWorkShell>
         </div>
       </div>
     </div>

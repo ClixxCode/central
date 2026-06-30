@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { X, LayoutDashboard, CalendarDays, FolderKanban, LayoutTemplate, Layers, Users, Settings, ChevronRight, Building2, Plus } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { X, Layers, Users, Settings, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
 import { useFavorites } from '@/lib/hooks/useFavorites';
@@ -13,6 +12,7 @@ import { useIsClient } from '@/hooks/useIsClient';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DEFAULT_APP_NAV_ORDER, getVisibleAppNavItems } from './app-nav';
 
 interface Client {
   id: string;
@@ -44,25 +44,14 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
   const isOpen = isClient ? sidebarOpen : false;
 
   const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
-  const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Schedule', 'Templates'];
   const savedNavOrder = sidebarPrefs?.navOrder;
-  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_NAV_ORDER;
-
-  const navItemDefs: Record<string, { href: string; label: string; icon: LucideIcon; alwaysVisible: boolean }> = {
-    'My Work': { href: '/my-tasks', label: 'My Tasks', icon: LayoutDashboard, alwaysVisible: true },
-    'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
-    'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
-    'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
-    'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
-  };
-
-  const availableLabels = new Set(Object.keys(navItemDefs));
-  if (!calPrefs?.showScheduleInSidebar) availableLabels.delete('Schedule');
-
-  const navItems = navOrder
-    .filter((label) => availableLabels.has(label))
-    .map((label) => navItemDefs[label])
-    .filter((item) => item.alwaysVisible || !hiddenNavItems.includes(item.label));
+  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_APP_NAV_ORDER;
+  const navItems = getVisibleAppNavItems({
+    navOrder,
+    hiddenNavItems,
+    showScheduleInSidebar: !!calPrefs?.showScheduleInSidebar,
+    surface: 'mobile',
+  });
 
   const showClientsSection = !hiddenNavItems.includes('ClientList');
 
