@@ -27,6 +27,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { NotificationBell } from '@/components/notifications';
 import { QuickAddDialog } from '@/components/quick-add';
 import { GlobalSearch } from '@/components/search';
@@ -69,7 +74,9 @@ export function AppActions({
 }: AppActionsProps) {
   const router = useRouter();
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const mobileSearchInputRef = React.useRef<HTMLInputElement>(null);
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
   const { openQuickAdd, quickAddOpen, closeQuickAdd } = useQuickActionsStore();
   const { theme, setTheme } = useTheme();
   const mounted = useIsClient();
@@ -200,9 +207,24 @@ export function AppActions({
           <GlobalSearch inputRef={searchInputRef} />
         </div>
 
-        <Button variant="ghost" size="icon" className="sm:hidden">
-          <Search className="h-5 w-5" />
-        </Button>
+        <Popover open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="sm:hidden"
+              aria-label="Open search"
+              onClick={() => {
+                window.setTimeout(() => mobileSearchInputRef.current?.focus(), 0);
+              }}
+            >
+              <Search className="h-5 w-5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[min(calc(100vw-1rem),24rem)] p-2 sm:hidden">
+            <GlobalSearch inputRef={mobileSearchInputRef} />
+          </PopoverContent>
+        </Popover>
 
         <NotificationBell />
 

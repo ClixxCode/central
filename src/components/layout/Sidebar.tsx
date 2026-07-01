@@ -943,15 +943,17 @@ export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
 
               if (isCollapsed) {
                 return (
-                  <Tooltip key={item.href}>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-                          isActive
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-accent'
+	                  <Tooltip key={item.href}>
+	                    <TooltipTrigger asChild>
+	                      <Link
+	                        href={item.href}
+	                        aria-label={item.label}
+	                        aria-current={isActive ? 'page' : undefined}
+	                        className={cn(
+	                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+	                          isActive
+	                            ? 'bg-primary/10 text-primary'
+	                            : 'text-muted-foreground hover:bg-accent'
                         )}
                       >
                         <Icon className="h-5 w-5" />
@@ -1045,14 +1047,16 @@ export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
                       : pathname.startsWith(href);
 
                     return (
-                      <Tooltip key={favorite.id}>
-                        <TooltipTrigger asChild>
-                          <Link
-                            href={href}
-                            className={cn(
-                              'relative flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-                              isActive
-                                ? 'bg-primary/10 text-primary'
+	                      <Tooltip key={favorite.id}>
+	                        <TooltipTrigger asChild>
+	                          <Link
+	                            href={href}
+	                            aria-label={favorite.name}
+	                            aria-current={isActive ? 'page' : undefined}
+	                            className={cn(
+	                              'relative flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+	                              isActive
+	                                ? 'bg-primary/10 text-primary'
                                 : 'text-muted-foreground hover:bg-accent'
                             )}
                           >
@@ -1170,13 +1174,15 @@ export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
             {isCollapsed ? (
               <div className="space-y-1">
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href="/settings"
+	                  <TooltipTrigger asChild>
+	                    <Link
+	                      href="/settings"
+	                      aria-label="Settings"
+	                      aria-current={isSettingsActive ? 'page' : undefined}
 	                      className={cn(
-	                        'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-	                        isSettingsActive
-	                          ? 'bg-primary/10 text-primary'
+		                        'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+		                        isSettingsActive
+		                          ? 'bg-primary/10 text-primary'
 	                          : 'text-muted-foreground hover:bg-accent'
 	                      )}
                     >
@@ -1187,13 +1193,15 @@ export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
                 </Tooltip>
                 {isAdmin && (
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href="/settings/admin"
+	                    <TooltipTrigger asChild>
+	                      <Link
+	                        href="/settings/admin"
+	                        aria-label="Admin"
+	                        aria-current={isAdminActive ? 'page' : undefined}
 	                        className={cn(
-	                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-	                          isAdminActive
-	                            ? 'bg-primary/10 text-primary'
+		                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+		                          isAdminActive
+		                            ? 'bg-primary/10 text-primary'
 	                            : 'text-muted-foreground hover:bg-accent'
 	                        )}
                       >

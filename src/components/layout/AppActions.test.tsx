@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { AppActions } from './AppActions';
 
 const mocks = vi.hoisted(() => ({
@@ -53,7 +53,9 @@ vi.mock('@/lib/stores', () => ({
 }));
 
 vi.mock('@/components/search', () => ({
-  GlobalSearch: () => <div data-testid="global-search" />,
+  GlobalSearch: ({ inputRef }: { inputRef?: Ref<HTMLInputElement> }) => (
+    <input ref={inputRef} aria-label="Search" data-testid="global-search" />
+  ),
 }));
 
 vi.mock('@/components/notifications', () => ({
@@ -142,5 +144,13 @@ describe('AppActions', () => {
 
     expect(mocks.routerPush).not.toHaveBeenCalled();
     input.remove();
+  });
+
+  it('opens a labelled mobile search popover', () => {
+    render(<AppActions user={user} onSignOut={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open search' }));
+
+    expect(screen.getAllByTestId('global-search')).toHaveLength(2);
   });
 });
