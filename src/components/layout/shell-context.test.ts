@@ -21,11 +21,19 @@ const clients: DashboardContextClient[] = [
 
 describe('resolveDashboardShellContext', () => {
   it('resolves top-level dashboard sections', () => {
-    expect(resolveDashboardShellContext({ pathname: '/my-tasks' })).toMatchObject({
+    const myWorkContext = resolveDashboardShellContext({ pathname: '/my-tasks' });
+
+    expect(myWorkContext).toMatchObject({
       section: 'my-work',
       activeNavItem: 'my-work',
       title: 'My Work',
     });
+    expect(myWorkContext.tabs).toEqual([
+      { label: 'Assigned', href: '/my-tasks?tab=tasks', active: true },
+      { label: 'Personal', href: '/my-tasks?tab=personal', active: false },
+      { label: 'Mentions', href: '/my-tasks?tab=notifications', active: false },
+    ]);
+
     expect(resolveDashboardShellContext({ pathname: '/clients' })).toMatchObject({
       section: 'clients',
       activeNavItem: 'clients',
@@ -54,24 +62,30 @@ describe('resolveDashboardShellContext', () => {
   });
 
   it('uses search params for my work tab context', () => {
-    expect(
-      resolveDashboardShellContext({
-        pathname: '/my-tasks',
-        searchParams: new URLSearchParams('tab=personal'),
-      })
-    ).toMatchObject({
+    const personalContext = resolveDashboardShellContext({
+      pathname: '/my-tasks',
+      searchParams: new URLSearchParams('tab=personal'),
+    });
+
+    expect(personalContext).toMatchObject({
       section: 'my-work',
       title: 'Personal Tasks',
     });
+    expect(personalContext.tabs?.find((tab) => tab.label === 'Personal')).toMatchObject({
+      active: true,
+    });
 
-    expect(
-      resolveDashboardShellContext({
-        pathname: '/my-tasks?tab=notifications',
-        searchParams: '?tab=notifications',
-      })
-    ).toMatchObject({
+    const mentionsContext = resolveDashboardShellContext({
+      pathname: '/my-tasks?tab=notifications',
+      searchParams: '?tab=notifications',
+    });
+
+    expect(mentionsContext).toMatchObject({
       section: 'my-work',
       title: 'Replies & Mentions',
+    });
+    expect(mentionsContext.tabs?.find((tab) => tab.label === 'Mentions')).toMatchObject({
+      active: true,
     });
   });
 
@@ -96,6 +110,11 @@ describe('resolveDashboardShellContext', () => {
       },
     });
     expect(context.board).toBeUndefined();
+    expect(context.tabs).toEqual([
+      { label: 'Overview', href: '/clients/acme-co', active: true },
+      { label: 'Activity', href: '/clients/acme-co#activity', active: false },
+      { label: 'Boards', href: '/clients/acme-co#boards', active: false },
+    ]);
     expect(context.crumbs).toEqual([
       { label: 'Central', href: '/my-tasks' },
       { label: 'Clients', href: '/clients' },
@@ -130,6 +149,32 @@ describe('resolveDashboardShellContext', () => {
         boardId: 'board-1',
       },
     });
+    expect(context.tabs).toEqual([
+      { label: 'Tasks', href: '/clients/acme-co/boards/board-1', active: true },
+      { label: 'Activity', href: '/clients/acme-co/boards/board-1#activity', active: false },
+      { label: 'Projects', href: '/clients/acme-co/boards/board-1#projects', active: false },
+    ]);
+  });
+
+  it('keeps board context while adding child route crumbs', () => {
+    const context = resolveDashboardShellContext({
+      pathname: '/clients/acme-co/boards/board-1/settings',
+      clients,
+    });
+
+    expect(context).toMatchObject({
+      section: 'board',
+      activeNavItem: 'clients',
+      title: 'Launch Board',
+      actionsSlot: 'board',
+    });
+    expect(context.crumbs).toEqual([
+      { label: 'Central', href: '/my-tasks' },
+      { label: 'Clients', href: '/clients' },
+      { label: 'Acme Co', href: '/clients/acme-co' },
+      { label: 'Launch Board', href: '/clients/acme-co/boards/board-1' },
+      { label: 'Settings', href: '/clients/acme-co/boards/board-1/settings' },
+    ]);
   });
 
   it('degrades safely when client or board data is missing', () => {
@@ -151,13 +196,29 @@ describe('resolveDashboardShellContext', () => {
         name: 'Board 12345678',
       },
     });
+    expect(context.crumbs).toEqual([
+      { label: 'Central', href: '/my-tasks' },
+      { label: 'Clients', href: '/clients' },
+      { label: 'Missing Client', href: '/clients/missing-client' },
+      {
+        label: 'Board 12345678',
+        href: '/clients/missing-client/boards/1234567890abcdef',
+      },
+    ]);
   });
 
   it('resolves rollup detail and new rollup routes', () => {
     expect(resolveDashboardShellContext({ pathname: '/rollups/rollup-123/settings' })).toMatchObject({
       section: 'rollup',
       activeNavItem: 'rollups',
-      title: 'Rollup rollup-1',
+      title: 'Settings',
+      subtitle: 'Rollup rollup-1',
+      crumbs: [
+        { label: 'Central', href: '/my-tasks' },
+        { label: 'Rollups', href: '/rollups' },
+        { label: 'Rollup rollup-1', href: '/rollups/rollup-123' },
+        { label: 'Settings', href: '/rollups/rollup-123/settings' },
+      ],
       rollup: {
         id: 'rollup-123',
         href: '/rollups/rollup-123',
@@ -183,9 +244,17 @@ describe('resolveDashboardShellContext', () => {
     ).toMatchObject({
       section: 'admin',
       activeNavItem: 'admin',
-      title: 'Admin Settings',
+      title: 'Users',
+      subtitle: 'Admin Settings',
       isAdminRoute: true,
       actionsSlot: 'settings',
+      tabs: [
+        { label: 'General', href: '/settings/admin/general', active: false },
+        { label: 'Users', href: '/settings/admin/users', active: true },
+        { label: 'Teams', href: '/settings/admin/teams', active: false },
+        { label: 'Statuses', href: '/settings/admin/statuses', active: false },
+        { label: 'Archive', href: '/settings/admin/archive', active: false },
+      ],
     });
 
     expect(
@@ -196,8 +265,54 @@ describe('resolveDashboardShellContext', () => {
     ).toMatchObject({
       section: 'admin',
       activeNavItem: 'settings',
-      title: 'Admin Settings',
+      title: 'Users',
       isAdminRoute: true,
+    });
+  });
+
+  it('labels regular settings sections with tabs', () => {
+    expect(resolveDashboardShellContext({ pathname: '/settings/profile' })).toMatchObject({
+      section: 'settings',
+      activeNavItem: 'settings',
+      title: 'Profile',
+      crumbs: [
+        { label: 'Central', href: '/my-tasks' },
+        { label: 'Settings', href: '/settings' },
+        { label: 'Profile', href: '/settings/profile' },
+      ],
+      tabs: [
+        { label: 'Profile', href: '/settings/profile', active: true },
+        { label: 'Notifications', href: '/settings/notifications', active: false },
+        { label: 'Integrations', href: '/settings/integrations', active: false },
+      ],
+    });
+
+    expect(resolveDashboardShellContext({ pathname: '/settings/statuses-sections' })).toMatchObject({
+      title: 'Statuses & Sections',
+      crumbs: [
+        { label: 'Central', href: '/my-tasks' },
+        { label: 'Settings', href: '/settings' },
+        { label: 'Statuses & Sections', href: '/settings/statuses-sections' },
+      ],
+    });
+  });
+
+  it('adds child labels for template edit routes', () => {
+    expect(resolveDashboardShellContext({ pathname: '/templates/template-123/edit' })).toMatchObject({
+      section: 'templates',
+      activeNavItem: 'templates',
+      title: 'Edit',
+      subtitle: 'Template template',
+      crumbs: [
+        { label: 'Central', href: '/my-tasks' },
+        { label: 'Templates', href: '/templates' },
+        { label: 'Template template', href: '/templates/template-123' },
+        { label: 'Edit', href: '/templates/template-123/edit' },
+      ],
+      template: {
+        id: 'template-123',
+        href: '/templates/template-123',
+      },
     });
   });
 

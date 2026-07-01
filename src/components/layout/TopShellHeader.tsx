@@ -30,65 +30,70 @@ export function TopShellHeader({
   const { setSidebarOpen, sidebarOpen } = useUIStore();
   const crumbs = shellContext?.breadcrumbs ?? shellContext?.crumbs ?? [];
   const parentCrumbs = crumbs.slice(0, -1);
+  const tabs = shellContext?.tabs ?? [];
 
   return (
     <header
-      className="flex h-14 items-center gap-3 border-b bg-background px-3 sm:px-4"
+      className="border-b bg-background"
       data-shell-header-section={shellContext?.section}
       data-shell-header-nav-item={shellContext?.activeNavItem ?? undefined}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="lg:hidden"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          aria-label="Toggle navigation"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
+      <div className="flex h-14 items-center gap-3 px-3 sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Toggle navigation"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
 
-        <div className="flex min-w-0 items-center gap-3">
-          {parentCrumbs.length > 0 && (
-            <nav
-              aria-label="Breadcrumb"
-              className="hidden min-w-0 items-center gap-1 text-xs text-muted-foreground md:flex"
-            >
-              {parentCrumbs.map((crumb, index) => (
-                <BreadcrumbItem
-                  key={`${crumb.label}-${crumb.href ?? index}`}
-                  crumb={crumb}
-                />
-              ))}
-            </nav>
-          )}
+          <div className="flex min-w-0 items-center gap-3">
+            {parentCrumbs.length > 0 && (
+              <nav
+                aria-label="Breadcrumb"
+                className="hidden min-w-0 items-center gap-1 text-xs text-muted-foreground md:flex"
+              >
+                {parentCrumbs.map((crumb, index) => (
+                  <BreadcrumbItem
+                    key={`${crumb.label}-${crumb.href ?? index}`}
+                    crumb={crumb}
+                  />
+                ))}
+              </nav>
+            )}
 
-          {shellContext && (
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <h1 className="truncate text-sm font-semibold leading-5 text-foreground">
-                  {shellContext.title}
-                </h1>
-                {shellContext.subtitle && (
-                  <span className="hidden truncate text-xs text-muted-foreground sm:inline">
-                    {shellContext.subtitle}
-                  </span>
-                )}
+            {shellContext && (
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <h1 className="truncate text-sm font-semibold leading-5 text-foreground">
+                    {shellContext.title}
+                  </h1>
+                  {shellContext.subtitle && (
+                    <span className="hidden truncate text-xs text-muted-foreground sm:inline">
+                      {shellContext.subtitle}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-
-          {shellContext?.tabs && shellContext.tabs.length > 0 && (
-            <TopShellTabs tabs={shellContext.tabs} />
-          )}
+            )}
+          </div>
         </div>
+
+        <AppActions
+          user={user}
+          isAdmin={isAdmin}
+          onSignOut={onSignOut}
+        />
       </div>
 
-      <AppActions
-        user={user}
-        isAdmin={isAdmin}
-        onSignOut={onSignOut}
-      />
+      {tabs.length > 0 && (
+        <div className="px-3 pb-2 sm:px-4">
+          <TopShellTabs tabs={tabs} />
+        </div>
+      )}
     </header>
   );
 }
@@ -132,11 +137,11 @@ function TopShellTabs({ tabs }: { tabs: TopShellTab[] }) {
   return (
     <nav
       aria-label="Section tabs"
-      className="hidden min-w-0 items-center gap-1 border-l pl-3 md:flex"
+      className="flex min-w-0 items-center gap-1 overflow-x-auto"
     >
       {tabs.map((tab) => {
         const className = cn(
-          'inline-flex h-7 items-center rounded-md px-2 text-xs font-medium transition-colors',
+          'inline-flex h-7 shrink-0 items-center rounded-md px-2 text-xs font-medium transition-colors',
           tab.active
             ? 'bg-muted text-foreground'
             : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'

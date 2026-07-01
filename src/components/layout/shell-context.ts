@@ -121,6 +121,25 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
 ];
 
 const ROOT_CRUMB: TopShellCrumb = { label: 'Central', href: '/my-tasks' };
+const MY_TASKS_TAB_VALUES = ['tasks', 'assigned', 'personal', 'notifications', 'mentions'];
+
+const SETTINGS_SECTION_LABELS: Record<string, string> = {
+  profile: 'Profile',
+  notifications: 'Notifications',
+  integrations: 'Integrations',
+  team: 'Team',
+  teams: 'Teams',
+  users: 'Users',
+  'statuses-sections': 'Statuses & Sections',
+};
+
+const ADMIN_SETTINGS_SECTION_LABELS: Record<string, string> = {
+  general: 'General',
+  users: 'Users',
+  teams: 'Teams',
+  statuses: 'Statuses & Sections',
+  archive: 'Archive',
+};
 
 export function resolveDashboardShellContext({
   pathname,
@@ -145,7 +164,7 @@ export function resolveDashboardShellContext({
     });
   }
 
-  const [section, second, third, fourth] = segments;
+  const [section, second, third, fourth, fifth] = segments;
 
   if (section === 'my-tasks') {
     const tab = getSearchParam(searchParams, 'tab');
@@ -156,6 +175,7 @@ export function resolveDashboardShellContext({
       activeNavItem: 'my-work',
       title,
       crumbs: [ROOT_CRUMB, { label: 'My Work', href: '/my-tasks' }],
+      tabs: getMyTasksTabs(tab),
       route,
     });
   }
@@ -194,6 +214,7 @@ export function resolveDashboardShellContext({
       const board = client?.boards?.find((item) => item.id === fourth);
       const boardName = board?.name ?? `Board ${shortIdentifier(fourth)}`;
       const boardHref = `${clientHref}/boards/${fourth}`;
+      const childLabel = fifth ? humanizeSegment(fifth) : null;
       route.boardId = fourth;
 
       return createContext({
@@ -205,7 +226,9 @@ export function resolveDashboardShellContext({
           { label: 'Clients', href: '/clients' },
           { label: clientName, href: clientHref },
           { label: boardName, href: boardHref },
+          ...(childLabel ? [{ label: childLabel, href: `${boardHref}/${fifth}` }] : []),
         ],
+        tabs: getBoardTabs(boardHref),
         route,
         client: {
           id: client?.id,
@@ -231,6 +254,7 @@ export function resolveDashboardShellContext({
         { label: 'Clients', href: '/clients' },
         { label: clientName, href: clientHref },
       ],
+      tabs: getClientTabs(clientHref),
       route,
       client: {
         id: client?.id,
@@ -268,16 +292,19 @@ export function resolveDashboardShellContext({
 
     const rollupName = `Rollup ${shortIdentifier(second)}`;
     const rollupHref = `/rollups/${second}`;
+    const rollupChildLabel = third ? humanizeSegment(third) : null;
     route.rollupId = second;
 
     return createContext({
       section: 'rollup',
       activeNavItem: 'rollups',
-      title: rollupName,
+      title: rollupChildLabel ?? rollupName,
+      subtitle: rollupChildLabel ? rollupName : undefined,
       crumbs: [
         ROOT_CRUMB,
         { label: 'Rollups', href: '/rollups' },
         { label: rollupName, href: rollupHref },
+        ...(rollupChildLabel ? [{ label: rollupChildLabel, href: `${rollupHref}/${third}` }] : []),
       ],
       route,
       rollup: {
@@ -310,16 +337,19 @@ export function resolveDashboardShellContext({
     }
 
     const templateName = `Template ${shortIdentifier(second)}`;
+    const templateChildLabel = third ? humanizeSegment(third) : null;
     route.templateId = second;
 
     return createContext({
       section: 'templates',
       activeNavItem: 'templates',
-      title: templateName,
+      title: templateChildLabel ?? templateName,
+      subtitle: templateChildLabel ? templateName : undefined,
       crumbs: [
         ROOT_CRUMB,
         { label: 'Templates', href: '/templates' },
         { label: templateName, href: `/templates/${second}` },
+        ...(templateChildLabel ? [{ label: templateChildLabel, href: `/templates/${second}/${third}` }] : []),
       ],
       route,
       template: {
@@ -334,30 +364,40 @@ export function resolveDashboardShellContext({
     const isAdminRoute = second === 'admin';
 
     if (isAdminRoute) {
+      const adminSectionLabel = third ? getAdminSettingsSectionLabel(third) : null;
+
       return createContext({
         section: 'admin',
         activeNavItem: isAdmin ? 'admin' : 'settings',
-        title: 'Admin Settings',
+        title: adminSectionLabel ?? 'Admin Settings',
+        subtitle: adminSectionLabel ? 'Admin Settings' : undefined,
         crumbs: [
           ROOT_CRUMB,
           { label: 'Settings', href: '/settings' },
           { label: 'Admin Settings', href: '/settings/admin' },
+          ...(adminSectionLabel
+            ? [{ label: adminSectionLabel, href: `/settings/admin/${third}` }]
+            : []),
         ],
+        tabs: getAdminSettingsTabs(third),
         route,
         isAdminRoute: true,
         actionsSlot: 'settings',
       });
     }
 
+    const settingsSectionLabel = second ? getSettingsSectionLabel(second) : 'Settings';
+
     return createContext({
       section: 'settings',
       activeNavItem: 'settings',
-      title: second ? humanizeSegment(second) : 'Settings',
+      title: settingsSectionLabel,
       crumbs: [
         ROOT_CRUMB,
         { label: 'Settings', href: '/settings' },
-        ...(second ? [{ label: humanizeSegment(second), href: `/settings/${second}` }] : []),
+        ...(second ? [{ label: settingsSectionLabel, href: `/settings/${second}` }] : []),
       ],
+      tabs: getSettingsTabs(second),
       route,
       actionsSlot: 'settings',
     });
@@ -434,8 +474,83 @@ function hasSearchParamGetter(
 
 function getMyTasksTitle(tab: string | null): string {
   if (tab === 'personal') return 'Personal Tasks';
-  if (tab === 'notifications') return 'Replies & Mentions';
+  if (tab === 'mentions' || tab === 'notifications') return 'Replies & Mentions';
   return 'My Work';
+}
+
+function getMyTasksTabs(tab: string | null): TopShellTab[] {
+  const activeTab = getMyTasksActiveTab(tab);
+
+  return [
+    {
+      label: 'Assigned',
+      href: '/my-tasks?tab=tasks',
+      active: activeTab === 'assigned',
+    },
+    {
+      label: 'Personal',
+      href: '/my-tasks?tab=personal',
+      active: activeTab === 'personal',
+    },
+    {
+      label: 'Mentions',
+      href: '/my-tasks?tab=notifications',
+      active: activeTab === 'mentions',
+    },
+  ];
+}
+
+function getMyTasksActiveTab(tab: string | null): 'assigned' | 'personal' | 'mentions' {
+  if (tab === 'personal') return 'personal';
+  if (tab === 'mentions' || tab === 'notifications') return 'mentions';
+  if (tab && !MY_TASKS_TAB_VALUES.includes(tab)) return 'assigned';
+  return 'assigned';
+}
+
+function getClientTabs(clientHref: string): TopShellTab[] {
+  return [
+    { label: 'Overview', href: clientHref, active: true },
+    { label: 'Activity', href: `${clientHref}#activity`, active: false },
+    { label: 'Boards', href: `${clientHref}#boards`, active: false },
+  ];
+}
+
+function getBoardTabs(boardHref: string): TopShellTab[] {
+  return [
+    { label: 'Tasks', href: boardHref, active: true },
+    { label: 'Activity', href: `${boardHref}#activity`, active: false },
+    { label: 'Projects', href: `${boardHref}#projects`, active: false },
+  ];
+}
+
+function getSettingsTabs(activeSection: string | undefined): TopShellTab[] {
+  const active = activeSection ?? 'profile';
+
+  return [
+    { label: 'Profile', href: '/settings/profile', active: active === 'profile' },
+    { label: 'Notifications', href: '/settings/notifications', active: active === 'notifications' },
+    { label: 'Integrations', href: '/settings/integrations', active: active === 'integrations' },
+  ];
+}
+
+function getAdminSettingsTabs(activeSection: string | undefined): TopShellTab[] {
+  const active = activeSection ?? 'general';
+
+  return [
+    { label: 'General', href: '/settings/admin/general', active: active === 'general' },
+    { label: 'Users', href: '/settings/admin/users', active: active === 'users' },
+    { label: 'Teams', href: '/settings/admin/teams', active: active === 'teams' },
+    { label: 'Statuses', href: '/settings/admin/statuses', active: active === 'statuses' },
+    { label: 'Archive', href: '/settings/admin/archive', active: active === 'archive' },
+  ];
+}
+
+function getSettingsSectionLabel(section: string): string {
+  return SETTINGS_SECTION_LABELS[section] ?? humanizeSegment(section);
+}
+
+function getAdminSettingsSectionLabel(section: string): string {
+  return ADMIN_SETTINGS_SECTION_LABELS[section] ?? humanizeSegment(section);
 }
 
 function humanizeSegment(segment: string): string {
