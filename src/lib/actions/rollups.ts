@@ -33,6 +33,7 @@ import {
 import type { TaskFilters, TaskSortOptions } from './tasks';
 import { getSiteSettings } from './site-settings';
 import { getOrgToday } from '@/lib/utils/timezone';
+import { isProjectBoardBehaviorEnabled } from '@/lib/feature-flags/project-board-behavior';
 import {
   getBoardAccessLevel,
   getExplicitAccessBoardIds,
@@ -1143,29 +1144,31 @@ export async function getRollupTasks(
       ])
     );
 
-    const projectRows = await db
-      .select({
-        id: boardProjects.id,
-        parentBoardId: boardProjects.parentBoardId,
-        projectBoardId: boardProjects.projectBoardId,
-        status: boardProjects.status,
-        section: boardProjects.section,
-        dueDate: boardProjects.dueDate,
-        position: boardProjects.position,
-        createdAt: boardProjects.createdAt,
-        updatedAt: boardProjects.updatedAt,
-        archivedAt: boardProjects.archivedAt,
-        title: boards.name,
-        description: boards.description,
-        clientId: boards.clientId,
-        color: boards.color,
-        icon: boards.icon,
-        internalStatusOptions: boards.statusOptions,
-        internalSectionOptions: boards.sectionOptions,
-      })
-      .from(boardProjects)
-      .innerJoin(boards, eq(boards.id, boardProjects.projectBoardId))
-      .where(and(inArray(boardProjects.parentBoardId, sourceBoardIds), isNull(boardProjects.archivedAt)));
+    const projectRows = (await isProjectBoardBehaviorEnabled())
+      ? await db
+          .select({
+            id: boardProjects.id,
+            parentBoardId: boardProjects.parentBoardId,
+            projectBoardId: boardProjects.projectBoardId,
+            status: boardProjects.status,
+            section: boardProjects.section,
+            dueDate: boardProjects.dueDate,
+            position: boardProjects.position,
+            createdAt: boardProjects.createdAt,
+            updatedAt: boardProjects.updatedAt,
+            archivedAt: boardProjects.archivedAt,
+            title: boards.name,
+            description: boards.description,
+            clientId: boards.clientId,
+            color: boards.color,
+            icon: boards.icon,
+            internalStatusOptions: boards.statusOptions,
+            internalSectionOptions: boards.sectionOptions,
+          })
+          .from(boardProjects)
+          .innerJoin(boards, eq(boards.id, boardProjects.projectBoardId))
+          .where(and(inArray(boardProjects.parentBoardId, sourceBoardIds), isNull(boardProjects.archivedAt)))
+      : [];
 
     const projectBoardIds = projectRows.map((project) => project.projectBoardId);
     const projectTaskCounts =

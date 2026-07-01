@@ -44,6 +44,7 @@ import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import { trackEvent } from '@/lib/analytics';
 import { useTopShellActions } from '@/components/layout/top-shell-actions';
 import { useTopShellToolbar } from '@/components/layout/top-shell-toolbar';
+import { useCentralFeatureFlags } from '@/lib/feature-flags/CentralFeatureFlagsProvider';
 
 interface BoardPageClientProps {
   boardId: string;
@@ -71,6 +72,7 @@ export function BoardPageClient({
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const { projectBoardBehaviorEnabled } = useCentralFeatureFlags();
 
   // Filter and sort state
   const [filters, setFilters] = React.useState<TaskFilters>({});
@@ -114,9 +116,14 @@ export function BoardPageClient({
 
   // Fetch data
   const { data: boardItems = [], isLoading: isLoadingBoardItems } = useBoardItems(boardId, filters, sort);
+  const canUseProjectBoards = projectBoardBehaviorEnabled;
+  const visibleBoardItems = React.useMemo(
+    () => canUseProjectBoards ? boardItems : boardItems.filter((item) => item.kind === 'task'),
+    [boardItems, canUseProjectBoards]
+  );
   const tasks = React.useMemo(
-    () => boardItems.filter((item): item is Extract<BoardItem, { kind: 'task' }> => item.kind === 'task'),
-    [boardItems]
+    () => visibleBoardItems.filter((item): item is Extract<BoardItem, { kind: 'task' }> => item.kind === 'task'),
+    [visibleBoardItems]
   );
   const { data: assignableUsers = [], isLoading: isLoadingUsers } = useAssignableUsers(boardId);
 
@@ -407,7 +414,15 @@ export function BoardPageClient({
   }, [swimlaneCardItems]);
 
   const isLoading = isLoadingBoardItems || isLoadingUsers;
-  const canCreateProjects = boardType !== 'project' && boardType !== 'personal';
+  const canCreateProjects = canUseProjectBoards && boardType !== 'project' && boardType !== 'personal';
+  const handleOpenProject = React.useCallback(
+    (projectBoardId: string) => {
+      if (canUseProjectBoards) {
+        router.push(`/clients/${clientSlug}/boards/${projectBoardId}`);
+      }
+    },
+    [canUseProjectBoards, clientSlug, router]
+  );
 
   const createActions = React.useMemo(
     () => (
@@ -554,15 +569,15 @@ export function BoardPageClient({
       ) : viewMode === 'table' ? (
         <BoardTable
           tasks={tasks}
-          items={boardItems}
+          items={visibleBoardItems}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
           onUpdateTask={(input) => updateTask.mutate(input)}
-          onUpdateProject={(input) => updateProject.mutate(input)}
+          onUpdateProject={canUseProjectBoards ? (input) => updateProject.mutate(input) : undefined}
           onDeleteTask={(taskId) => deleteTask.mutate(taskId)}
           onOpenTaskModal={openTaskModal}
-          onOpenProject={(projectBoardId) => router.push(`/clients/${clientSlug}/boards/${projectBoardId}`)}
+          onOpenProject={canUseProjectBoards ? handleOpenProject : undefined}
           onOpenSubtasks={(taskId) => openTaskModal(taskId, 'subtasks')}
           updatingTaskIds={updatingTaskIds}
           sort={sort}
@@ -579,7 +594,7 @@ export function BoardPageClient({
           boardId={boardId}
           clientSlug={clientSlug}
           tasks={tasks}
-          items={boardItems}
+          items={visibleBoardItems}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
@@ -587,7 +602,7 @@ export function BoardPageClient({
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
           onTaskModalOpen={exitSubtaskOnlyMode}
-          onOpenProject={(projectBoardId) => router.push(`/clients/${clientSlug}/boards/${projectBoardId}`)}
+          onOpenProject={canUseProjectBoards ? handleOpenProject : undefined}
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}
           isMultiSelectMode={isMultiSelectMode}
@@ -600,7 +615,7 @@ export function BoardPageClient({
           boardId={boardId}
           clientSlug={clientSlug}
           tasks={tasks}
-          items={boardItems}
+          items={visibleBoardItems}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
@@ -608,7 +623,7 @@ export function BoardPageClient({
           highlightedCommentId={urlCommentId}
           onTaskModalClose={clearUrlParams}
           onTaskModalOpen={exitSubtaskOnlyMode}
-          onOpenProject={(projectBoardId) => router.push(`/clients/${clientSlug}/boards/${projectBoardId}`)}
+          onOpenProject={canUseProjectBoards ? handleOpenProject : undefined}
           hiddenItems={swimlaneHiddenItems}
           selectedTaskIds={selectedTaskIds}
           onTaskMultiSelect={handleTaskMultiSelect}

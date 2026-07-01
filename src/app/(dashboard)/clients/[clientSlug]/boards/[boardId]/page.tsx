@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { boards, clients } from '@/lib/db/schema';
 import { BoardPageClient } from '@/components/tasks/BoardPageClient';
 import { BoardHeader } from '@/components/boards/BoardHeader';
+import { isProjectBoardBehaviorEnabled } from '@/lib/feature-flags/project-board-behavior';
 
 interface Props {
   params: Promise<{ clientSlug: string; boardId: string }>;
@@ -62,6 +63,10 @@ export default async function BoardPage({ params }: Props) {
   }
 
   const board = result.data;
+
+  if (board.type === 'project' && !(await isProjectBoardBehaviorEnabled())) {
+    notFound();
+  }
 
   // Check if user can edit (admin or full access) for settings link
   const isAdmin = user.role === 'admin';

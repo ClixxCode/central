@@ -35,6 +35,10 @@ import {
 } from '@/lib/queues/background-jobs';
 import { getSiteSettings } from './site-settings';
 import {
+  getProjectBoardBehaviorDisabledResult,
+  isProjectBoardBehaviorEnabled,
+} from '@/lib/feature-flags/project-board-behavior';
+import {
   canAccessTask,
   getBoardAccessLevel,
   getBoardAccessSourceBoardId,
@@ -807,6 +811,14 @@ export async function listBoardItems(
     return { success: false, error: taskResult.error };
   }
 
+  const taskItems = (taskResult.tasks ?? []).map((task) => ({ ...task, kind: 'task' as const }));
+  if (!(await isProjectBoardBehaviorEnabled())) {
+    return {
+      success: true,
+      items: sortBoardItems(taskItems, sort),
+    };
+  }
+
   const parentBoard = await db.query.boards.findFirst({
     where: eq(boards.id, boardId),
     columns: { statusOptions: true },
@@ -904,7 +916,7 @@ export async function listBoardItems(
   return {
     success: true,
     items: sortBoardItems([
-      ...(taskResult.tasks ?? []).map((task) => ({ ...task, kind: 'task' as const })),
+      ...taskItems,
       ...filteredProjectItems,
     ], sort),
   };
@@ -995,6 +1007,9 @@ export async function createProject(input: CreateBoardProjectInput): Promise<{
   project?: ProjectBoardItem;
   error?: string;
 }> {
+  const disabledResult = await getProjectBoardBehaviorDisabledResult();
+  if (disabledResult) return disabledResult;
+
   const user = await requireAuth();
   const isAdmin = user.role === 'admin';
 
@@ -1080,6 +1095,9 @@ export async function updateProject(input: UpdateBoardProjectInput): Promise<{
   project?: ProjectBoardItem;
   error?: string;
 }> {
+  const disabledResult = await getProjectBoardBehaviorDisabledResult();
+  if (disabledResult) return disabledResult;
+
   const user = await requireAuth();
   const isAdmin = user.role === 'admin';
 
@@ -1133,6 +1151,9 @@ export async function updateProject(input: UpdateBoardProjectInput): Promise<{
 }
 
 export async function archiveProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+  const disabledResult = await getProjectBoardBehaviorDisabledResult();
+  if (disabledResult) return disabledResult;
+
   const user = await requireAuth();
   const isAdmin = user.role === 'admin';
   const project = await getProjectCardById(projectId);
@@ -1159,6 +1180,9 @@ export async function archiveProject(projectId: string): Promise<{ success: bool
 }
 
 export async function unarchiveProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+  const disabledResult = await getProjectBoardBehaviorDisabledResult();
+  if (disabledResult) return disabledResult;
+
   const user = await requireAuth();
   const isAdmin = user.role === 'admin';
   const project = await getProjectCardById(projectId);
@@ -1181,6 +1205,9 @@ export async function unarchiveProject(projectId: string): Promise<{ success: bo
 }
 
 export async function deleteProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+  const disabledResult = await getProjectBoardBehaviorDisabledResult();
+  if (disabledResult) return disabledResult;
+
   const user = await requireAuth();
   const isAdmin = user.role === 'admin';
   const project = await getProjectCardById(projectId);
@@ -1212,6 +1239,11 @@ export async function updateBoardItemPositions(
     .filter((update) => update.kind === 'task')
     .map(({ id, position, status, section }) => ({ id, position, status, section }));
   const projectUpdates = validation.data.filter((update) => update.kind === 'project');
+
+  if (projectUpdates.length > 0) {
+    const disabledResult = await getProjectBoardBehaviorDisabledResult();
+    if (disabledResult) return disabledResult;
+  }
 
   if (taskUpdates.length > 0) {
     const result = await updateTaskPositions(taskUpdates);
