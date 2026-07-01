@@ -33,6 +33,7 @@ import { GlobalSearch } from '@/components/search';
 import { KeyboardShortcutsModal } from '@/components/shortcuts';
 import { useIsClient } from '@/hooks/useIsClient';
 import { useFavorites } from '@/lib/hooks/useFavorites';
+import { useFavoriteHintKeys } from '@/lib/hooks/useFavoriteHintKeys';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { useQuickActionsStore } from '@/lib/stores';
 
@@ -49,6 +50,17 @@ interface AppActionsProps {
   mobileMenuSlot?: React.ReactNode;
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const tagName = target.tagName.toLowerCase();
+  return (
+    tagName === 'input' ||
+    tagName === 'textarea' ||
+    tagName === 'select' ||
+    (target as HTMLElement).isContentEditable
+  );
+}
+
 export function AppActions({
   user,
   isAdmin = false,
@@ -62,23 +74,42 @@ export function AppActions({
   const { theme, setTheme } = useTheme();
   const mounted = useIsClient();
   const { data: favoritesData } = useFavorites();
+  const fKeyHeld = useFavoriteHintKeys();
 
-  const favoriteShortcuts = React.useMemo(() => {
+  const favoriteHrefByDigit = React.useMemo(() => {
     const favorites = favoritesData?.favorites ?? [];
-    return favorites.slice(0, 9).map((fav, index) => ({
-      key: ['f', String(index + 1)] as string[],
-      description: `Go to ${fav.name}`,
-      handler: () => {
+
+    return new Map(
+      favorites.slice(0, 9).map((fav, index) => {
         const href =
           fav.boardType === 'personal'
             ? '/my-tasks?tab=personal'
             : fav.entityType === 'board' && fav.clientSlug
             ? `/clients/${fav.clientSlug}/boards/${fav.entityId}`
             : `/rollups/${fav.entityId}`;
-        router.push(href);
-      },
-    }));
-  }, [favoritesData?.favorites, router]);
+        return [String(index + 1), href];
+      })
+    );
+  }, [favoritesData?.favorites]);
+
+  React.useEffect(() => {
+    if (!fKeyHeld) return;
+
+    const handleFavoriteChord = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const href = favoriteHrefByDigit.get(event.key);
+      if (!href) return;
+
+      event.preventDefault();
+      router.push(href);
+    };
+
+    document.addEventListener('keydown', handleFavoriteChord);
+    return () => document.removeEventListener('keydown', handleFavoriteChord);
+  }, [fKeyHeld, favoriteHrefByDigit, router]);
 
   useKeyboardShortcuts([
     {
@@ -140,7 +171,6 @@ export function AppActions({
         router.push('/settings');
       },
     },
-    ...favoriteShortcuts,
   ]);
 
   const initials = user.name
@@ -255,19 +285,19 @@ export function AppActions({
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/settings/users" className="cursor-pointer">
+                  <Link href="/settings/admin/users" className="cursor-pointer">
                     <Users className="mr-2 h-4 w-4" />
                     Manage Users
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/settings/teams" className="cursor-pointer">
+                  <Link href="/settings/admin/teams" className="cursor-pointer">
                     <ShieldCheck className="mr-2 h-4 w-4" />
                     Manage Teams
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/settings/statuses-sections" className="cursor-pointer">
+                  <Link href="/settings/admin/statuses" className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     Statuses & Sections
                   </Link>

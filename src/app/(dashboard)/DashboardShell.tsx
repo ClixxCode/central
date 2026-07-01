@@ -99,7 +99,12 @@ export function DashboardShell({
       )}
       <div className="flex flex-1 overflow-hidden">
         <StoreHydration />
-        <OuterAppSidebar clients={clients} isAdmin={isAdmin} isContractor={isContractor} />
+        <OuterAppSidebar
+          clients={clients}
+          isAdmin={isAdmin}
+          isContractor={isContractor}
+          shellContext={shellContext}
+        />
         <MobileDashboardNav isAdmin={isAdmin} shellContext={shellContext} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <TopShellContextOverrideProvider registerOverride={registerShellContextOverride}>

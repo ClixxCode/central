@@ -6,6 +6,7 @@ import {
   LayoutTemplate,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { AppNavItemId } from './shell-context';
 
 export const DEFAULT_APP_NAV_ORDER = [
   'My Work',
@@ -17,6 +18,10 @@ export const DEFAULT_APP_NAV_ORDER = [
 
 export type AppNavPreferenceLabel = (typeof DEFAULT_APP_NAV_ORDER)[number];
 export type AppNavSurface = 'desktop' | 'mobile';
+
+const LEGACY_APP_NAV_PREFERENCE_LABELS: Record<string, AppNavPreferenceLabel> = {
+  ClientList: 'Clients',
+};
 
 export interface AppShellNavDefinition {
   preferenceLabel: AppNavPreferenceLabel;
@@ -97,18 +102,18 @@ export function getOrderedAppNavItems({
   surface = 'desktop',
 }: BuildAppNavItemsInput): AppShellNavItem[] {
   const availableLabels = new Set(getAvailableAppNavPreferenceLabels(showScheduleInSidebar));
-  const orderedLabels =
-    navOrder && navOrder.length > 0 ? navOrder : DEFAULT_APP_NAV_ORDER;
+  const orderedLabels = normalizeAppNavPreferenceLabels(navOrder);
+  const baseOrder = orderedLabels.length > 0 ? orderedLabels : [...DEFAULT_APP_NAV_ORDER];
   const items: AppShellNavItem[] = [];
 
-  for (const label of orderedLabels) {
-    if (isAppNavPreferenceLabel(label) && availableLabels.has(label)) {
+  for (const label of baseOrder) {
+    if (availableLabels.has(label)) {
       items.push(toAppShellNavItem(APP_SHELL_NAV_ITEMS[label], surface));
     }
   }
 
   for (const label of availableLabels) {
-    if (!orderedLabels.includes(label)) {
+    if (!baseOrder.includes(label)) {
       items.push(toAppShellNavItem(APP_SHELL_NAV_ITEMS[label], surface));
     }
   }
@@ -120,11 +125,31 @@ export function getVisibleAppNavItems({
   hiddenNavItems = [],
   ...input
 }: BuildAppNavItemsInput): AppShellNavItem[] {
-  const hiddenLabels = hiddenNavItems ?? [];
+  const hiddenLabels = normalizeAppNavPreferenceLabels(hiddenNavItems);
 
   return getOrderedAppNavItems(input).filter(
     (item) => item.alwaysVisible || !hiddenLabels.includes(item.preferenceLabel)
   );
+}
+
+export function normalizeAppNavPreferenceLabels(
+  labels?: readonly string[] | null
+): AppNavPreferenceLabel[] {
+  const normalized: AppNavPreferenceLabel[] = [];
+  const seen = new Set<AppNavPreferenceLabel>();
+
+  for (const label of labels ?? []) {
+    const preferenceLabel = isAppNavPreferenceLabel(label)
+      ? label
+      : LEGACY_APP_NAV_PREFERENCE_LABELS[label];
+
+    if (preferenceLabel && !seen.has(preferenceLabel)) {
+      normalized.push(preferenceLabel);
+      seen.add(preferenceLabel);
+    }
+  }
+
+  return normalized;
 }
 
 function toAppShellNavItem(
@@ -142,4 +167,21 @@ function toAppShellNavItem(
 
 export function isAppNavPreferenceLabel(label: string): label is AppNavPreferenceLabel {
   return label in APP_SHELL_NAV_ITEMS;
+}
+
+export function getAppNavActiveItem(
+  preferenceLabel: AppNavPreferenceLabel
+): AppNavItemId {
+  switch (preferenceLabel) {
+    case 'My Work':
+      return 'my-work';
+    case 'Clients':
+      return 'clients';
+    case 'Rollups':
+      return 'rollups';
+    case 'Schedule':
+      return 'schedule';
+    case 'Templates':
+      return 'templates';
+  }
 }

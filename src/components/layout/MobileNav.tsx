@@ -18,8 +18,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { DEFAULT_APP_NAV_ORDER, getVisibleAppNavItems } from './app-nav';
-import type { AppNavItemId, TopShellContext } from './shell-context';
+import { DEFAULT_APP_NAV_ORDER, getAppNavActiveItem, getVisibleAppNavItems } from './app-nav';
+import type { TopShellContext } from './shell-context';
 
 interface MobileNavProps {
   isAdmin?: boolean;
@@ -81,7 +81,7 @@ export function MobileNav({ isAdmin = false, shellContext }: MobileNavProps) {
             {/* Main Navigation */}
             <nav className="space-y-1">
               {navItems.map((item) => {
-                const isActive = getMobileNavActiveItem(item.preferenceLabel) === shellContext?.activeNavItem;
+                const isActive = getAppNavActiveItem(item.preferenceLabel) === shellContext?.activeNavItem;
                 const Icon = item.icon;
 
                 return (
@@ -195,21 +195,4 @@ export function MobileNav({ isAdmin = false, shellContext }: MobileNavProps) {
       </SheetContent>
     </Sheet>
   );
-}
-
-function getMobileNavActiveItem(preferenceLabel: string): AppNavItemId | null {
-  switch (preferenceLabel) {
-    case 'My Work':
-      return 'my-work';
-    case 'Clients':
-      return 'clients';
-    case 'Rollups':
-      return 'rollups';
-    case 'Schedule':
-      return 'schedule';
-    case 'Templates':
-      return 'templates';
-    default:
-      return null;
-  }
 }

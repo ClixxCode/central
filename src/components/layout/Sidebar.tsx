@@ -77,10 +77,13 @@ import {
   APP_SHELL_NAV_ITEMS,
   DEFAULT_APP_NAV_ORDER,
   getAvailableAppNavPreferenceLabels,
-  getOrderedAppNavItems,
+  getAppNavActiveItem,
+  getVisibleAppNavItems,
   isAppNavPreferenceLabel,
+  normalizeAppNavPreferenceLabels,
   type AppNavPreferenceLabel,
 } from './app-nav';
+import type { TopShellContext } from './shell-context';
 
 // A top-level item is either a folder or a standalone favorite
 type TopLevelItem =
@@ -544,9 +547,10 @@ interface SidebarProps {
   clients?: unknown[];
   isAdmin?: boolean;
   isContractor?: boolean;
+  shellContext?: TopShellContext;
 }
 
-export function Sidebar({ isAdmin = false }: SidebarProps) {
+export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -590,9 +594,10 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
   }, [creatingFolder]);
 
   const enterEditMode = () => {
-    setDraftHiddenNav(sidebarPrefs?.hiddenNavItems ?? []);
+    setDraftHiddenNav(normalizeAppNavPreferenceLabels(sidebarPrefs?.hiddenNavItems));
     const savedOrder = sidebarPrefs?.navOrder;
-    setDraftNavOrder(savedOrder && savedOrder.length > 0 ? savedOrder : [...DEFAULT_APP_NAV_ORDER]);
+    const normalizedOrder = normalizeAppNavPreferenceLabels(savedOrder);
+    setDraftNavOrder(normalizedOrder.length > 0 ? normalizedOrder : [...DEFAULT_APP_NAV_ORDER]);
     setEditMode(true);
   };
 
@@ -718,11 +723,13 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
 
   const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
   const savedNavOrder = sidebarPrefs?.navOrder;
-  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_APP_NAV_ORDER;
+  const normalizedNavOrder = normalizeAppNavPreferenceLabels(savedNavOrder);
+  const navOrder = normalizedNavOrder.length > 0 ? normalizedNavOrder : DEFAULT_APP_NAV_ORDER;
   const showScheduleInSidebar = !!calPrefs?.showScheduleInSidebar;
   const availableLabels = new Set(getAvailableAppNavPreferenceLabels(showScheduleInSidebar));
-  const allNavItems = getOrderedAppNavItems({
+  const navItems = getVisibleAppNavItems({
     navOrder,
+    hiddenNavItems,
     showScheduleInSidebar,
     surface: 'desktop',
   });
@@ -730,11 +737,14 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
     (label): label is AppNavPreferenceLabel =>
       isAppNavPreferenceLabel(label) && availableLabels.has(label)
   );
-  const navItems = allNavItems.filter(
-    (item) => item.alwaysVisible || !hiddenNavItems.includes(item.preferenceLabel)
-  );
 
   const hasFavorites = favoritesData.favorites.length > 0 || favoritesData.folders.length > 0;
+  const isSettingsActive = shellContext
+    ? shellContext.activeNavItem === 'settings'
+    : pathname.startsWith('/settings') && !pathname.startsWith('/settings/admin');
+  const isAdminActive = shellContext
+    ? shellContext.activeNavItem === 'admin'
+    : pathname.startsWith('/settings/admin');
 
   // Prevent hydration mismatch by not rendering until client-side
   // This avoids the sidebar "sliding in" when localStorage state differs from SSR default
@@ -924,7 +934,11 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
           {/* Main Navigation */}
           <nav className="space-y-1">
             {navItems.map((item) => {
-              const isActive = item.preferenceLabel === 'Clients' ? pathname === '/clients' : pathname === item.href;
+              const isActive = shellContext
+                ? getAppNavActiveItem(item.preferenceLabel) === shellContext.activeNavItem
+                : item.preferenceLabel === 'Clients'
+                ? pathname === '/clients'
+                : pathname === item.href;
               const Icon = item.icon;
 
               if (isCollapsed) {
@@ -1159,12 +1173,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
                   <TooltipTrigger asChild>
                     <Link
                       href="/settings"
-                      className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-                        pathname.startsWith('/settings') && !pathname.startsWith('/settings/admin')
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:bg-accent'
-                      )}
+	                      className={cn(
+	                        'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+	                        isSettingsActive
+	                          ? 'bg-primary/10 text-primary'
+	                          : 'text-muted-foreground hover:bg-accent'
+	                      )}
                     >
                       <Settings className="h-5 w-5" />
                     </Link>
@@ -1176,12 +1190,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
                     <TooltipTrigger asChild>
                       <Link
                         href="/settings/admin"
-                        className={cn(
-                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-                          pathname.startsWith('/settings/admin')
-                            ? 'bg-primary/10 text-primary'
-                            : 'text-muted-foreground hover:bg-accent'
-                        )}
+	                        className={cn(
+	                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+	                          isAdminActive
+	                            ? 'bg-primary/10 text-primary'
+	                            : 'text-muted-foreground hover:bg-accent'
+	                        )}
                       >
                         <ShieldCheck className="h-5 w-5" />
                       </Link>
@@ -1194,12 +1208,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
               <nav className="space-y-1">
                 <Link
                   href="/settings"
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                    pathname.startsWith('/settings') && !pathname.startsWith('/settings/admin')
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:bg-accent'
-                  )}
+	                  className={cn(
+	                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+	                    isSettingsActive
+	                      ? 'bg-primary/10 text-primary font-medium'
+	                      : 'text-muted-foreground hover:bg-accent'
+	                  )}
                 >
                   <Settings className="h-5 w-5" />
                   Settings
@@ -1207,12 +1221,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
                 {isAdmin && (
                   <Link
                     href="/settings/admin"
-                    className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                      pathname.startsWith('/settings/admin')
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:bg-accent'
-                    )}
+	                    className={cn(
+	                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+	                      isAdminActive
+	                        ? 'bg-primary/10 text-primary font-medium'
+	                        : 'text-muted-foreground hover:bg-accent'
+	                    )}
                   >
                     <ShieldCheck className="h-5 w-5" />
                     Admin
