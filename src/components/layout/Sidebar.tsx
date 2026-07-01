@@ -21,7 +21,6 @@ import {
   Trash2,
   ArrowRight,
   ArrowUp,
-  Hammer,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';

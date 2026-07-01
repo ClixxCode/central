@@ -13,7 +13,6 @@ import {
   getAvailableSourceBoards,
   getRollupRuleOptions,
   updateRollupRule,
-  type RollupBoardSummary,
   type RollupBoardWithSources,
 } from '@/lib/actions/rollups';
 import type {

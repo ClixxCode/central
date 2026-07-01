@@ -6,6 +6,19 @@ import { ClientSwimlane } from '@/components/tasks/ClientSwimlane';
 import { PersonalRollupToolbar } from '@/components/tasks/PersonalRollupToolbar';
 import type { MyTasksByClient, MyTaskWithContext } from '@/lib/actions/tasks';
 
+const createMockClient = (overrides = {}) => ({
+  id: 'client-1',
+  name: 'Test Client',
+  slug: 'test-client',
+  color: '#3B82F6',
+  icon: null,
+  pulseAccountId: null,
+  accountStatus: null,
+  accountTeam: [],
+  accountServices: [],
+  ...overrides,
+});
+
 // Mock next/server and next-auth to avoid module resolution errors in jsdom
 vi.mock('next/server', () => ({
   NextRequest: class MockNextRequest {},
@@ -181,24 +194,14 @@ const createMockTask = (overrides: Partial<MyTaskWithContext> = {}): MyTaskWithC
     sectionOptions: [],
   },
   client: {
-    id: 'client-1',
-    name: 'Test Client',
-    slug: 'test-client',
-    color: '#3B82F6',
-    icon: null,
+    ...createMockClient(),
   },
   ...overrides,
 });
 
 const createMockTasksByClient = (): MyTasksByClient[] => [
   {
-    client: {
-      id: 'client-1',
-      name: 'Acme Corporation',
-      slug: 'acme',
-      color: '#3B82F6',
-      icon: null,
-    },
+    client: createMockClient({ name: 'Acme Corporation', slug: 'acme' }),
     boards: [
       {
         id: 'board-1',
@@ -214,23 +217,22 @@ const createMockTasksByClient = (): MyTasksByClient[] => [
       createMockTask({
         id: 'task-1',
         title: 'Write blog post',
-        client: { id: 'client-1', name: 'Acme Corporation', slug: 'acme', color: '#3B82F6', icon: null },
+        client: createMockClient({ name: 'Acme Corporation', slug: 'acme' }),
       }),
       createMockTask({
         id: 'task-2',
         title: 'Review campaign',
-        client: { id: 'client-1', name: 'Acme Corporation', slug: 'acme', color: '#3B82F6', icon: null },
+        client: createMockClient({ name: 'Acme Corporation', slug: 'acme' }),
       }),
     ],
   },
   {
-    client: {
+    client: createMockClient({
       id: 'client-2',
       name: 'Beta Inc',
       slug: 'beta',
       color: '#10B981',
-      icon: null,
-    },
+    }),
     boards: [
       {
         id: 'board-2',
@@ -246,7 +248,12 @@ const createMockTasksByClient = (): MyTasksByClient[] => [
         id: 'task-3',
         title: 'Fix bug',
         boardId: 'board-2',
-        client: { id: 'client-2', name: 'Beta Inc', slug: 'beta', color: '#10B981', icon: null },
+        client: createMockClient({
+          id: 'client-2',
+          name: 'Beta Inc',
+          slug: 'beta',
+          color: '#10B981',
+        }),
         board: {
           id: 'board-2',
           name: 'Development',
