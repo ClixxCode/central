@@ -1,27 +1,13 @@
 'use client';
 
 import { MobileNav } from './MobileNav';
-
-interface Client {
-  id: string;
-  name: string;
-  slug: string;
-  color: string;
-  icon: string | null;
-  defaultBoardId: string | null;
-  boards: { id: string; name: string }[];
-}
+import type { TopShellContext } from './shell-context';
 
 interface MobileDashboardNavProps {
-  clients: Client[];
   isAdmin: boolean;
-  isContractor?: boolean;
+  shellContext: TopShellContext;
 }
 
-export function MobileDashboardNav({
-  clients,
-  isAdmin,
-  isContractor = false,
-}: MobileDashboardNavProps) {
-  return <MobileNav clients={clients} isAdmin={isAdmin} isContractor={isContractor} />;
+export function MobileDashboardNav({ isAdmin, shellContext }: MobileDashboardNavProps) {
+  return <MobileNav isAdmin={isAdmin} shellContext={shellContext} />;
 }

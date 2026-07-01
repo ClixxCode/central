@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { X, Layers, Users, Settings, ChevronRight, Plus } from 'lucide-react';
+import { Layers, Settings, ShieldCheck, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
 import { useFavorites } from '@/lib/hooks/useFavorites';
@@ -10,27 +10,23 @@ import { useCalendarPreferences, useSidebarPreferences } from '@/lib/hooks';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useIsClient } from '@/hooks/useIsClient';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DEFAULT_APP_NAV_ORDER, getVisibleAppNavItems } from './app-nav';
-
-interface Client {
-  id: string;
-  name: string;
-  slug: string;
-  color: string;
-  icon: string | null;
-  defaultBoardId: string | null;
-  boards: { id: string; name: string }[];
-}
+import type { AppNavItemId, TopShellContext } from './shell-context';
 
 interface MobileNavProps {
-  clients: Client[];
   isAdmin?: boolean;
-  isContractor?: boolean;
+  shellContext?: TopShellContext;
 }
 
-export function MobileNav({ clients, isAdmin = false, isContractor = false }: MobileNavProps) {
+export function MobileNav({ isAdmin = false, shellContext }: MobileNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isClient = useIsClient();
@@ -53,20 +49,13 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
     surface: 'mobile',
   });
 
-  const showClientsSection = !hiddenNavItems.includes('ClientList');
-
-  const adminItems = [
-    { href: '/settings/users', label: 'Users', icon: Users },
-    { href: '/settings', label: 'Settings', icon: Settings },
-  ];
-
   const handleLinkClick = () => {
     setSidebarOpen(false);
   };
 
   return (
     <Sheet open={isOpen} onOpenChange={setSidebarOpen}>
-      <SheetContent side="left" className="w-80 p-0">
+      <SheetContent side="left" showCloseButton={false} className="w-80 p-0">
         <SheetHeader className="flex h-14 flex-row items-center justify-between border-b px-4">
           <SheetTitle className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -74,7 +63,15 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
             </div>
             <span className="font-semibold">Central</span>
           </SheetTitle>
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
+          <SheetDescription className="sr-only">
+            App-wide navigation, favorites, settings, and admin links.
+          </SheetDescription>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation"
+          >
             <X className="h-5 w-5" />
           </Button>
         </SheetHeader>
@@ -84,7 +81,7 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
             {/* Main Navigation */}
             <nav className="space-y-1">
               {navItems.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = getMobileNavActiveItem(item.preferenceLabel) === shellContext?.activeNavItem;
                 const Icon = item.icon;
 
                 return (
@@ -163,106 +160,56 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
               </div>
             )}
 
-            {/* Clients Section */}
-            {showClientsSection && (clients.length > 0 || !isContractor) && (
-            <div>
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Clients
-                </span>
-                {!isContractor && (
-                  <Link
-                    href="/clients/new"
-                    onClick={handleLinkClick}
-                    className="p-0.5 rounded hover:bg-accent"
-                  >
-                    <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Link>
+            <nav className="space-y-1 border-t pt-4">
+              <Link
+                href="/settings"
+                onClick={handleLinkClick}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                  shellContext?.activeNavItem === 'settings'
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-muted-foreground hover:bg-accent'
                 )}
-              </div>
-              <div className="space-y-1">
-                {clients.map((client) => (
-                  <div key={client.id}>
-                    <Link
-                      href={`/clients/${client.slug}`}
-                      onClick={handleLinkClick}
-                      className={cn(
-                        'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                        pathname.includes(`/clients/${client.slug}`)
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-muted-foreground hover:bg-accent'
-                      )}
-                    >
-                      <ClientIcon icon={client.icon} color={client.color} name={client.name} size="xs" />
-                      <span className="flex-1">{client.name}</span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground/70" />
-                    </Link>
-                    {pathname.includes(`/clients/${client.slug}`) && (
-                      <div className="ml-5 space-y-1 py-1">
-                        {client.boards.map((board) => {
-                          const boardPath = `/clients/${client.slug}/boards/${board.id}`;
-                          const isBoardActive = pathname.startsWith(boardPath);
-
-                          return (
-                            <Link
-                              key={board.id}
-                              href={boardPath}
-                              onClick={handleLinkClick}
-                              className={cn(
-                                'flex items-center rounded-lg px-3 py-1.5 text-sm transition-colors',
-                                isBoardActive
-                                  ? 'bg-primary/10 text-primary font-medium'
-                                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                              )}
-                            >
-                              {board.name}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-            )}
-
-            {/* Admin Section */}
-            {isAdmin && (
-              <div>
-                <div className="px-3 py-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Admin
-                  </span>
-                </div>
-                <nav className="space-y-1">
-                  {adminItems.map((item) => {
-                    const isActive = pathname === item.href;
-                    const Icon = item.icon;
-
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={handleLinkClick}
-                        className={cn(
-                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                          isActive
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'text-muted-foreground hover:bg-accent'
-                        )}
-                      >
-                        <Icon className="h-5 w-5" />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </nav>
-              </div>
-            )}
+              >
+                <Settings className="h-5 w-5" />
+                Settings
+              </Link>
+              {isAdmin && (
+                <Link
+                  href="/settings/admin"
+                  onClick={handleLinkClick}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    shellContext?.activeNavItem === 'admin'
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:bg-accent'
+                  )}
+                >
+                  <ShieldCheck className="h-5 w-5" />
+                  Admin
+                </Link>
+              )}
+            </nav>
           </div>
         </ScrollArea>
       </SheetContent>
     </Sheet>
   );
+}
+
+function getMobileNavActiveItem(preferenceLabel: string): AppNavItemId | null {
+  switch (preferenceLabel) {
+    case 'My Work':
+      return 'my-work';
+    case 'Clients':
+      return 'clients';
+    case 'Rollups':
+      return 'rollups';
+    case 'Schedule':
+      return 'schedule';
+    case 'Templates':
+      return 'templates';
+    default:
+      return null;
+  }
 }
