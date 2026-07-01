@@ -13,7 +13,9 @@ import {
   PanelLeft,
   MoreHorizontal,
   X,
-  Building2,
+  Search,
+  Settings,
+  ShieldCheck,
   GripVertical,
   FolderOpen,
   FolderClosed,
@@ -29,7 +31,7 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
-import { useUIStore } from '@/lib/stores';
+import { useQuickActionsStore, useUIStore } from '@/lib/stores';
 import {
   useFavorites,
   useReorderFavorites,
@@ -47,13 +49,14 @@ import { useFavoriteHintKeys } from '@/lib/hooks/useFavoriteHintKeys';
 import { useCalendarPreferences, useSidebarPreferences, useUpdateSidebarPreferences } from '@/lib/hooks';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
+import { GlobalSearch } from '@/components/search';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Tooltip,
   TooltipContent,
@@ -78,16 +81,6 @@ import {
   isAppNavPreferenceLabel,
   type AppNavPreferenceLabel,
 } from './app-nav';
-
-interface Client {
-  id: string;
-  name: string;
-  slug: string;
-  color: string;
-  icon: string | null;
-  defaultBoardId: string | null;
-  boards: { id: string; name: string }[];
-}
 
 // A top-level item is either a folder or a standalone favorite
 type TopLevelItem =
@@ -548,20 +541,20 @@ function SortableNavEditItem({ id, label, icon: Icon, alwaysVisible, isHidden, o
 }
 
 interface SidebarProps {
-  clients: Client[];
+  clients?: unknown[];
   isAdmin?: boolean;
   isContractor?: boolean;
 }
 
-export function Sidebar({ clients, isContractor = false }: SidebarProps) {
+export function Sidebar({ isAdmin = false }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const isClient = useIsClient();
   const {
     sidebarCollapsed,
-    expandedClients,
     toggleSidebarCollapse,
-    toggleClientExpanded,
     toggleSection,
     isSectionCollapsed,
   } = useUIStore();
@@ -569,6 +562,7 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
   const { data: sidebarPrefs } = useSidebarPreferences();
   const updateSidebarPrefs = useUpdateSidebarPreferences();
   const { data: favoritesData = { folders: [], favorites: [] } } = useFavorites();
+  const { openQuickAdd } = useQuickActionsStore();
   const reorderFavoritesMut = useReorderFavorites();
   const removeFavoriteMut = useRemoveFavorite();
   const createFolderMut = useCreateFavoriteFolder();
@@ -608,7 +602,7 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
 
   const saveEditMode = () => {
     updateSidebarPrefs.mutate({
-      hiddenNavItems: draftHiddenNav,
+      hiddenNavItems: draftHiddenNav.filter((item) => isAppNavPreferenceLabel(item)),
       navOrder: draftNavOrder,
     });
     setEditMode(false);
@@ -635,6 +629,11 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
     toggleSidebarCollapse();
   };
 
+  const handleOpenSearch = () => {
+    setSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -643,8 +642,6 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-
-  const router = useRouter();
 
   const topLevelList = buildTopLevelList(favoritesData);
   const flatFavorites = buildFlatFavoritesList(favoritesData);
@@ -716,24 +713,8 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
     [reorderContentsMut]
   );
 
-  const getDefaultBoard = (client: Client) => {
-    // 1. Explicit defaultBoardId (if set and exists in accessible boards)
-    if (client.defaultBoardId) {
-      const explicit = client.boards.find((b) => b.id === client.defaultBoardId);
-      if (explicit) return explicit;
-    }
-    // 2. Board whose name matches client name (case-insensitive)
-    const nameMatch = client.boards.find(
-      (b) => b.name.toLowerCase() === client.name.toLowerCase()
-    );
-    if (nameMatch) return nameMatch;
-    // 3. First board
-    return client.boards[0];
-  };
-
   // Use default values during SSR to prevent hydration mismatch
   const isCollapsed = isClient ? sidebarCollapsed : false;
-  const clientsExpanded = isClient ? expandedClients : [];
 
   const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
   const savedNavOrder = sidebarPrefs?.navOrder;
@@ -752,8 +733,6 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
   const navItems = allNavItems.filter(
     (item) => item.alwaysVisible || !hiddenNavItems.includes(item.preferenceLabel)
   );
-
-  const showClientsSection = !hiddenNavItems.includes('ClientList');
 
   const hasFavorites = favoritesData.favorites.length > 0 || favoritesData.folders.length > 0;
 
@@ -802,8 +781,23 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
         )}
       >
         {/* Header */}
-        <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-          {!isCollapsed && (
+        <div
+          className={cn(
+            'border-b border-sidebar-border',
+            isCollapsed
+              ? 'flex flex-col items-center gap-1 px-2 py-2'
+              : 'flex h-14 items-center justify-between px-4'
+          )}
+        >
+          {isCollapsed ? (
+            <Link
+              href="/my-tasks"
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground"
+              aria-label="Central"
+            >
+              C
+            </Link>
+          ) : (
             <Link href="/my-tasks" className="flex items-center gap-2">
               <Image
                 src={resolvedTheme === 'dark' ? '/clix_logo_white.png' : '/clix_logo_black.png'}
@@ -814,18 +808,53 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
               <span className="font-semibold text-foreground">CENTRAL</span>
             </Link>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSidebarCollapseToggle}
-            className={cn('h-8 w-8', isCollapsed && 'mx-auto')}
-          >
-            {isCollapsed ? (
-              <PanelLeft className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-          </Button>
+          <div className={cn('flex items-center gap-1', isCollapsed && 'flex-col')}>
+            <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleOpenSearch}
+                      className="h-8 w-8"
+                    >
+                      <Search className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent side={isCollapsed ? 'right' : 'bottom'}>Search</TooltipContent>
+              </Tooltip>
+              <PopoverContent side={isCollapsed ? 'right' : 'bottom'} align="start" className="w-auto p-2">
+                <GlobalSearch inputRef={searchInputRef} />
+              </PopoverContent>
+            </Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={openQuickAdd}
+                  className="h-8 w-8"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side={isCollapsed ? 'right' : 'bottom'}>Quick add</TooltipContent>
+            </Tooltip>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSidebarCollapseToggle}
+              className="h-8 w-8"
+            >
+              {isCollapsed ? (
+                <PanelLeft className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
 
         <ScrollArea className="flex-1 overflow-hidden">
@@ -878,23 +907,6 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
                   </SortableContext>
                 </DndContext>
 
-                {/* Client list section toggle */}
-                <div className="mt-4 pt-4 border-t">
-                  <label className="flex items-center gap-3 py-1.5 cursor-pointer">
-                    <Checkbox
-                      checked={!draftHiddenNav.includes('ClientList')}
-                      onCheckedChange={(checked) => {
-                        setDraftHiddenNav((prev) =>
-                          checked
-                            ? prev.filter((n) => n !== 'ClientList')
-                            : [...prev, 'ClientList']
-                        );
-                      }}
-                    />
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">Client list</span>
-                  </label>
-                </div>
               </div>
 
               {/* Footer */}
@@ -1140,140 +1152,75 @@ export function Sidebar({ clients, isContractor = false }: SidebarProps) {
             </div>
           )}
 
-          {/* Clients Section */}
-          {!isCollapsed && showClientsSection && (clients.length > 0 || !isContractor) && (
-            <div className="mt-6">
-              <div className="group flex items-center gap-2 px-3 py-2 w-full">
-                <button
-                  onClick={() => toggleSection('clients')}
-                  className="flex items-center gap-2 flex-1"
-                >
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Clients
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      'h-3 w-3 text-muted-foreground/70 opacity-0 group-hover:opacity-100 transition-all',
-                      isSectionCollapsed('clients') && '-rotate-90'
-                    )}
-                  />
-                </button>
-                {!isContractor && (
+          <div className="mt-6 border-t border-sidebar-border pt-3">
+            {isCollapsed ? (
+              <div className="space-y-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href="/settings"
+                      className={cn(
+                        'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+                        pathname.startsWith('/settings') && !pathname.startsWith('/settings/admin')
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-accent'
+                      )}
+                    >
+                      <Settings className="h-5 w-5" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Settings</TooltipContent>
+                </Tooltip>
+                {isAdmin && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Link
-                        href="/clients/new"
-                        className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent transition-opacity"
+                        href="/settings/admin"
+                        className={cn(
+                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
+                          pathname.startsWith('/settings/admin')
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-accent'
+                        )}
                       >
-                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                        <ShieldCheck className="h-5 w-5" />
                       </Link>
                     </TooltipTrigger>
-                    <TooltipContent>New client</TooltipContent>
+                    <TooltipContent side="right">Admin</TooltipContent>
                   </Tooltip>
                 )}
               </div>
-
-              {!isSectionCollapsed('clients') && <div className="space-y-1">
-                {clients.map((client) => {
-                  const isExpanded = clientsExpanded.includes(client.id);
-                  const isClientActive = pathname.includes(`/clients/${client.slug}`);
-                  const hasSingleBoard = client.boards.length === 1;
-
-                  // Single-board clients render as a direct link
-                  if (hasSingleBoard) {
-                    const board = client.boards[0];
-                    const boardPath = `/clients/${client.slug}/boards/${board.id}`;
-                    const isBoardActive = pathname.startsWith(boardPath);
-
-                    return (
-                      <Link
-                        key={client.id}
-                        href={boardPath}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                          isBoardActive
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'text-muted-foreground hover:bg-accent'
-                        )}
-                      >
-                        <ClientIcon icon={client.icon} color={client.color} name={client.name} size="xs" />
-                        <span className="flex-1 truncate text-left">{client.name}</span>
-                      </Link>
-                    );
-                  }
-
-                  // Multi-board clients use collapsible menu
-                  return (
-                    <Collapsible
-                      key={client.id}
-                      open={isExpanded}
-                      onOpenChange={() => toggleClientExpanded(client.id)}
-                    >
-                      <div
-                        className={cn(
-                          'flex w-full items-center rounded-lg text-sm transition-colors',
-                          isClientActive
-                            ? 'bg-accent text-accent-foreground'
-                            : 'text-muted-foreground hover:bg-accent'
-                        )}
-                      >
-                        <CollapsibleTrigger asChild>
-                          <button
-                            className="flex items-center pl-3 py-2 shrink-0"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground/70" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground/70" />
-                            )}
-                          </button>
-                        </CollapsibleTrigger>
-                        <button
-                          className="flex flex-1 items-center gap-2 py-2 pr-3 min-w-0"
-                          onClick={() => {
-                            const board = getDefaultBoard(client);
-                            if (board) {
-                              router.push(`/clients/${client.slug}/boards/${board.id}`);
-                            }
-                            if (!isExpanded) {
-                              toggleClientExpanded(client.id);
-                            }
-                          }}
-                        >
-                          <ClientIcon icon={client.icon} color={client.color} name={client.name} size="xs" />
-                          <span className="flex-1 truncate text-left">{client.name}</span>
-                        </button>
-                      </div>
-                      <CollapsibleContent>
-                        <div className="ml-6 space-y-1 py-1">
-                          {client.boards.map((board) => {
-                            const boardPath = `/clients/${client.slug}/boards/${board.id}`;
-                            const isBoardActive = pathname.startsWith(boardPath);
-
-                            return (
-                              <Link
-                                key={board.id}
-                                href={boardPath}
-                                className={cn(
-                                  'flex items-center rounded-lg px-3 py-1.5 text-sm transition-colors',
-                                  isBoardActive
-                                    ? 'bg-primary/10 text-primary font-medium'
-                                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                                )}
-                              >
-                                {board.name}
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  );
-                })}
-              </div>}
-            </div>
-          )}
+            ) : (
+              <nav className="space-y-1">
+                <Link
+                  href="/settings"
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    pathname.startsWith('/settings') && !pathname.startsWith('/settings/admin')
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:bg-accent'
+                  )}
+                >
+                  <Settings className="h-5 w-5" />
+                  Settings
+                </Link>
+                {isAdmin && (
+                  <Link
+                    href="/settings/admin"
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                      pathname.startsWith('/settings/admin')
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-muted-foreground hover:bg-accent'
+                    )}
+                  >
+                    <ShieldCheck className="h-5 w-5" />
+                    Admin
+                  </Link>
+                )}
+              </nav>
+            )}
+          </div>
           </div>
           )}
         </ScrollArea>
