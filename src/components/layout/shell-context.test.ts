@@ -112,7 +112,6 @@ describe('resolveDashboardShellContext', () => {
     expect(context.board).toBeUndefined();
     expect(context.tabs).toEqual([
       { label: 'Overview', href: '/clients/acme-co', active: true },
-      { label: 'Activity', href: '/clients/acme-co#activity', active: false },
       { label: 'Boards', href: '/clients/acme-co#boards', active: false },
     ]);
     expect(context.crumbs).toEqual([

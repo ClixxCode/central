@@ -512,7 +512,6 @@ function getMyTasksActiveTab(tab: string | null): 'assigned' | 'personal' | 'men
 function getClientTabs(clientHref: string): TopShellTab[] {
   return [
     { label: 'Overview', href: clientHref, active: true },
-    { label: 'Activity', href: `${clientHref}#activity`, active: false },
     { label: 'Boards', href: `${clientHref}#boards`, active: false },
   ];
 }

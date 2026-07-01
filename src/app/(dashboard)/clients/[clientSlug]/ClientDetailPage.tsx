@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FolderKanban, Pencil, Trash2, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+import { Plus, FolderKanban, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BoardList } from '@/components/boards';
 import { NewBoardModal } from '@/components/boards/NewBoardModal';
@@ -66,33 +65,33 @@ export function ClientDetailPage({
 
   return (
     <div className="space-y-6">
-      {/* Back link */}
-      {isAdmin && (
-        <Link
-          href="/clients"
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          All Clients
-        </Link>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <section id="overview" className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <div
-            className="w-12 h-12 rounded-lg flex items-center justify-center text-white"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white"
             style={{ backgroundColor: displayClient.color ?? '#6B7280' }}
           >
-            <ClientIcon icon={displayClient.icon} color="white" name={displayClient.name} size="lg" />
+            <ClientIcon
+              icon={displayClient.icon}
+              color="white"
+              name={displayClient.name}
+              size="md"
+            />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{displayClient.name}</h1>
-            <p className="text-sm text-muted-foreground">/{displayClient.slug}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">Client overview</p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              <span className="truncate">/{displayClient.slug}</span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {displayClient.boards.length}{' '}
+                {displayClient.boards.length === 1 ? 'board' : 'boards'}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isAdmin && (
             <>
               <Button
@@ -121,38 +120,47 @@ export function ClientDetailPage({
             </Button>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* Boards */}
-      {displayClient.boards.length > 0 ? (
-        <BoardList
-          boards={displayClient.boards}
-          clientSlug={clientSlug}
-          onSettings={isAdmin ? handleBoardSettings : undefined}
-          onDelete={isAdmin ? setDeleteBoardData : undefined}
-        />
-      ) : (
-        <EmptyState
-          icon={FolderKanban}
-          title="No boards yet"
-          description={
-            isAdmin
-              ? 'Create a board to start organizing tasks for this client.'
-              : 'No boards have been shared with you for this client.'
-          }
-          action={
-            isAdmin ? (
-              <Button onClick={() => setNewBoardModalOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Board
-              </Button>
-            ) : undefined
-          }
-        />
-      )}
+      <section id="boards" className="space-y-3 scroll-mt-24">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">Boards</h2>
+        </div>
 
-      {/* Details */}
-      <ClientMetadataTab client={displayClient} teamMembers={teamMembers} isAdmin={isAdmin} />
+        {displayClient.boards.length > 0 ? (
+          <BoardList
+            boards={displayClient.boards}
+            clientSlug={clientSlug}
+            onSettings={isAdmin ? handleBoardSettings : undefined}
+            onDelete={isAdmin ? setDeleteBoardData : undefined}
+          />
+        ) : (
+          <EmptyState
+            icon={FolderKanban}
+            title="No boards yet"
+            description={
+              isAdmin
+                ? 'Create a board to start organizing tasks for this client.'
+                : 'No boards have been shared with you for this client.'
+            }
+            action={
+              isAdmin ? (
+                <Button onClick={() => setNewBoardModalOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Board
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
+      </section>
+
+      <section id="details" className="space-y-3 scroll-mt-24">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">Details</h2>
+        </div>
+        <ClientMetadataTab client={displayClient} teamMembers={teamMembers} isAdmin={isAdmin} />
+      </section>
 
       {/* Modals */}
       {isAdmin && (
