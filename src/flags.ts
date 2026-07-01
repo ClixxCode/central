@@ -1,5 +1,10 @@
 import { vercelAdapter } from '@flags-sdk/vercel';
-import { flag } from 'flags/next';
+import { dedupe, flag } from 'flags/next';
+import { getCurrentUser } from '@/lib/auth/session';
+import {
+  getCentralFlagEntities,
+  type CentralFlagEntities,
+} from '@/lib/feature-flags/entities';
 import type { CentralFeatureFlags } from '@/lib/feature-flags/types';
 
 const booleanOptions = [
@@ -7,18 +12,25 @@ const booleanOptions = [
   { label: 'Enabled', value: true },
 ];
 
-export const projectBoardBehaviorEnabled = flag<boolean>({
+const identify = dedupe(async (): Promise<CentralFlagEntities> => {
+  const user = await getCurrentUser();
+  return getCentralFlagEntities(user);
+});
+
+export const projectBoardBehaviorEnabled = flag<boolean, CentralFlagEntities>({
   key: 'project-board-behavior',
   description: 'Enable nested project-board behavior in Central.',
   adapter: vercelAdapter(),
+  identify,
   defaultValue: false,
   options: booleanOptions,
 });
 
-export const appShellVisualRefreshEnabled = flag<boolean>({
+export const appShellVisualRefreshEnabled = flag<boolean, CentralFlagEntities>({
   key: 'app-shell-visual-refresh',
   description: 'Enable the refreshed Central app shell visuals.',
   adapter: vercelAdapter(),
+  identify,
   defaultValue: false,
   options: booleanOptions,
 });
