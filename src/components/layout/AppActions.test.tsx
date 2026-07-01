@@ -153,4 +153,13 @@ describe('AppActions', () => {
 
     expect(screen.getAllByTestId('global-search')).toHaveLength(2);
   });
+
+  it('hides quick add and search controls in contextual headers', () => {
+    render(<AppActions user={user} onSignOut={vi.fn()} hidePrimaryActions />);
+
+    expect(screen.queryByTitle('Quick add task (n)')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('global-search')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open search' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('notification-bell')).toBeInTheDocument();
+  });
 });

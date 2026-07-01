@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MoreHorizontal, Settings } from 'lucide-react';
+import { ArrowLeft, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/shared/FavoriteButton';
 import { useTopShellContextOverride } from '@/components/layout/top-shell-override';
@@ -57,9 +57,6 @@ export function BoardHeader({
       { label: 'Central', href: '/my-tasks' },
       { label: 'Clients', href: '/clients' },
       { label: clientLabel, href: clientHref },
-      ...(parentBoardName && parentHref
-        ? [{ label: parentBoardName, href: parentHref }]
-        : []),
       { label: boardName, href: boardHref },
     ];
 
@@ -92,23 +89,19 @@ export function BoardHeader({
       breadcrumbs: crumbs,
       tabs: [{ label: 'Tasks', href: boardHref, active: true }],
       actions: (
-        <div className="flex items-center gap-1">
-          <FavoriteButton entityType="board" entityId={boardId} />
+        <div className="flex items-center gap-0.5">
+          <FavoriteButton
+            entityType="board"
+            entityId={boardId}
+            className="size-8 border-transparent bg-transparent px-0 shadow-none hover:bg-muted"
+          />
           {canEdit && (
-            <Button variant="ghost" size="icon" asChild>
+            <Button variant="ghost" size="icon-sm" asChild>
               <Link href={`${boardHref}/settings`} aria-label="Board settings">
                 <Settings className="size-4" />
               </Link>
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled
-            aria-label="More board actions"
-          >
-            <MoreHorizontal className="size-4" />
-          </Button>
         </div>
       ),
       actionsSlot: 'board',

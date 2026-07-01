@@ -93,6 +93,7 @@ export function TopShellHeader({
             user={user}
             isAdmin={isAdmin}
             onSignOut={onSignOut}
+            hidePrimaryActions={shellContext?.actionsSlot === 'board'}
           />
         </div>
       </div>

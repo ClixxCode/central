@@ -4,8 +4,20 @@ import { TopShellHeader } from './TopShellHeader';
 import { useUIStore } from '@/lib/stores';
 import type { TopShellContext } from './shell-context';
 
+const mocks = vi.hoisted(() => ({
+  appActionsProps: [] as Array<{ hidePrimaryActions?: boolean }>,
+}));
+
 vi.mock('./AppActions', () => ({
-  AppActions: () => <div data-testid="app-actions" />,
+  AppActions: (props: { hidePrimaryActions?: boolean }) => {
+    mocks.appActionsProps.push(props);
+    return (
+      <div
+        data-testid="app-actions"
+        data-hide-primary-actions={String(props.hidePrimaryActions)}
+      />
+    );
+  },
 }));
 
 const user = {
@@ -59,6 +71,7 @@ const shellContext: TopShellContext = {
 
 describe('TopShellHeader', () => {
   beforeEach(() => {
+    mocks.appActionsProps = [];
     useUIStore.setState({
       sidebarOpen: false,
       sidebarCollapsed: false,
@@ -82,7 +95,7 @@ describe('TopShellHeader', () => {
     expect(screen.getByRole('link', { name: 'Central' })).toHaveAttribute('href', '/my-tasks');
     expect(screen.getByRole('link', { name: 'Clients' })).toHaveAttribute('href', '/clients');
     expect(screen.getByRole('button', { name: 'Board action' })).toBeInTheDocument();
-    expect(screen.getByTestId('app-actions')).toBeInTheDocument();
+    expect(screen.getByTestId('app-actions')).toHaveAttribute('data-hide-primary-actions', 'true');
     expect(screen.getByRole('link', { name: 'Tasks' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current');
   });

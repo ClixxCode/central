@@ -53,6 +53,7 @@ interface AppActionsProps {
   isAdmin?: boolean;
   onSignOut: () => void;
   mobileMenuSlot?: React.ReactNode;
+  hidePrimaryActions?: boolean;
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -71,6 +72,7 @@ export function AppActions({
   isAdmin = false,
   onSignOut,
   mobileMenuSlot,
+  hidePrimaryActions = false,
 }: AppActionsProps) {
   const router = useRouter();
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -193,38 +195,42 @@ export function AppActions({
     <>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {mobileMenuSlot}
-        <Button
-          variant="outline"
-          size="icon-sm"
-          onClick={openQuickAdd}
-          title="Quick add task (n)"
-          className="cursor-pointer border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-
-        <div className="hidden sm:block">
-          <GlobalSearch inputRef={searchInputRef} />
-        </div>
-
-        <Popover open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
-          <PopoverTrigger asChild>
+        {!hidePrimaryActions && (
+          <>
             <Button
-              variant="ghost"
-              size="icon"
-              className="sm:hidden"
-              aria-label="Open search"
-              onClick={() => {
-                window.setTimeout(() => mobileSearchInputRef.current?.focus(), 0);
-              }}
+              variant="outline"
+              size="icon-sm"
+              onClick={openQuickAdd}
+              title="Quick add task (n)"
+              className="cursor-pointer border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
             >
-              <Search className="h-5 w-5" />
+              <Plus className="h-4 w-4" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-[min(calc(100vw-1rem),24rem)] p-2 sm:hidden">
-            <GlobalSearch inputRef={mobileSearchInputRef} />
-          </PopoverContent>
-        </Popover>
+
+            <div className="hidden sm:block">
+              <GlobalSearch inputRef={searchInputRef} />
+            </div>
+
+            <Popover open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="sm:hidden"
+                  aria-label="Open search"
+                  onClick={() => {
+                    window.setTimeout(() => mobileSearchInputRef.current?.focus(), 0);
+                  }}
+                >
+                  <Search className="h-5 w-5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[min(calc(100vw-1rem),24rem)] p-2 sm:hidden">
+                <GlobalSearch inputRef={mobileSearchInputRef} />
+              </PopoverContent>
+            </Popover>
+          </>
+        )}
 
         <NotificationBell />
 
