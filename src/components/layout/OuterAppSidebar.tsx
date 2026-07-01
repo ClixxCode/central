@@ -26,6 +26,7 @@ interface OuterAppSidebarProps {
   isContractor?: boolean;
   shellContext: TopShellContext;
   onSignOut: () => void;
+  visualRefreshEnabled?: boolean;
 }
 
 export function OuterAppSidebar({
@@ -35,6 +36,7 @@ export function OuterAppSidebar({
   isContractor = false,
   shellContext,
   onSignOut,
+  visualRefreshEnabled = true,
 }: OuterAppSidebarProps) {
   return (
     <div className="hidden h-full lg:flex">
@@ -45,6 +47,7 @@ export function OuterAppSidebar({
         isContractor={isContractor}
         shellContext={shellContext}
         onSignOut={onSignOut}
+        visualRefreshEnabled={visualRefreshEnabled}
       />
     </div>
   );

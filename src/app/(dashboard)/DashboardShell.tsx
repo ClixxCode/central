@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import {
   AppShellBottomBar,
   MainWorkShell,
@@ -131,6 +132,7 @@ export function DashboardShell({
   }, []);
 
   const shellContext = registeredShellContext?.context ?? baseShellContext;
+  const appShellVisualRefreshEnabled = featureFlags.appShellVisualRefreshEnabled;
 
   const handleSignOut = async () => {
     await signOutUser();
@@ -138,7 +140,13 @@ export function DashboardShell({
 
   return (
     <CentralFeatureFlagsProvider flags={featureFlags}>
-      <div className="flex h-screen flex-col overflow-hidden bg-sidebar">
+      <div
+        className={cn(
+          'flex h-screen flex-col overflow-hidden',
+          appShellVisualRefreshEnabled && 'bg-sidebar'
+        )}
+        data-shell-visual-refresh={appShellVisualRefreshEnabled ? 'on' : 'off'}
+      >
         {impersonation && (
           <ImpersonationBanner
             userName={impersonation.userName}
@@ -154,9 +162,16 @@ export function DashboardShell({
             isContractor={isContractor}
             shellContext={shellContext}
             onSignOut={handleSignOut}
+            visualRefreshEnabled={appShellVisualRefreshEnabled}
           />
           <MobileDashboardNav isAdmin={isAdmin} shellContext={shellContext} />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background lg:mb-0 lg:ml-0 lg:mr-2 lg:mt-2 lg:rounded-xl lg:border lg:shadow-panel">
+          <div
+            className={cn(
+              'flex min-w-0 flex-1 flex-col overflow-hidden bg-background',
+              appShellVisualRefreshEnabled && 'lg:mb-0 lg:ml-0 lg:mr-2 lg:mt-2 lg:rounded-xl lg:border lg:shadow-panel'
+            )}
+            data-shell-content
+          >
             <TopShellContextOverrideProvider registerOverride={registerShellContextOverride}>
               <TopShellActionsProvider registerActions={registerShellActions}>
                 <TopShellBottomBarProvider registerBottomBar={registerShellBottomBar}>

@@ -552,9 +552,16 @@ interface SidebarProps {
   isContractor?: boolean;
   shellContext?: TopShellContext;
   onSignOut: () => void;
+  visualRefreshEnabled?: boolean;
 }
 
-export function Sidebar({ user, isAdmin = false, shellContext, onSignOut }: SidebarProps) {
+export function Sidebar({
+  user,
+  isAdmin = false,
+  shellContext,
+  onSignOut,
+  visualRefreshEnabled = true,
+}: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -747,9 +754,21 @@ export function Sidebar({ user, isAdmin = false, shellContext, onSignOut }: Side
   // This avoids the sidebar "sliding in" when localStorage state differs from SSR default
   if (!isClient) {
     return (
-      <aside className="flex w-64 flex-col bg-sidebar">
+      <aside
+        className={cn(
+          'flex w-64 flex-col',
+          visualRefreshEnabled ? 'bg-sidebar' : 'border-r bg-muted/50'
+        )}
+        data-app-sidebar
+        data-shell-visual-refresh={visualRefreshEnabled ? 'on' : 'off'}
+      >
         {/* Skeleton placeholder during SSR */}
-        <div className="flex h-14 items-center border-b border-sidebar-border px-4">
+        <div
+          className={cn(
+            'flex h-14 items-center border-b px-4',
+            visualRefreshEnabled && 'border-sidebar-border'
+          )}
+        >
           <Skeleton className="h-8 w-8 rounded-lg" />
           <Skeleton className="ml-2 h-4 w-20" />
         </div>
@@ -783,9 +802,14 @@ export function Sidebar({ user, isAdmin = false, shellContext, onSignOut }: Side
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          'flex flex-col shrink-0 h-full overflow-hidden bg-sidebar text-sidebar-foreground transition-all duration-300',
+          'flex flex-col shrink-0 h-full overflow-hidden transition-all duration-300',
+          visualRefreshEnabled
+            ? 'bg-sidebar text-sidebar-foreground'
+            : 'border-r bg-muted/50',
           isCollapsed ? 'w-16' : 'w-64'
         )}
+        data-app-sidebar
+        data-shell-visual-refresh={visualRefreshEnabled ? 'on' : 'off'}
       >
         {/* Header */}
         <div

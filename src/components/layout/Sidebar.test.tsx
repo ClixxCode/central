@@ -156,4 +156,34 @@ describe('Sidebar', () => {
     expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
     expect(screen.getByTestId('sidebar-app-actions')).toBeInTheDocument();
   });
+
+  it('switches sidebar styling with the app shell visual refresh variant', () => {
+    const { container, rerender } = render(
+      <Sidebar
+        user={user}
+        isAdmin
+        shellContext={shellContext}
+        onSignOut={vi.fn()}
+        visualRefreshEnabled={false}
+      />
+    );
+
+    const legacySidebar = container.querySelector('[data-app-sidebar]');
+    expect(legacySidebar).toHaveAttribute('data-shell-visual-refresh', 'off');
+    expect(legacySidebar).toHaveClass('border-r', 'bg-muted/50');
+
+    rerender(
+      <Sidebar
+        user={user}
+        isAdmin
+        shellContext={shellContext}
+        onSignOut={vi.fn()}
+        visualRefreshEnabled
+      />
+    );
+
+    const refreshedSidebar = container.querySelector('[data-app-sidebar]');
+    expect(refreshedSidebar).toHaveAttribute('data-shell-visual-refresh', 'on');
+    expect(refreshedSidebar).toHaveClass('bg-sidebar', 'text-sidebar-foreground');
+  });
 });
