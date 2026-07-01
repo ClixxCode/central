@@ -154,7 +154,7 @@ export function AppActions({
 
   return (
     <>
-      <div className="flex items-center gap-4">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         {mobileMenuSlot}
         <Button
           variant="outline"
@@ -169,9 +169,7 @@ export function AppActions({
         <div className="hidden sm:block">
           <GlobalSearch inputRef={searchInputRef} />
         </div>
-      </div>
 
-      <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" className="sm:hidden">
           <Search className="h-5 w-5" />
         </Button>
