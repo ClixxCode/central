@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Info, LayoutTemplate } from 'lucide-react';
+import { Info, LayoutTemplate } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useTopShellContextOverride } from '@/components/layout/top-shell-override';
+import type { TopShellContext } from '@/components/layout/shell-context';
 import { StatusOptionsEditor } from '@/components/boards/BoardSettings/StatusOptionsEditor';
 import { SectionOptionsEditor } from '@/components/boards/BoardSettings/SectionOptionsEditor';
 import { AccessManagement } from '@/components/boards/BoardSettings/AccessManagement';
@@ -45,11 +47,67 @@ export function BoardSettingsPage({
   const parentBoardHref = parentBoard
     ? `/clients/${parentBoard.parentBoardClientSlug ?? clientSlug}/boards/${parentBoard.parentBoardId}`
     : null;
+  const clientName = displayBoard.client?.name ?? humanizeSlug(clientSlug);
+  const clientHref = `/clients/${clientSlug}`;
+  const boardHref = `${clientHref}/boards/${boardId}`;
 
   const [name, setName] = useState(displayBoard.name);
   const [nameError, setNameError] = useState<string | null>(null);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const shellContext = useMemo<TopShellContext>(() => {
+    const settingsHref = `${boardHref}/settings`;
+    const crumbs = [
+      { label: 'Central', href: '/my-tasks' },
+      { label: 'Clients', href: '/clients' },
+      { label: clientName, href: clientHref },
+      ...(parentBoard && parentBoardHref
+        ? [{ label: parentBoard.parentBoardName, href: parentBoardHref }]
+        : []),
+      { label: displayBoard.name, href: boardHref },
+      { label: 'Settings', href: settingsHref },
+    ];
+
+    return {
+      section: 'board',
+      activeNavItem: 'clients',
+      title: isProjectBoard ? 'Project Settings' : 'Board Settings',
+      subtitle: displayBoard.name,
+      crumbs,
+      breadcrumbs: crumbs,
+      actionsSlot: 'none',
+      route: {
+        pathname: settingsHref,
+        segments: ['clients', clientSlug, 'boards', boardId, 'settings'],
+        clientSlug,
+        boardId,
+      },
+      client: {
+        name: clientName,
+        slug: clientSlug,
+        href: clientHref,
+      },
+      board: {
+        id: boardId,
+        name: displayBoard.name,
+        href: boardHref,
+      },
+      isAdminRoute: false,
+    };
+  }, [
+    boardHref,
+    boardId,
+    clientHref,
+    clientName,
+    clientSlug,
+    displayBoard.name,
+    isProjectBoard,
+    parentBoard,
+    parentBoardHref,
+  ]);
+
+  useTopShellContextOverride(shellContext);
 
   const handleSaveName = async () => {
     setNameError(null);
@@ -90,28 +148,6 @@ export function BoardSettingsPage({
 
   return (
     <div className="space-y-6">
-      {/* Back link */}
-      <Link
-        href={`/clients/${clientSlug}/boards/${boardId}`}
-        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4 mr-1" />
-        Back to {displayBoard.name}
-      </Link>
-
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">
-          {isProjectBoard ? 'Project Settings' : 'Board Settings'}
-        </h1>
-        <Link
-          href={`/clients/${clientSlug}`}
-          className="text-sm text-muted-foreground hover:text-foreground mt-1 inline-block"
-        >
-          {displayBoard.client?.name ?? 'Client'}
-        </Link>
-      </div>
-
       {/* Tabs */}
       <Tabs defaultValue={canEdit ? 'general' : 'activity'}>
         <TabsList>
@@ -315,4 +351,14 @@ export function BoardSettingsPage({
       </Tabs>
     </div>
   );
+}
+
+function humanizeSlug(slug: string): string {
+  return slug
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ') || slug;
 }

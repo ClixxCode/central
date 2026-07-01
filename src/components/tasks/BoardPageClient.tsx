@@ -42,6 +42,8 @@ import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import type { BoardItem, TaskFilters, TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import { trackEvent } from '@/lib/analytics';
+import { useTopShellActions } from '@/components/layout/top-shell-actions';
+import { useTopShellToolbar } from '@/components/layout/top-shell-toolbar';
 
 interface BoardPageClientProps {
   boardId: string;
@@ -407,109 +409,143 @@ export function BoardPageClient({
   const isLoading = isLoadingBoardItems || isLoadingUsers;
   const canCreateProjects = boardType !== 'project' && boardType !== 'personal';
 
-  return (
-    <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {/* View Toggle */}
-          <ViewToggleButtons boardId={boardId} defaultView="kanban" />
-
-          {/* Column visibility (table/swimlane) / Card items (kanban) */}
-          {viewMode === 'table' || viewMode === 'swimlane' ? (
-            <TableColumnsButton
-              columns={[
-                { id: 'status', label: 'Status' },
-                { id: 'section', label: 'Section' },
-                { id: 'assignees', label: 'Assignees' },
-                { id: 'dueDate', label: 'Due Date' },
-              ]}
-              visibleColumns={columns}
-              onToggle={(col) => toggleBoardTableColumn(boardId, col as keyof typeof columns)}
-            />
-          ) : (
-            <TableColumnsButton
-              columns={[
-                { id: 'section', label: 'Section' },
-                { id: 'dueDate', label: 'Due Date' },
-                { id: 'assignees', label: 'Assignees' },
-              ]}
-              visibleColumns={swimlaneCardItems}
-              onToggle={(col) => toggleSwimlaneCardItem(boardId, col as 'section' | 'dueDate' | 'assignees')}
-              label="Card Items"
-              menuLabel="Toggle card items"
-              icon={SlidersHorizontal}
-            />
-          )}
-
-          {/* Group By dropdown (kanban/swimlane only) */}
-          {viewMode !== 'table' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    'h-8 border-dashed',
-                    groupBy !== 'status' && 'border-solid bg-primary/10 border-primary/50 text-primary hover:bg-primary/20 hover:text-primary'
-                  )}
-                >
-                  {groupBy === 'date' ? (
-                    <CalendarDays className="mr-2 size-3" />
-                  ) : groupBy === 'section' ? (
-                    <LayoutGrid className="mr-2 size-3" />
-                  ) : (
-                    <Columns3 className="mr-2 size-3" />
-                  )}
-                  {groupBy === 'status' ? 'By Status' : groupBy === 'date' ? 'By Date' : 'By Section'}
-                  <ChevronDown className="ml-2 size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuRadioGroup value={groupBy} onValueChange={(v) => setGroupBy(boardId, v as GroupBy)}>
-                  <DropdownMenuRadioItem value="status">
-                    <Columns3 className="mr-2 size-3.5" />
-                    By Status
-                  </DropdownMenuRadioItem>
-                  {sectionOptions.length > 0 && (
-                    <DropdownMenuRadioItem value="section">
-                      <LayoutGrid className="mr-2 size-3.5" />
-                      By Section
-                    </DropdownMenuRadioItem>
-                  )}
-                  <DropdownMenuRadioItem value="date">
-                    <CalendarDays className="mr-2 size-3.5" />
-                    By Date
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
-          <TaskFilterBar
-            filters={filters}
-            onFiltersChange={setFilters}
-            statusOptions={statusOptions}
-            sectionOptions={sectionOptions}
-            assignableUsers={assignableUsers}
-          />
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          {canCreateProjects && (
-            <Button onClick={() => setIsCreateProjectOpen(true)} size="sm" variant="outline">
-              <FolderPlus className="mr-1 size-4" />
-              New Project
-            </Button>
-          )}
-          <Button onClick={() => setIsCreateModalOpen(true)} size="sm">
-            <Plus className="mr-1 size-4" />
-            New Task
+  const createActions = React.useMemo(
+    () => (
+      <div className="flex items-center gap-2">
+        {canCreateProjects && (
+          <Button
+            onClick={() => setIsCreateProjectOpen(true)}
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New project"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <FolderPlus className="size-4" />
           </Button>
+        )}
+        <Button
+          onClick={() => setIsCreateModalOpen(true)}
+          variant="ghost"
+          size="icon-sm"
+          aria-label="New task"
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <Plus className="size-4" />
+        </Button>
+      </div>
+    ),
+    [canCreateProjects]
+  );
+
+  const toolbar = React.useMemo(
+    () => (
+      <div className="flex flex-wrap items-center gap-4">
+        <ViewToggleButtons boardId={boardId} defaultView="kanban" />
+
+        {viewMode === 'table' || viewMode === 'swimlane' ? (
+          <TableColumnsButton
+            columns={[
+              { id: 'status', label: 'Status' },
+              { id: 'section', label: 'Section' },
+              { id: 'assignees', label: 'Assignees' },
+              { id: 'dueDate', label: 'Due Date' },
+            ]}
+            visibleColumns={columns}
+            onToggle={(col) => toggleBoardTableColumn(boardId, col as keyof typeof columns)}
+          />
+        ) : (
+          <TableColumnsButton
+            columns={[
+              { id: 'section', label: 'Section' },
+              { id: 'dueDate', label: 'Due Date' },
+              { id: 'assignees', label: 'Assignees' },
+            ]}
+            visibleColumns={swimlaneCardItems}
+            onToggle={(col) => toggleSwimlaneCardItem(boardId, col as 'section' | 'dueDate' | 'assignees')}
+            label="Card Items"
+            menuLabel="Toggle card items"
+            icon={SlidersHorizontal}
+          />
+        )}
+
+        {viewMode !== 'table' && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'h-8 border-dashed',
+                  groupBy !== 'status' && 'border-solid bg-primary/10 border-primary/50 text-primary hover:bg-primary/20 hover:text-primary'
+                )}
+              >
+                {groupBy === 'date' ? (
+                  <CalendarDays className="mr-2 size-3" />
+                ) : groupBy === 'section' ? (
+                  <LayoutGrid className="mr-2 size-3" />
+                ) : (
+                  <Columns3 className="mr-2 size-3" />
+                )}
+                {groupBy === 'status' ? 'By Status' : groupBy === 'date' ? 'By Date' : 'By Section'}
+                <ChevronDown className="ml-2 size-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuRadioGroup value={groupBy} onValueChange={(v) => setGroupBy(boardId, v as GroupBy)}>
+                <DropdownMenuRadioItem value="status">
+                  <Columns3 className="mr-2 size-3.5" />
+                  By Status
+                </DropdownMenuRadioItem>
+                {sectionOptions.length > 0 && (
+                  <DropdownMenuRadioItem value="section">
+                    <LayoutGrid className="mr-2 size-3.5" />
+                    By Section
+                  </DropdownMenuRadioItem>
+                )}
+                <DropdownMenuRadioItem value="date">
+                  <CalendarDays className="mr-2 size-3.5" />
+                  By Date
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        <TaskFilterBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          statusOptions={statusOptions}
+          sectionOptions={sectionOptions}
+          assignableUsers={assignableUsers}
+        />
+
+        <div className="md:hidden">
+          {createActions}
         </div>
       </div>
+    ),
+    [
+      assignableUsers,
+      boardId,
+      columns,
+      createActions,
+      filters,
+      groupBy,
+      sectionOptions,
+      setGroupBy,
+      statusOptions,
+      swimlaneCardItems,
+      toggleBoardTableColumn,
+      toggleSwimlaneCardItem,
+      viewMode,
+    ]
+  );
 
+  useTopShellActions(createActions);
+  useTopShellToolbar(toolbar);
+
+  return (
+    <div className="space-y-4">
       {/* Board View */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">

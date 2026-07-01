@@ -176,6 +176,7 @@ export function resolveDashboardShellContext({
       section: 'my-work',
       activeNavItem: 'my-work',
       title,
+      subtitle: 'Tasks, mentions, and replies across all clients',
       crumbs: [ROOT_CRUMB, { label: 'My Work', href: '/my-tasks' }],
       tabs: getMyTasksTabs(tab),
       route,
@@ -188,6 +189,7 @@ export function resolveDashboardShellContext({
         section: 'clients',
         activeNavItem: 'clients',
         title: 'Clients',
+        subtitle: "Manage your agency's clients and their boards",
         crumbs: [ROOT_CRUMB, { label: 'Clients', href: '/clients' }],
         route,
       });
@@ -198,6 +200,7 @@ export function resolveDashboardShellContext({
         section: 'clients',
         activeNavItem: 'clients',
         title: 'New Client',
+        subtitle: 'Create a new client for your agency',
         crumbs: [
           ROOT_CRUMB,
           { label: 'Clients', href: '/clients' },
@@ -273,6 +276,7 @@ export function resolveDashboardShellContext({
         section: 'rollups',
         activeNavItem: 'rollups',
         title: 'Rollups',
+        subtitle: 'Aggregate tasks from multiple boards into a single view',
         crumbs: [ROOT_CRUMB, { label: 'Rollups', href: '/rollups' }],
         route,
       });
@@ -282,11 +286,12 @@ export function resolveDashboardShellContext({
       return createContext({
         section: 'rollups',
         activeNavItem: 'rollups',
-        title: 'New Rollup',
+        title: 'Create Rollup Board',
+        subtitle: 'Aggregate tasks from multiple boards into a single view',
         crumbs: [
           ROOT_CRUMB,
           { label: 'Rollups', href: '/rollups' },
-          { label: 'New Rollup' },
+          { label: 'Create Rollup Board' },
         ],
         route,
       });
@@ -322,6 +327,7 @@ export function resolveDashboardShellContext({
       section: 'schedule',
       activeNavItem: 'schedule',
       title: 'Schedule',
+      subtitle: 'Check team availability and create calendar holds',
       crumbs: [ROOT_CRUMB, { label: 'Schedule', href: '/schedule' }],
       route,
     });
@@ -333,6 +339,7 @@ export function resolveDashboardShellContext({
         section: 'templates',
         activeNavItem: 'templates',
         title: 'Templates',
+        subtitle: 'Create and manage reusable board templates and task lists',
         crumbs: [ROOT_CRUMB, { label: 'Templates', href: '/templates' }],
         route,
       });
@@ -394,12 +401,13 @@ export function resolveDashboardShellContext({
       section: 'settings',
       activeNavItem: 'settings',
       title: settingsSectionLabel,
+      subtitle: getSettingsSectionSubtitle(second),
       crumbs: [
         ROOT_CRUMB,
         { label: 'Settings', href: '/settings' },
         ...(second ? [{ label: settingsSectionLabel, href: `/settings/${second}` }] : []),
       ],
-      tabs: getSettingsTabs(second),
+      tabs: getSettingsTabs(second, isAdmin),
       route,
       actionsSlot: 'settings',
     });
@@ -522,14 +530,20 @@ function getBoardTabs(boardHref: string): TopShellTab[] {
   ];
 }
 
-function getSettingsTabs(activeSection: string | undefined): TopShellTab[] {
+function getSettingsTabs(activeSection: string | undefined, canShowAdmin = false): TopShellTab[] {
   const active = activeSection ?? 'profile';
 
-  return [
+  const tabs = [
     { label: 'Profile', href: '/settings/profile', active: active === 'profile' },
     { label: 'Notifications', href: '/settings/notifications', active: active === 'notifications' },
     { label: 'Integrations', href: '/settings/integrations', active: active === 'integrations' },
   ];
+
+  if (canShowAdmin) {
+    tabs.push({ label: 'Admin', href: '/settings/admin/general', active: false });
+  }
+
+  return tabs;
 }
 
 function getAdminSettingsTabs(activeSection: string | undefined): TopShellTab[] {
@@ -546,6 +560,21 @@ function getAdminSettingsTabs(activeSection: string | undefined): TopShellTab[] 
 
 function getSettingsSectionLabel(section: string): string {
   return SETTINGS_SECTION_LABELS[section] ?? humanizeSegment(section);
+}
+
+function getSettingsSectionSubtitle(section: string | undefined): string {
+  if (!section) return 'Manage your account settings and preferences.';
+
+  switch (section) {
+    case 'integrations':
+      return 'Connect third-party services to enhance your workflow.';
+    case 'notifications':
+      return 'View and manage your notifications and preferences.';
+    case 'statuses-sections':
+      return 'Manage global statuses and sections used across all boards';
+    default:
+      return 'Manage your account settings and preferences.';
+  }
 }
 
 function getAdminSettingsSectionLabel(section: string): string {

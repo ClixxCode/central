@@ -28,9 +28,13 @@ export function FavoriteButton({ entityType, entityId, className }: FavoriteButt
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="outline"
-            size="sm"
-            className={cn('px-3', className)}
+            variant="ghost"
+            size="icon-sm"
+            className={cn(
+              'rounded-full text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+              isFavorited && 'bg-yellow-400/15 text-yellow-400 hover:bg-yellow-400/20 hover:text-yellow-400',
+              className
+            )}
             onClick={() => toggle(entityType, entityId)}
             disabled={isPending}
           >
@@ -38,7 +42,7 @@ export function FavoriteButton({ entityType, entityId, className }: FavoriteButt
               className={cn(
                 'size-4 transition-colors',
                 isFavorited
-                  ? 'fill-foreground text-foreground'
+                  ? 'fill-yellow-400 text-yellow-400'
                   : 'text-muted-foreground/50'
               )}
             />

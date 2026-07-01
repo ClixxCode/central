@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
+  AppShellBottomBar,
   MainWorkShell,
   MobileDashboardNav,
   OuterAppSidebar,
@@ -16,6 +17,9 @@ import {
   type TopShellContext,
 } from '@/components/layout/shell-context';
 import { TopShellContextOverrideProvider } from '@/components/layout/top-shell-override';
+import { TopShellActionsProvider } from '@/components/layout/top-shell-actions';
+import { TopShellBottomBarProvider } from '@/components/layout/top-shell-bottom-bar';
+import { TopShellToolbarProvider } from '@/components/layout/top-shell-toolbar';
 
 interface Client {
   id: string;
@@ -73,6 +77,18 @@ export function DashboardShell({
     id: symbol;
     context: TopShellContext;
   } | null>(null);
+  const [registeredShellToolbar, setRegisteredShellToolbar] = useState<{
+    id: symbol;
+    toolbar: React.ReactNode;
+  } | null>(null);
+  const [registeredShellActions, setRegisteredShellActions] = useState<{
+    id: symbol;
+    actions: React.ReactNode;
+  } | null>(null);
+  const [registeredShellBottomBar, setRegisteredShellBottomBar] = useState<{
+    id: symbol;
+    content: React.ReactNode;
+  } | null>(null);
 
   const registerShellContextOverride = useCallback((context: TopShellContext) => {
     const id = Symbol('top-shell-context-override');
@@ -83,6 +99,33 @@ export function DashboardShell({
     };
   }, []);
 
+  const registerShellToolbar = useCallback((toolbar: React.ReactNode) => {
+    const id = Symbol('top-shell-toolbar');
+    setRegisteredShellToolbar({ id, toolbar });
+
+    return () => {
+      setRegisteredShellToolbar((current) => (current?.id === id ? null : current));
+    };
+  }, []);
+
+  const registerShellActions = useCallback((actions: React.ReactNode) => {
+    const id = Symbol('top-shell-actions');
+    setRegisteredShellActions({ id, actions });
+
+    return () => {
+      setRegisteredShellActions((current) => (current?.id === id ? null : current));
+    };
+  }, []);
+
+  const registerShellBottomBar = useCallback((content: React.ReactNode) => {
+    const id = Symbol('top-shell-bottom-bar');
+    setRegisteredShellBottomBar({ id, content });
+
+    return () => {
+      setRegisteredShellBottomBar((current) => (current?.id === id ? null : current));
+    };
+  }, []);
+
   const shellContext = registeredShellContext?.context ?? baseShellContext;
 
   const handleSignOut = async () => {
@@ -90,31 +133,44 @@ export function DashboardShell({
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden bg-sidebar">
       {impersonation && (
         <ImpersonationBanner
           userName={impersonation.userName}
           userEmail={impersonation.userEmail}
         />
       )}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <StoreHydration />
         <OuterAppSidebar
           clients={clients}
+          user={user}
           isAdmin={isAdmin}
           isContractor={isContractor}
           shellContext={shellContext}
+          onSignOut={handleSignOut}
         />
         <MobileDashboardNav isAdmin={isAdmin} shellContext={shellContext} />
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background lg:mb-0 lg:ml-0 lg:mr-2 lg:mt-2 lg:rounded-xl lg:border lg:shadow-panel">
           <TopShellContextOverrideProvider registerOverride={registerShellContextOverride}>
-            <TopShellHeader
-              user={user}
-              isAdmin={isAdmin}
-              onSignOut={handleSignOut}
-              shellContext={shellContext}
-            />
-            <MainWorkShell shellContext={shellContext}>{children}</MainWorkShell>
+            <TopShellActionsProvider registerActions={registerShellActions}>
+              <TopShellBottomBarProvider registerBottomBar={registerShellBottomBar}>
+                <TopShellToolbarProvider registerToolbar={registerShellToolbar}>
+                  <TopShellHeader
+                    user={user}
+                    isAdmin={isAdmin}
+                    onSignOut={handleSignOut}
+                    shellContext={shellContext}
+                    toolbar={registeredShellToolbar?.toolbar}
+                    primaryActions={registeredShellActions?.actions}
+                  />
+                  <MainWorkShell shellContext={shellContext}>{children}</MainWorkShell>
+                  <AppShellBottomBar>
+                    {registeredShellBottomBar?.content}
+                  </AppShellBottomBar>
+                </TopShellToolbarProvider>
+              </TopShellBottomBarProvider>
+            </TopShellActionsProvider>
           </TopShellContextOverrideProvider>
         </div>
       </div>

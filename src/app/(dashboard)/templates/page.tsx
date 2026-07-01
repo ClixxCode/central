@@ -9,5 +9,5 @@ export default async function TemplatesPage() {
     redirect('/login');
   }
 
-  return <TemplatesPageClient isAdmin={user.role === 'admin'} />;
+  return <TemplatesPageClient />;
 }

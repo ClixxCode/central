@@ -162,4 +162,11 @@ describe('AppActions', () => {
     expect(screen.queryByRole('button', { name: 'Open search' })).not.toBeInTheDocument();
     expect(screen.getByTestId('notification-bell')).toBeInTheDocument();
   });
+
+  it('uses a standard account icon instead of the profile image', () => {
+    render(<AppActions user={{ ...user, image: '/avatar.png' }} onSignOut={vi.fn()} hidePrimaryActions />);
+
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeInTheDocument();
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
 });

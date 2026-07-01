@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ClientList } from '@/components/clients';
@@ -8,7 +8,10 @@ import { NewClientModal } from '@/components/clients/NewClientModal';
 import { EditClientModal } from '@/components/clients/EditClientModal';
 import { DeleteClientDialog } from '@/components/clients/DeleteClientDialog';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { PageHeaderSkeleton, CardGridSkeleton } from '@/components/shared/LoadingSkeleton';
+import { CardGridSkeleton } from '@/components/shared/LoadingSkeleton';
+import { useTopShellActions } from '@/components/layout/top-shell-actions';
+import { useTopShellContextOverride } from '@/components/layout/top-shell-override';
+import type { TopShellContext } from '@/components/layout/shell-context';
 import { useClients, useDeleteClient } from '@/lib/hooks';
 import type { ClientWithBoards } from '@/lib/actions/clients';
 
@@ -31,6 +34,46 @@ export function ClientsListPage({ teamMembers = [] }: ClientsListPageProps) {
   const [editClient, setEditClient] = useState<ClientWithBoards | null>(null);
   const [deleteClientData, setDeleteClientData] = useState<ClientWithBoards | null>(null);
 
+  const actions = useMemo(
+    () => (
+      <Button
+        onClick={() => setNewModalOpen(true)}
+        variant="ghost"
+        size="icon-sm"
+        aria-label="New client"
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <Plus className="size-4" />
+      </Button>
+    ),
+    []
+  );
+
+  const shellContext = useMemo<TopShellContext>(() => {
+    const crumbs = [
+      { label: 'Central', href: '/my-tasks' },
+      { label: 'Clients', href: '/clients' },
+    ];
+
+    return {
+      section: 'clients',
+      activeNavItem: 'clients',
+      title: 'Clients',
+      subtitle: "Manage your agency's clients and their boards",
+      crumbs,
+      breadcrumbs: crumbs,
+      actionsSlot: 'board',
+      route: {
+        pathname: '/clients',
+        segments: ['clients'],
+      },
+      isAdminRoute: false,
+    };
+  }, []);
+
+  useTopShellContextOverride(shellContext);
+  useTopShellActions(actions);
+
   const handleDelete = async () => {
     if (!deleteClientData) return;
     await deleteClient.mutateAsync(deleteClientData.id);
@@ -40,7 +83,6 @@ export function ClientsListPage({ teamMembers = [] }: ClientsListPageProps) {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeaderSkeleton />
         <CardGridSkeleton count={6} />
       </div>
     );
@@ -57,20 +99,6 @@ export function ClientsListPage({ teamMembers = [] }: ClientsListPageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Clients</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage your agency&apos;s clients and their boards
-          </p>
-        </div>
-        <Button onClick={() => setNewModalOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Client
-        </Button>
-      </div>
-
       {/* Client List */}
       {clients && clients.length > 0 ? (
         <ClientList

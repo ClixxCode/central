@@ -18,7 +18,6 @@ import {
   Users,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -41,6 +40,7 @@ import { useFavorites } from '@/lib/hooks/useFavorites';
 import { useFavoriteHintKeys } from '@/lib/hooks/useFavoriteHintKeys';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { useQuickActionsStore } from '@/lib/stores';
+import { cn } from '@/lib/utils';
 
 interface AppActionsUser {
   name: string | null;
@@ -54,6 +54,10 @@ interface AppActionsProps {
   onSignOut: () => void;
   mobileMenuSlot?: React.ReactNode;
   hidePrimaryActions?: boolean;
+  className?: string;
+  orientation?: 'horizontal' | 'vertical';
+  enableGlobalInteractions?: boolean;
+  renderDialogs?: boolean;
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -73,6 +77,10 @@ export function AppActions({
   onSignOut,
   mobileMenuSlot,
   hidePrimaryActions = false,
+  className,
+  orientation = 'horizontal',
+  enableGlobalInteractions = true,
+  renderDialogs = true,
 }: AppActionsProps) {
   const router = useRouter();
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -102,6 +110,7 @@ export function AppActions({
   }, [favoritesData?.favorites]);
 
   React.useEffect(() => {
+    if (!enableGlobalInteractions) return;
     if (!fKeyHeld) return;
 
     const handleFavoriteChord = (event: KeyboardEvent) => {
@@ -118,9 +127,9 @@ export function AppActions({
 
     document.addEventListener('keydown', handleFavoriteChord);
     return () => document.removeEventListener('keydown', handleFavoriteChord);
-  }, [fKeyHeld, favoriteHrefByDigit, router]);
+  }, [enableGlobalInteractions, fKeyHeld, favoriteHrefByDigit, router]);
 
-  useKeyboardShortcuts([
+  useKeyboardShortcuts(enableGlobalInteractions ? [
     {
       key: '/',
       description: 'Focus search',
@@ -180,20 +189,17 @@ export function AppActions({
         router.push('/settings');
       },
     },
-  ]);
-
-  const initials = user.name
-    ? user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : user.email.slice(0, 2).toUpperCase();
+  ] : []);
 
   return (
     <>
-      <div className="ml-auto flex shrink-0 items-center gap-2">
+      <div
+        className={cn(
+          'ml-auto flex shrink-0 gap-2',
+          orientation === 'vertical' ? 'flex-col items-center' : 'items-center',
+          className
+        )}
+      >
         {mobileMenuSlot}
         {!hidePrimaryActions && (
           <>
@@ -271,13 +277,13 @@ export function AppActions({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={user.image ?? undefined} alt={user.name ?? ''} />
-                <AvatarFallback className="bg-primary/10 text-primary">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative h-8 w-8 rounded-full"
+              aria-label="Account menu"
+            >
+              <User className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -344,20 +350,24 @@ export function AppActions({
         </DropdownMenu>
       </div>
 
-      <KeyboardShortcutsModal
-        open={shortcutsOpen}
-        onOpenChange={setShortcutsOpen}
-      />
+      {renderDialogs && (
+        <>
+          <KeyboardShortcutsModal
+            open={shortcutsOpen}
+            onOpenChange={setShortcutsOpen}
+          />
 
-      <QuickAddDialog
-        open={quickAddOpen}
-        onOpenChange={(open) => {
-          if (!open) closeQuickAdd();
-        }}
-        onTaskCreatedAndEdit={(taskId, boardPath) => {
-          router.push(`${boardPath}?task=${taskId}`);
-        }}
-      />
+          <QuickAddDialog
+            open={quickAddOpen}
+            onOpenChange={(open) => {
+              if (!open) closeQuickAdd();
+            }}
+            onTaskCreatedAndEdit={(taskId, boardPath) => {
+              router.push(`${boardPath}?task=${taskId}`);
+            }}
+          />
+        </>
+      )}
     </>
   );
 }

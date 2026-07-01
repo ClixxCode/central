@@ -6,16 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   useStatuses,
@@ -31,8 +28,6 @@ import {
   useReorderSections,
   useSeedDefaultSections,
 } from '@/lib/hooks';
-import type { Status } from '@/lib/actions/statuses';
-import type { Section } from '@/lib/actions/sections';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -289,8 +284,6 @@ export function StatusesSectionsPageClient() {
   if (statusesLoading || sectionsLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-8 w-48 bg-muted animate-pulse rounded" />
-        <div className="h-4 w-64 bg-muted animate-pulse rounded" />
         <div className="h-32 bg-muted animate-pulse rounded" />
       </div>
     );
@@ -298,13 +291,6 @@ export function StatusesSectionsPageClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Statuses & Sections</h1>
-        <p className="text-muted-foreground">
-          Manage global statuses and sections used across all boards
-        </p>
-      </div>
-
       <Tabs defaultValue="statuses">
         <TabsList>
           <TabsTrigger value="statuses">Statuses</TabsTrigger>
@@ -371,7 +357,7 @@ export function StatusesSectionsPageClient() {
                 </DndContext>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No statuses configured. Click "Load Defaults" to get started.
+                  No statuses configured. Click &quot;Load Defaults&quot; to get started.
                 </p>
               )}
             </CardContent>
@@ -438,7 +424,7 @@ export function StatusesSectionsPageClient() {
                 </DndContext>
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  No sections configured. Click "Load Defaults" to get started.
+                  No sections configured. Click &quot;Load Defaults&quot; to get started.
                 </p>
               )}
             </CardContent>

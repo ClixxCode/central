@@ -92,7 +92,7 @@ describe('TopShellHeader', () => {
 
     expect(screen.getByRole('heading', { name: 'Launch Board' })).toBeInTheDocument();
     expect(screen.getAllByText('Acme Co')).toHaveLength(2);
-    expect(screen.getByRole('link', { name: 'Central' })).toHaveAttribute('href', '/my-tasks');
+    expect(screen.queryByRole('link', { name: 'Central' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Clients' })).toHaveAttribute('href', '/clients');
     expect(screen.getByRole('button', { name: 'Board action' })).toBeInTheDocument();
     expect(screen.getByTestId('app-actions')).toHaveAttribute('data-hide-primary-actions', 'true');
@@ -112,5 +112,32 @@ describe('TopShellHeader', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
 
     expect(useUIStore.getState().sidebarOpen).toBe(true);
+  });
+
+  it('renders a shell toolbar instead of section tabs when provided', () => {
+    render(
+      <TopShellHeader
+        user={user}
+        onSignOut={vi.fn()}
+        shellContext={shellContext}
+        toolbar={<div>Board filters</div>}
+      />
+    );
+
+    expect(screen.getByText('Board filters')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Tasks' })).not.toBeInTheDocument();
+  });
+
+  it('renders primary actions in the header action area', () => {
+    render(
+      <TopShellHeader
+        user={user}
+        onSignOut={vi.fn()}
+        shellContext={shellContext}
+        primaryActions={<button type="button">New Task</button>}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'New Task' })).toBeInTheDocument();
   });
 });

@@ -15,5 +15,5 @@ export default async function TemplateEditPage({ params }: Props) {
 
   const { templateId } = await params;
 
-  return <TemplateEditorClient templateId={templateId} isAdmin={user.role === 'admin'} />;
+  return <TemplateEditorClient templateId={templateId} />;
 }

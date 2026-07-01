@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Layers } from 'lucide-react';
+import { Layers, Plus } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth/session';
 import { listRollupBoards } from '@/lib/actions/rollups';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { RollupsShellHeader } from './RollupsShellHeader';
 
 export default async function RollupsPage() {
   const user = await getCurrentUser();
@@ -18,21 +19,7 @@ export default async function RollupsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Rollup Boards</h1>
-          <p className="text-sm text-muted-foreground">
-            Aggregate tasks from multiple boards into a single view
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/rollups/new">
-            <Plus className="mr-2 size-4" />
-            New Rollup
-          </Link>
-        </Button>
-      </div>
+      <RollupsShellHeader />
 
       {/* Rollup List */}
       {rollups.length === 0 ? (

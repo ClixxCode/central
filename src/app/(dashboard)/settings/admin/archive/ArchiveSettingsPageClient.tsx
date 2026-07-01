@@ -55,13 +55,6 @@ export function ArchiveSettingsPageClient() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">Archive</h2>
-        <p className="text-sm text-muted-foreground">
-          Configure automatic archiving of completed tasks.
-        </p>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Auto-Archive</CardTitle>

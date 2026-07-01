@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/shared/FavoriteButton';
 import { useTopShellContextOverride } from '@/components/layout/top-shell-override';
@@ -35,68 +35,54 @@ interface BoardHeaderProps {
 export function BoardHeader({
   boardId,
   boardName,
-  boardIcon,
-  boardColor,
   clientName,
   clientSlug,
   canEdit,
   parentBoard,
 }: BoardHeaderProps) {
-  const parentBoardId = parentBoard?.id;
-  const parentBoardName = parentBoard?.name;
-  const parentBoardClientSlug = parentBoard?.clientSlug ?? clientSlug;
-
   const shellContext = React.useMemo<TopShellContext>(() => {
     const clientLabel = clientName ?? humanizeSlug(clientSlug);
     const clientHref = `/clients/${clientSlug}`;
     const boardHref = `${clientHref}/boards/${boardId}`;
-    const parentHref = parentBoardId
-      ? `/clients/${parentBoardClientSlug}/boards/${parentBoardId}`
+    const parentBoardHref = parentBoard
+      ? `/clients/${parentBoard.clientSlug ?? clientSlug}/boards/${parentBoard.id}`
       : null;
+    const showParentBoardCrumb =
+      !!parentBoard &&
+      !!parentBoardHref &&
+      normalizeLabel(parentBoard.name) !== normalizeLabel(clientLabel);
+    const showCurrentBoardCrumb =
+      normalizeLabel(boardName) !== normalizeLabel(clientLabel);
     const crumbs = [
       { label: 'Central', href: '/my-tasks' },
       { label: 'Clients', href: '/clients' },
       { label: clientLabel, href: clientHref },
-      { label: boardName, href: boardHref },
+      ...(showParentBoardCrumb
+        ? [{ label: parentBoard.name, href: parentBoardHref }]
+        : []),
+      ...(showCurrentBoardCrumb ? [{ label: boardName, href: boardHref }] : []),
     ];
 
     return {
       section: 'board',
       activeNavItem: 'clients',
       title: boardName,
-      subtitle: parentBoardName && parentHref ? (
-        <Link
-          href={parentHref}
-          className="inline-flex min-w-0 items-center gap-1 transition-colors hover:text-foreground hover:underline"
-        >
-          <ArrowLeft className="size-3.5 shrink-0" />
-          <span className="truncate">{parentBoardName}</span>
-        </Link>
-      ) : undefined,
-      titleIcon: (
-        <span
-          aria-hidden="true"
-          className="material-symbols-outlined leading-none"
-          style={{
-            color: boardColor ?? undefined,
-            fontSize: 18,
-          }}
-        >
-          {boardIcon ?? 'checklist'}
-        </span>
-      ),
       crumbs,
       breadcrumbs: crumbs,
-      tabs: [{ label: 'Tasks', href: boardHref, active: true }],
       actions: (
         <div className="flex items-center gap-0.5">
           <FavoriteButton
             entityType="board"
             entityId={boardId}
-            className="size-8 border-transparent bg-transparent px-0 shadow-none hover:bg-muted"
+            className="size-8"
           />
           {canEdit && (
-            <Button variant="ghost" size="icon-sm" asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              asChild
+            >
               <Link href={`${boardHref}/settings`} aria-label="Board settings">
                 <Settings className="size-4" />
               </Link>
@@ -124,16 +110,12 @@ export function BoardHeader({
       isAdminRoute: false,
     };
   }, [
-    boardColor,
-    boardIcon,
     boardId,
     boardName,
     canEdit,
     clientName,
     clientSlug,
-    parentBoardClientSlug,
-    parentBoardId,
-    parentBoardName,
+    parentBoard,
   ]);
 
   useTopShellContextOverride(shellContext);
@@ -149,4 +131,8 @@ function humanizeSlug(slug: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ') || slug;
+}
+
+function normalizeLabel(label: string): string {
+  return label.trim().replace(/\s+/g, ' ').toLowerCase();
 }

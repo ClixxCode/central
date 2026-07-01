@@ -17,13 +17,12 @@ import {
   useDeleteNotification,
   useClearReadNotifications,
 } from '@/lib/hooks/useNotifications';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { getUserPreferences } from '@/lib/actions/user-preferences';
 import { useUpdateInAppPreferences } from '@/lib/hooks/useNotifications';
 
 export function NotificationsPageClient() {
   const [activeTab, setActiveTab] = useState('all');
-  const queryClient = useQueryClient();
 
   // Fetch notifications
   const {
@@ -67,14 +66,6 @@ export function NotificationsPageClient() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Notifications</h1>
-        <p className="text-muted-foreground">
-          View and manage your notifications and preferences.
-        </p>
-      </div>
-
       {/* Preferences Card */}
       <Card>
         <CardHeader>

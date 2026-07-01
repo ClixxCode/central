@@ -16,20 +16,72 @@ import { useTemplates } from '@/lib/hooks';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { CreateTemplateDialog } from '@/components/templates/CreateTemplateDialog';
 import { CreateTaskListDialog } from '@/components/templates/CreateTaskListDialog';
+import { useTopShellActions } from '@/components/layout/top-shell-actions';
+import { useTopShellContextOverride } from '@/components/layout/top-shell-override';
+import type { TopShellContext } from '@/components/layout/shell-context';
 import { cn } from '@/lib/utils';
-
-interface TemplatesPageClientProps {
-  isAdmin: boolean;
-}
 
 type FilterTab = 'all' | 'board_template' | 'task_list';
 
-export function TemplatesPageClient({ isAdmin }: TemplatesPageClientProps) {
+export function TemplatesPageClient() {
   const router = useRouter();
   const [filterTab, setFilterTab] = React.useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [createTemplateOpen, setCreateTemplateOpen] = React.useState(false);
   const [createTaskListOpen, setCreateTaskListOpen] = React.useState(false);
+
+  const actions = React.useMemo(
+    () => (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New template"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setCreateTemplateOpen(true)}>
+            <LayoutTemplate className="mr-2 size-4" />
+            Board Template
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setCreateTaskListOpen(true)}>
+            <ListChecks className="mr-2 size-4" />
+            Task List
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ),
+    []
+  );
+
+  const shellContext = React.useMemo<TopShellContext>(() => {
+    const crumbs = [
+      { label: 'Central', href: '/my-tasks' },
+      { label: 'Templates', href: '/templates' },
+    ];
+
+    return {
+      section: 'templates',
+      activeNavItem: 'templates',
+      title: 'Templates',
+      subtitle: 'Create and manage reusable board templates and task lists',
+      crumbs,
+      breadcrumbs: crumbs,
+      actionsSlot: 'board',
+      route: {
+        pathname: '/templates',
+        segments: ['templates'],
+      },
+      isAdminRoute: false,
+    };
+  }, []);
+
+  useTopShellContextOverride(shellContext);
+  useTopShellActions(actions);
 
   const typeFilter = filterTab === 'all' ? undefined : filterTab;
   const { data: templates = [], isLoading } = useTemplates(typeFilter);
@@ -52,34 +104,6 @@ export function TemplatesPageClient({ isAdmin }: TemplatesPageClientProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Templates</h1>
-          <p className="text-sm text-muted-foreground">
-            Create and manage reusable board templates and task lists
-          </p>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button>
-              <Plus className="mr-2 size-4" />
-              New Template
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setCreateTemplateOpen(true)}>
-              <LayoutTemplate className="mr-2 size-4" />
-              Board Template
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setCreateTaskListOpen(true)}>
-              <ListChecks className="mr-2 size-4" />
-              Task List
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
       {/* Tabs + Search */}
       <div className="flex items-center gap-4">
         <div className="flex gap-1 rounded-lg bg-muted p-1">

@@ -228,7 +228,8 @@ describe('resolveDashboardShellContext', () => {
     expect(resolveDashboardShellContext({ pathname: '/rollups/new' })).toMatchObject({
       section: 'rollups',
       activeNavItem: 'rollups',
-      title: 'New Rollup',
+      title: 'Create Rollup Board',
+      subtitle: 'Aggregate tasks from multiple boards into a single view',
     });
   });
 
@@ -281,6 +282,15 @@ describe('resolveDashboardShellContext', () => {
         { label: 'Profile', href: '/settings/profile', active: true },
         { label: 'Notifications', href: '/settings/notifications', active: false },
         { label: 'Integrations', href: '/settings/integrations', active: false },
+      ],
+    });
+
+    expect(resolveDashboardShellContext({ pathname: '/settings/profile', isAdmin: true })).toMatchObject({
+      tabs: [
+        { label: 'Profile', href: '/settings/profile', active: true },
+        { label: 'Notifications', href: '/settings/notifications', active: false },
+        { label: 'Integrations', href: '/settings/integrations', active: false },
+        { label: 'Admin', href: '/settings/admin/general', active: false },
       ],
     });
 

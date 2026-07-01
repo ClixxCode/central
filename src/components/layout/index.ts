@@ -13,12 +13,17 @@ export {
   type AppShellNavItem,
 } from './app-nav';
 export { AppActions } from './AppActions';
+export { AppShellBottomBar } from './AppShellBottomBar';
 export { Sidebar } from './Sidebar';
 export { Header } from './Header';
 export { MobileNav } from './MobileNav';
 export { MobileDashboardNav } from './MobileDashboardNav';
 export { OuterAppSidebar } from './OuterAppSidebar';
 export { TopShellHeader } from './TopShellHeader';
+export {
+  TopShellBottomBarProvider,
+  useTopShellBottomBar,
+} from './top-shell-bottom-bar';
 export {
   TopShellContextOverrideProvider,
   useTopShellContextOverride,

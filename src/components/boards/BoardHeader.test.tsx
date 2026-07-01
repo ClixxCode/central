@@ -20,7 +20,7 @@ vi.mock('@/components/shared/FavoriteButton', () => ({
 }));
 
 describe('BoardHeader', () => {
-  it('keeps parent project context out of breadcrumbs when shown as subtitle', () => {
+  it('keeps parent project context out of the top shell header', () => {
     render(
       <BoardHeader
         boardId="board-1"
@@ -43,9 +43,64 @@ describe('BoardHeader', () => {
       'Central',
       'Clients',
       'SWMW Law',
+      'Matter Projects',
       'Podcast',
     ]);
-    expect(context.subtitle).toBeTruthy();
+    expect(context.breadcrumbs[3]).toMatchObject({
+      label: 'Matter Projects',
+      href: '/clients/swmw-law/boards/parent-board',
+    });
+    expect(context.subtitle).toBeUndefined();
+    expect(context.titleIcon).toBeUndefined();
+    expect(context.tabs).toBeUndefined();
     expect(context.actionsSlot).toBe('board');
+  });
+
+  it('omits the parent board breadcrumb when the parent board matches the client name', () => {
+    render(
+      <BoardHeader
+        boardId="project-1"
+        boardName="Podcast"
+        clientName="SWMW Law"
+        clientSlug="swmw-law"
+        canEdit
+        parentBoard={{
+          id: 'default-board',
+          name: 'SWMW Law',
+          clientSlug: 'swmw-law',
+        }}
+      />
+    );
+
+    const calls = mocks.useTopShellContextOverride.mock.calls;
+    const context = calls[calls.length - 1]?.[0] as TopShellContext;
+
+    expect(context.breadcrumbs.map((crumb) => crumb.label)).toEqual([
+      'Central',
+      'Clients',
+      'SWMW Law',
+      'Podcast',
+    ]);
+  });
+
+  it('omits the current board breadcrumb when the board matches the client name', () => {
+    render(
+      <BoardHeader
+        boardId="board-1"
+        boardName="Rent One"
+        clientName="Rent One"
+        clientSlug="rent-one"
+        canEdit
+      />
+    );
+
+    const calls = mocks.useTopShellContextOverride.mock.calls;
+    const context = calls[calls.length - 1]?.[0] as TopShellContext;
+
+    expect(context.breadcrumbs.map((crumb) => crumb.label)).toEqual([
+      'Central',
+      'Clients',
+      'Rent One',
+    ]);
   });
 });

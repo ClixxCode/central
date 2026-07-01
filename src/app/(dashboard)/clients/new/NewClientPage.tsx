@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,12 +20,13 @@ export function NewClientPage() {
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; slug?: string }>({});
 
-  // Auto-generate slug from name unless manually edited
-  useEffect(() => {
-    if (!slugManuallyEdited && name) {
-      setSlug(generateSlug(name));
+  const handleNameChange = (value: string) => {
+    setName(value);
+
+    if (!slugManuallyEdited) {
+      setSlug(value ? generateSlug(value) : '');
     }
-  }, [name, slugManuallyEdited]);
+  };
 
   const handleSlugChange = (value: string) => {
     setSlugManuallyEdited(true);
@@ -62,21 +62,7 @@ export function NewClientPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/clients')}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">New Client</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create a new client for your agency
-          </p>
-        </div>
-      </div>
-
-      {/* Form */}
+    <div>
       <Card className="max-w-lg">
         <CardHeader>
           <CardTitle>Client Details</CardTitle>
@@ -88,7 +74,7 @@ export function NewClientPage() {
               <Input
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="Enter client name"
               />
               {errors.name && (

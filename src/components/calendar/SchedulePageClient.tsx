@@ -123,13 +123,7 @@ export function SchedulePageClient() {
 
   if (!connection?.connected) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Schedule</h1>
-          <p className="text-muted-foreground">
-            Check team availability and create calendar holds
-          </p>
-        </div>
+      <div>
         <div className="max-w-md">
           <CalendarConnectionCard />
         </div>
@@ -139,13 +133,6 @@ export function SchedulePageClient() {
 
   return (
     <div className={pendingHolds.length > 0 ? 'pb-64' : ''}>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Schedule</h1>
-        <p className="text-muted-foreground">
-          Check team availability and create calendar holds
-        </p>
-      </div>
-
       {/* Controls — single row */}
       <div className="flex items-center gap-4 mb-6 flex-wrap">
         <TeamMemberSelect

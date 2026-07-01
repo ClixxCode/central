@@ -3,6 +3,7 @@
 import { Play, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
+import { cn } from '@/lib/utils';
 import {
   Tooltip,
   TooltipContent,
@@ -26,9 +27,12 @@ export function RollupReviewButton({ rollupId, reviewModeEnabled }: RollupReview
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant={isActive ? 'default' : 'outline'}
-          size="icon"
-          className="size-8"
+          variant="ghost"
+          size="icon-sm"
+          className={cn(
+            'rounded-full text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+            isActive && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground'
+          )}
           onClick={() => setActiveReviewBoardId(isActive ? null : rollupId)}
         >
           {isActive ? <X className="size-4" /> : <Play className="size-4" />}

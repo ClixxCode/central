@@ -1,9 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Kanban, LayoutList, LayoutTemplate, ListChecks, Plus, Settings, Trash2 } from 'lucide-react';
+import { Edit3, Kanban, LayoutList, Plus, Settings, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -28,14 +27,16 @@ import { TemplateKanbanEditor } from '@/components/templates/TemplateKanbanEdito
 import { TemplateBoardTableEditor } from '@/components/templates/TemplateBoardTableEditor';
 import { TemplateTableEditor } from '@/components/templates/TemplateTableEditor';
 import { ApplyTemplateTasksDialog } from '@/components/templates/ApplyTemplateTasksDialog';
+import { useTopShellActions } from '@/components/layout/top-shell-actions';
+import { useTopShellContextOverride } from '@/components/layout/top-shell-override';
+import type { TopShellContext } from '@/components/layout/shell-context';
 import { cn } from '@/lib/utils';
 
 interface TemplateEditorClientProps {
   templateId: string;
-  isAdmin: boolean;
 }
 
-export function TemplateEditorClient({ templateId, isAdmin }: TemplateEditorClientProps) {
+export function TemplateEditorClient({ templateId }: TemplateEditorClientProps) {
   const router = useRouter();
   const { data: template, isLoading } = useTemplate(templateId);
   const updateTemplate = useUpdateTemplate();
@@ -72,14 +73,107 @@ export function TemplateEditorClient({ templateId, isAdmin }: TemplateEditorClie
   };
 
   const isBoardTemplate = template?.type === 'board_template';
+  const actions = React.useMemo(
+    () =>
+      template ? (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setApplyTasksOpen(true)}
+            aria-label="Add tasks"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Plus className="size-4" />
+          </Button>
+          {template.type === 'board_template' && (
+            <div className="inline-flex rounded-md border bg-muted p-0.5">
+              <Button
+                variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+                size="sm"
+                className={cn('h-7 gap-1.5 px-2', viewMode === 'kanban' && 'bg-background shadow-sm')}
+                onClick={() => setViewMode('kanban')}
+              >
+                <Kanban className="size-4" />
+                <span className="hidden sm:inline">Kanban</span>
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                size="sm"
+                className={cn('h-7 gap-1.5 px-2', viewMode === 'table' && 'bg-background shadow-sm')}
+                onClick={() => setViewMode('table')}
+              >
+                <LayoutList className="size-4" />
+                <span className="hidden sm:inline">Table</span>
+              </Button>
+            </div>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Template settings">
+                <Settings className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditingName(true)}>
+                <Edit3 className="mr-2 size-4" />
+                Rename template
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="mr-2 size-4" />
+                Delete template
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null,
+    [template, viewMode]
+  );
+
+  const shellContext = React.useMemo<TopShellContext | null>(() => {
+    if (!template) return null;
+
+    const templateHref = `/templates/${templateId}`;
+    const editHref = `${templateHref}/edit`;
+    const templateTypeLabel = template.type === 'board_template' ? 'Board Template' : 'Task List';
+    const crumbs = [
+      { label: 'Central', href: '/my-tasks' },
+      { label: 'Templates', href: '/templates' },
+      { label: template.name, href: templateHref },
+      { label: 'Edit', href: editHref },
+    ];
+
+    return {
+      section: 'templates',
+      activeNavItem: 'templates',
+      title: template.name,
+      subtitle: templateTypeLabel,
+      crumbs,
+      breadcrumbs: crumbs,
+      actionsSlot: 'board',
+      route: {
+        pathname: editHref,
+        segments: ['templates', templateId, 'edit'],
+        templateId,
+      },
+      template: {
+        id: templateId,
+        name: template.name,
+        href: templateHref,
+      },
+      isAdminRoute: false,
+    };
+  }, [template, templateId]);
+
+  useTopShellContextOverride(shellContext);
+  useTopShellActions(actions);
 
   if (isLoading || !template) {
     return (
-      <div className="space-y-6 p-6">
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-9 w-9" />
-          <Skeleton className="h-8 w-64" />
-        </div>
+      <div className="space-y-6">
         <Skeleton className="h-[500px] w-full" />
       </div>
     );
@@ -87,99 +181,25 @@ export function TemplateEditorClient({ templateId, isAdmin }: TemplateEditorClie
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <header className="border-b px-6 py-4">
-        <div className="flex items-start gap-4">
-          <Link href="/templates">
-            <Button variant="ghost" size="icon" className="mt-0.5 shrink-0">
-              <ArrowLeft className="size-4" />
-            </Button>
-          </Link>
-          <div className="flex-1 space-y-1">
-            <span className={cn(
-              'flex items-center gap-1 text-xs',
-              isBoardTemplate ? 'text-blue-600' : 'text-green-600'
-            )}>
-              {isBoardTemplate ? (
-                <LayoutTemplate className="size-3" />
-              ) : (
-                <ListChecks className="size-3" />
-              )}
-              {isBoardTemplate ? 'Board Template' : 'Task List'}
-            </span>
-            {editingName ? (
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={handleSaveName}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveName();
-                  if (e.key === 'Escape') {
-                    setName(template.name);
-                    setEditingName(false);
-                  }
-                }}
-                className="h-8 max-w-sm text-lg font-semibold"
-                placeholder="Template name"
-                autoFocus
-              />
-            ) : (
-              <h1
-                className="text-lg font-semibold cursor-pointer rounded px-1 -ml-1 hover:bg-muted/50"
-                onClick={() => setEditingName(true)}
-              >
-                {template.name}
-              </h1>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={() => setApplyTasksOpen(true)}>
-              <Plus className="mr-1.5 size-3.5" />
-              Add Tasks to Board
-            </Button>
-            {isBoardTemplate && (
-              <div className="inline-flex rounded-md border bg-muted p-0.5">
-                <Button
-                  variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className={cn('h-7 gap-1.5 px-2', viewMode === 'kanban' && 'bg-background shadow-sm')}
-                  onClick={() => setViewMode('kanban')}
-                >
-                  <Kanban className="size-4" />
-                  <span className="hidden sm:inline">Kanban</span>
-                </Button>
-                <Button
-                  variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className={cn('h-7 gap-1.5 px-2', viewMode === 'table' && 'bg-background shadow-sm')}
-                  onClick={() => setViewMode('table')}
-                >
-                  <LayoutList className="size-4" />
-                  <span className="hidden sm:inline">Table</span>
-                </Button>
-              </div>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Settings className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => setDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="mr-2 size-4" />
-                  Delete template
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+      {editingName && (
+        <div className="mb-4 max-w-sm">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={handleSaveName}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSaveName();
+              if (e.key === 'Escape') {
+                setName(template.name);
+                setEditingName(false);
+              }
+            }}
+            className="h-8 text-sm font-medium"
+            placeholder="Template name"
+            autoFocus
+          />
         </div>
-      </header>
+      )}
 
       {/* Editor */}
       <div className="flex-1 overflow-auto">

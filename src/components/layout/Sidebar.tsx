@@ -14,8 +14,6 @@ import {
   MoreHorizontal,
   X,
   Search,
-  Settings,
-  ShieldCheck,
   GripVertical,
   FolderOpen,
   FolderClosed,
@@ -84,6 +82,7 @@ import {
   type AppNavPreferenceLabel,
 } from './app-nav';
 import type { TopShellContext } from './shell-context';
+import { AppActions } from './AppActions';
 
 // A top-level item is either a folder or a standalone favorite
 type TopLevelItem =
@@ -545,12 +544,18 @@ function SortableNavEditItem({ id, label, icon: Icon, alwaysVisible, isHidden, o
 
 interface SidebarProps {
   clients?: unknown[];
+  user: {
+    name: string | null;
+    email: string;
+    image: string | null;
+  };
   isAdmin?: boolean;
   isContractor?: boolean;
   shellContext?: TopShellContext;
+  onSignOut: () => void;
 }
 
-export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
+export function Sidebar({ user, isAdmin = false, shellContext, onSignOut }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -739,18 +744,11 @@ export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
   );
 
   const hasFavorites = favoritesData.favorites.length > 0 || favoritesData.folders.length > 0;
-  const isSettingsActive = shellContext
-    ? shellContext.activeNavItem === 'settings'
-    : pathname.startsWith('/settings') && !pathname.startsWith('/settings/admin');
-  const isAdminActive = shellContext
-    ? shellContext.activeNavItem === 'admin'
-    : pathname.startsWith('/settings/admin');
-
   // Prevent hydration mismatch by not rendering until client-side
   // This avoids the sidebar "sliding in" when localStorage state differs from SSR default
   if (!isClient) {
     return (
-      <aside className="flex w-64 flex-col border-r border-sidebar-border bg-sidebar">
+      <aside className="flex w-64 flex-col bg-sidebar">
         {/* Skeleton placeholder during SSR */}
         <div className="flex h-14 items-center border-b border-sidebar-border px-4">
           <Skeleton className="h-8 w-8 rounded-lg" />
@@ -786,7 +784,7 @@ export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          'flex flex-col shrink-0 h-full overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300',
+          'flex flex-col shrink-0 h-full overflow-hidden bg-sidebar text-sidebar-foreground transition-all duration-300',
           isCollapsed ? 'w-16' : 'w-64'
         )}
       >
@@ -1170,82 +1168,30 @@ export function Sidebar({ isAdmin = false, shellContext }: SidebarProps) {
             </div>
           )}
 
-          <div className="mt-6 border-t border-sidebar-border pt-3">
-            {isCollapsed ? (
-              <div className="space-y-1">
-                <Tooltip>
-	                  <TooltipTrigger asChild>
-	                    <Link
-	                      href="/settings"
-	                      aria-label="Settings"
-	                      aria-current={isSettingsActive ? 'page' : undefined}
-	                      className={cn(
-		                        'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-		                        isSettingsActive
-		                          ? 'bg-primary/10 text-primary'
-	                          : 'text-muted-foreground hover:bg-accent'
-	                      )}
-                    >
-                      <Settings className="h-5 w-5" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Settings</TooltipContent>
-                </Tooltip>
-                {isAdmin && (
-                  <Tooltip>
-	                    <TooltipTrigger asChild>
-	                      <Link
-	                        href="/settings/admin"
-	                        aria-label="Admin"
-	                        aria-current={isAdminActive ? 'page' : undefined}
-	                        className={cn(
-		                          'flex h-10 w-10 items-center justify-center rounded-lg mx-auto',
-		                          isAdminActive
-		                            ? 'bg-primary/10 text-primary'
-	                            : 'text-muted-foreground hover:bg-accent'
-	                        )}
-                      >
-                        <ShieldCheck className="h-5 w-5" />
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">Admin</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
-            ) : (
-              <nav className="space-y-1">
-                <Link
-                  href="/settings"
-	                  className={cn(
-	                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-	                    isSettingsActive
-	                      ? 'bg-primary/10 text-primary font-medium'
-	                      : 'text-muted-foreground hover:bg-accent'
-	                  )}
-                >
-                  <Settings className="h-5 w-5" />
-                  Settings
-                </Link>
-                {isAdmin && (
-                  <Link
-                    href="/settings/admin"
-	                    className={cn(
-	                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-	                      isAdminActive
-	                        ? 'bg-primary/10 text-primary font-medium'
-	                        : 'text-muted-foreground hover:bg-accent'
-	                    )}
-                  >
-                    <ShieldCheck className="h-5 w-5" />
-                    Admin
-                  </Link>
-                )}
-              </nav>
-            )}
-          </div>
           </div>
           )}
         </ScrollArea>
+
+        <div
+          className={cn(
+            'shrink-0 border-t border-sidebar-border',
+            isCollapsed ? 'px-2 py-2' : 'px-3 py-2'
+          )}
+        >
+          <AppActions
+            user={user}
+            isAdmin={isAdmin}
+            onSignOut={onSignOut}
+            hidePrimaryActions
+            orientation={isCollapsed ? 'vertical' : 'horizontal'}
+            className={cn(
+              'ml-0',
+              isCollapsed
+                ? 'flex-col-reverse justify-center gap-1'
+                : 'w-full flex-row-reverse justify-between'
+            )}
+          />
+        </div>
       </aside>
     </TooltipProvider>
   );

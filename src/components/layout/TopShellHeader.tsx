@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronRight, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,8 @@ interface TopShellHeaderProps {
   isAdmin?: boolean;
   onSignOut: () => void;
   shellContext?: TopShellContext;
+  toolbar?: ReactNode;
+  primaryActions?: ReactNode;
 }
 
 export function TopShellHeader({
@@ -26,11 +29,15 @@ export function TopShellHeader({
   isAdmin = false,
   onSignOut,
   shellContext,
+  toolbar,
+  primaryActions,
 }: TopShellHeaderProps) {
   const { setSidebarOpen, sidebarOpen } = useUIStore();
   const crumbs = shellContext?.breadcrumbs ?? shellContext?.crumbs ?? [];
-  const parentCrumbs = crumbs.slice(0, -1);
+  const visibleCrumbs = crumbs.filter((crumb) => crumb.label !== 'Central');
+  const parentCrumbs = visibleCrumbs.slice(0, -1);
   const tabs = shellContext?.tabs ?? [];
+  const hasSecondaryRow = !!toolbar || tabs.length > 0;
 
   return (
     <header
@@ -38,7 +45,7 @@ export function TopShellHeader({
       data-shell-header-section={shellContext?.section}
       data-shell-header-nav-item={shellContext?.activeNavItem ?? undefined}
     >
-      <div className="flex h-14 items-center gap-3 px-3 sm:px-4">
+      <div className={cn('flex items-center gap-3 px-4 lg:px-6', hasSecondaryRow ? 'h-14' : 'h-[46px]')}>
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <Button
             variant="ghost"
@@ -81,6 +88,11 @@ export function TopShellHeader({
                       {shellContext.subtitle}
                     </span>
                   )}
+                  {shellContext.actions && (
+                    <div className="ml-1 flex shrink-0 items-center gap-0.5">
+                      {shellContext.actions}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -88,18 +100,29 @@ export function TopShellHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {shellContext?.actions}
+          {primaryActions && (
+            <div className="hidden items-center gap-2 md:flex">
+              {primaryActions}
+            </div>
+          )}
           <AppActions
             user={user}
             isAdmin={isAdmin}
             onSignOut={onSignOut}
+            className="lg:hidden"
             hidePrimaryActions={shellContext?.actionsSlot === 'board'}
+            enableGlobalInteractions={false}
+            renderDialogs={false}
           />
         </div>
       </div>
 
-      {tabs.length > 0 && (
-        <div className="px-3 pb-2 sm:px-4">
+      {toolbar ? (
+        <div className="px-4 pb-3 lg:px-6">
+          {toolbar}
+        </div>
+      ) : hasSecondaryRow && (
+        <div className="px-4 pb-2 lg:px-6">
           <TopShellTabs tabs={tabs} />
         </div>
       )}

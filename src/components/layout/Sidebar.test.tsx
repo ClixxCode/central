@@ -76,6 +76,10 @@ vi.mock('@/components/search', () => ({
   GlobalSearch: () => <div data-testid="global-search" />,
 }));
 
+vi.mock('./AppActions', () => ({
+  AppActions: () => <div data-testid="sidebar-app-actions" />,
+}));
+
 const shellContext: TopShellContext = {
   section: 'board',
   activeNavItem: 'clients',
@@ -90,6 +94,12 @@ const shellContext: TopShellContext = {
     boardId: 'board-1',
   },
   isAdminRoute: false,
+};
+
+const user = {
+  name: 'AJ Griem',
+  email: 'aj@example.com',
+  image: null,
 };
 
 describe('Sidebar', () => {
@@ -111,7 +121,14 @@ describe('Sidebar', () => {
       navOrder: [],
     };
 
-    render(<Sidebar isAdmin shellContext={shellContext} />);
+    render(
+      <Sidebar
+        user={user}
+        isAdmin
+        shellContext={shellContext}
+        onSignOut={vi.fn()}
+      />
+    );
 
     expect(screen.queryByRole('link', { name: 'Clients' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'My Work' })).toBeInTheDocument();
@@ -121,14 +138,22 @@ describe('Sidebar', () => {
   it('gives collapsed icon links accessible names and current state', () => {
     useUIStore.setState({ sidebarCollapsed: true });
 
-    render(<Sidebar isAdmin shellContext={shellContext} />);
+    render(
+      <Sidebar
+        user={user}
+        isAdmin
+        shellContext={shellContext}
+        onSignOut={vi.fn()}
+      />
+    );
 
     expect(screen.getByRole('link', { name: 'Clients' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Favorite Board' })).toHaveAttribute(
       'href',
       '/clients/acme-co/boards/board-1'
     );
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
-    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/settings/admin');
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('sidebar-app-actions')).toBeInTheDocument();
   });
 });

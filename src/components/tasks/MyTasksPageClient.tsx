@@ -755,11 +755,6 @@ export function MyTasksPageClient() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">My Work</h1>
-        <p className="text-muted-foreground">Tasks, mentions, and replies across all clients</p>
-      </div>
-
       {showCalendarEvents && <TodaysEvents />}
 
       <Tabs value={activeTabValue} onValueChange={(v) => {
