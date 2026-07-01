@@ -68,11 +68,12 @@ export default async function BoardPage({ params }: Props) {
   const canEdit = isAdmin || (await canUserEditBoard(user.id, boardId));
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <>
       <BoardHeader
         boardId={boardId}
         boardName={board.name}
+        boardIcon={board.icon}
+        boardColor={board.color}
         clientName={board.client?.name}
         clientSlug={clientSlug}
         canEdit={canEdit}
@@ -98,6 +99,6 @@ export default async function BoardPage({ params }: Props) {
         statusOptions={board.statusOptions}
         sectionOptions={board.sectionOptions}
       />
-    </div>
+    </>
   );
 }

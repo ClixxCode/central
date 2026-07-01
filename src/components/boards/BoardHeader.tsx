@@ -2,26 +2,23 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Settings } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from '@/components/shared/FavoriteButton';
-import { PULSE_BASE_URL } from '@/lib/ui/account-status';
-import {
-  Avatar,
-  AvatarImage,
-  AvatarFallback,
-  AvatarGroup,
-  AvatarGroupCount,
-} from '@/components/ui/avatar';
+import { useTopShellContextOverride } from '@/components/layout/top-shell-override';
+import type { TopShellContext } from '@/components/layout/shell-context';
 import type { AccountTeamMember } from '@/lib/db/schema';
 
 interface BoardHeaderProps {
   boardId: string;
   boardName: string;
+  boardIcon?: string | null;
+  boardColor?: string | null;
   clientName?: string;
   clientSlug: string;
   canEdit: boolean;
-  // Reflected Pulse account state (one-way Pulse → Central).
+  // Reflected Pulse account state. Accepted here so board pages can pass the
+  // account context while the top-shell visual treatment evolves.
   pulseAccountId?: string | null;
   accountStatus?: string | null;
   accountType?: string | null;
@@ -35,155 +32,128 @@ interface BoardHeaderProps {
   } | null;
 }
 
-// Lifecycle status → pill styling. Falls back to neutral for unknown values.
-const STATUS_STYLES: Record<string, string> = {
-  active: 'bg-green-100 text-green-800 border-green-200',
-  onboarding: 'bg-blue-100 text-blue-800 border-blue-200',
-  paused: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  offboarding: 'bg-orange-100 text-orange-800 border-orange-200',
-  terminated: 'bg-gray-100 text-gray-500 border-gray-200',
-  pipeline: 'bg-purple-100 text-purple-800 border-purple-200',
-};
-
-function titleCase(s: string): string {
-  return s.replace(/(^|_)([a-z])/g, (_, p, c) => (p ? ' ' : '') + c.toUpperCase());
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
-}
-
-function Pill({ label, className }: { label: string; className?: string }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-        className ?? 'bg-muted text-muted-foreground border-transparent'
-      }`}
-    >
-      {label}
-    </span>
-  );
-}
-
-function TeamGroup({ label, members }: { label: string; members: AccountTeamMember[] }) {
-  if (members.length === 0) return null;
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <AvatarGroup>
-        {members.slice(0, 5).map((m) => (
-          <Avatar key={m.staff_id} size="lg">
-            <AvatarImage src={m.avatar_url ?? undefined} alt={m.full_name ?? ''} />
-            <AvatarFallback>{getInitials(m.full_name ?? m.email ?? '?')}</AvatarFallback>
-          </Avatar>
-        ))}
-        {members.length > 5 && <AvatarGroupCount>+{members.length - 5}</AvatarGroupCount>}
-      </AvatarGroup>
-    </div>
-  );
-}
-
 export function BoardHeader({
   boardId,
   boardName,
+  boardIcon,
+  boardColor,
   clientName,
   clientSlug,
   canEdit,
-  pulseAccountId,
-  accountStatus,
-  accountType,
-  podName,
-  accountTeam = [],
-  accountServices = [],
   parentBoard,
 }: BoardHeaderProps) {
-  const management = accountTeam.filter((m) => m.group === 'management');
-  const delivery = accountTeam.filter((m) => m.group === 'delivery');
-  const parentHref =
-    parentBoard && (parentBoard.clientSlug ?? clientSlug)
-      ? `/clients/${parentBoard.clientSlug ?? clientSlug}/boards/${parentBoard.id}`
+  const parentBoardId = parentBoard?.id;
+  const parentBoardName = parentBoard?.name;
+  const parentBoardClientSlug = parentBoard?.clientSlug ?? clientSlug;
+
+  const shellContext = React.useMemo<TopShellContext>(() => {
+    const clientLabel = clientName ?? humanizeSlug(clientSlug);
+    const clientHref = `/clients/${clientSlug}`;
+    const boardHref = `${clientHref}/boards/${boardId}`;
+    const parentHref = parentBoardId
+      ? `/clients/${parentBoardClientSlug}/boards/${parentBoardId}`
       : null;
+    const crumbs = [
+      { label: 'Central', href: '/my-tasks' },
+      { label: 'Clients', href: '/clients' },
+      { label: clientLabel, href: clientHref },
+      ...(parentBoardName && parentHref
+        ? [{ label: parentBoardName, href: parentHref }]
+        : []),
+      { label: boardName, href: boardHref },
+    ];
 
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold">{boardName}</h1>
-          {parentHref && (
-            <Link
-              href={parentHref}
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline"
-            >
-              <ArrowLeft className="size-3.5" />
-              {parentBoard?.name}
-            </Link>
+    return {
+      section: 'board',
+      activeNavItem: 'clients',
+      title: boardName,
+      subtitle: parentBoardName && parentHref ? (
+        <Link
+          href={parentHref}
+          className="inline-flex min-w-0 items-center gap-1 transition-colors hover:text-foreground hover:underline"
+        >
+          <ArrowLeft className="size-3.5 shrink-0" />
+          <span className="truncate">{parentBoardName}</span>
+        </Link>
+      ) : undefined,
+      titleIcon: (
+        <span
+          aria-hidden="true"
+          className="material-symbols-outlined leading-none"
+          style={{
+            color: boardColor ?? undefined,
+            fontSize: 18,
+          }}
+        >
+          {boardIcon ?? 'checklist'}
+        </span>
+      ),
+      crumbs,
+      breadcrumbs: crumbs,
+      tabs: [{ label: 'Tasks', href: boardHref, active: true }],
+      actions: (
+        <div className="flex items-center gap-1">
+          <FavoriteButton entityType="board" entityId={boardId} />
+          {canEdit && (
+            <Button variant="ghost" size="icon" asChild>
+              <Link href={`${boardHref}/settings`} aria-label="Board settings">
+                <Settings className="size-4" />
+              </Link>
+            </Button>
           )}
-          {accountStatus && (
-            <Pill label={titleCase(accountStatus)} className={STATUS_STYLES[accountStatus]} />
-          )}
-          {accountType && accountType !== 'client' && (
-            <Pill label={titleCase(accountType)} />
-          )}
-          {podName && <Pill label={podName} />}
-          {pulseAccountId && (
-            <a
-              href={`${PULSE_BASE_URL}/accounts/${pulseAccountId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-full border border-transparent bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline"
-              title="Open this account in Pulse"
-            >
-              View in Pulse
-              <ExternalLink className="size-3" />
-            </a>
-          )}
-        </div>
-        {clientName && (
-          <Link
-            href={`/clients/${clientSlug}`}
-            className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors"
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled
+            aria-label="More board actions"
           >
-            {clientName}
-          </Link>
-        )}
-        {accountTeam.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-4">
-            <TeamGroup label="Management" members={management} />
-            <TeamGroup label="Delivery" members={delivery} />
-          </div>
-        )}
-        {accountServices.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Services
-            </span>
-            {accountServices.map((s) => (
-              <span
-                key={s}
-                className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-              >
-                {s}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <FavoriteButton entityType="board" entityId={boardId} />
-        {canEdit && (
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/clients/${clientSlug}/boards/${boardId}/settings`}>
-              <Settings className="mr-2 size-4" />
-              Settings
-            </Link>
+            <MoreHorizontal className="size-4" />
           </Button>
-        )}
-      </div>
-    </div>
-  );
+        </div>
+      ),
+      actionsSlot: 'board',
+      route: {
+        pathname: boardHref,
+        segments: ['clients', clientSlug, 'boards', boardId],
+        clientSlug,
+        boardId,
+      },
+      client: {
+        slug: clientSlug,
+        name: clientLabel,
+        href: clientHref,
+      },
+      board: {
+        id: boardId,
+        name: boardName,
+        href: boardHref,
+      },
+      isAdminRoute: false,
+    };
+  }, [
+    boardColor,
+    boardIcon,
+    boardId,
+    boardName,
+    canEdit,
+    clientName,
+    clientSlug,
+    parentBoardClientSlug,
+    parentBoardId,
+    parentBoardName,
+  ]);
+
+  useTopShellContextOverride(shellContext);
+
+  return null;
+}
+
+function humanizeSlug(slug: string): string {
+  return slug
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ') || slug;
 }

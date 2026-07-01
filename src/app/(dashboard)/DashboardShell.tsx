@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   MainWorkShell,
@@ -15,6 +15,7 @@ import {
   resolveDashboardShellContext,
   type TopShellContext,
 } from '@/components/layout/shell-context';
+import { TopShellContextOverrideProvider } from '@/components/layout/top-shell-override';
 
 interface Client {
   id: string;
@@ -57,7 +58,7 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const shellContext = useMemo(
+  const baseShellContext = useMemo(
     () =>
       topShellContext ??
       resolveDashboardShellContext({
@@ -68,6 +69,21 @@ export function DashboardShell({
       }),
     [clients, isAdmin, pathname, searchParams, topShellContext]
   );
+  const [registeredShellContext, setRegisteredShellContext] = useState<{
+    id: symbol;
+    context: TopShellContext;
+  } | null>(null);
+
+  const registerShellContextOverride = useCallback((context: TopShellContext) => {
+    const id = Symbol('top-shell-context-override');
+    setRegisteredShellContext({ id, context });
+
+    return () => {
+      setRegisteredShellContext((current) => (current?.id === id ? null : current));
+    };
+  }, []);
+
+  const shellContext = registeredShellContext?.context ?? baseShellContext;
 
   const handleSignOut = async () => {
     await signOutUser();
@@ -86,13 +102,15 @@ export function DashboardShell({
         <OuterAppSidebar clients={clients} isAdmin={isAdmin} isContractor={isContractor} />
         <MobileDashboardNav clients={clients} isAdmin={isAdmin} isContractor={isContractor} />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <TopShellHeader
-            user={user}
-            isAdmin={isAdmin}
-            onSignOut={handleSignOut}
-            shellContext={shellContext}
-          />
-          <MainWorkShell shellContext={shellContext}>{children}</MainWorkShell>
+          <TopShellContextOverrideProvider registerOverride={registerShellContextOverride}>
+            <TopShellHeader
+              user={user}
+              isAdmin={isAdmin}
+              onSignOut={handleSignOut}
+              shellContext={shellContext}
+            />
+            <MainWorkShell shellContext={shellContext}>{children}</MainWorkShell>
+          </TopShellContextOverrideProvider>
         </div>
       </div>
     </div>

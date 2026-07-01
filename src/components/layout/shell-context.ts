@@ -75,10 +75,12 @@ export interface TopShellContext {
   section: DashboardSection;
   activeNavItem: AppNavItemId | null;
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
+  titleIcon?: ReactNode;
   crumbs: TopShellCrumb[];
   breadcrumbs: TopShellCrumb[];
   tabs?: TopShellTab[];
+  actions?: ReactNode;
   actionsSlot: 'global' | 'board' | 'settings' | 'none';
   route: DashboardRouteContext;
   client?: TopShellEntityContext;
@@ -518,8 +520,6 @@ function getClientTabs(clientHref: string): TopShellTab[] {
 function getBoardTabs(boardHref: string): TopShellTab[] {
   return [
     { label: 'Tasks', href: boardHref, active: true },
-    { label: 'Activity', href: `${boardHref}#activity`, active: false },
-    { label: 'Projects', href: `${boardHref}#projects`, active: false },
   ];
 }
 

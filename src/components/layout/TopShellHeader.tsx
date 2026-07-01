@@ -68,11 +68,16 @@ export function TopShellHeader({
             {shellContext && (
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-2">
+                  {shellContext.titleIcon && (
+                    <span className="inline-flex shrink-0">
+                      {shellContext.titleIcon}
+                    </span>
+                  )}
                   <h1 className="truncate text-sm font-semibold leading-5 text-foreground">
                     {shellContext.title}
                   </h1>
                   {shellContext.subtitle && (
-                    <span className="hidden truncate text-xs text-muted-foreground sm:inline">
+                    <span className="hidden min-w-0 truncate text-xs text-muted-foreground sm:inline">
                       {shellContext.subtitle}
                     </span>
                   )}
@@ -82,11 +87,14 @@ export function TopShellHeader({
           </div>
         </div>
 
-        <AppActions
-          user={user}
-          isAdmin={isAdmin}
-          onSignOut={onSignOut}
-        />
+        <div className="flex shrink-0 items-center gap-2">
+          {shellContext?.actions}
+          <AppActions
+            user={user}
+            isAdmin={isAdmin}
+            onSignOut={onSignOut}
+          />
+        </div>
       </div>
 
       {tabs.length > 0 && (

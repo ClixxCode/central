@@ -17,6 +17,10 @@ export { MobileNav } from './MobileNav';
 export { MobileDashboardNav } from './MobileDashboardNav';
 export { OuterAppSidebar } from './OuterAppSidebar';
 export { TopShellHeader } from './TopShellHeader';
+export {
+  TopShellContextOverrideProvider,
+  useTopShellContextOverride,
+} from './top-shell-override';
 export { MainWorkShell } from './MainWorkShell';
 export {
   APP_NAV_ITEMS,

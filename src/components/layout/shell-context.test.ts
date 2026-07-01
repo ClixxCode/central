@@ -151,8 +151,6 @@ describe('resolveDashboardShellContext', () => {
     });
     expect(context.tabs).toEqual([
       { label: 'Tasks', href: '/clients/acme-co/boards/board-1', active: true },
-      { label: 'Activity', href: '/clients/acme-co/boards/board-1#activity', active: false },
-      { label: 'Projects', href: '/clients/acme-co/boards/board-1#projects', active: false },
     ]);
   });
 
