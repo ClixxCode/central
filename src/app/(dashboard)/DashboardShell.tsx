@@ -20,6 +20,8 @@ import { TopShellContextOverrideProvider } from '@/components/layout/top-shell-o
 import { TopShellActionsProvider } from '@/components/layout/top-shell-actions';
 import { TopShellBottomBarProvider } from '@/components/layout/top-shell-bottom-bar';
 import { TopShellToolbarProvider } from '@/components/layout/top-shell-toolbar';
+import { CentralFeatureFlagsProvider } from '@/lib/feature-flags/CentralFeatureFlagsProvider';
+import type { CentralFeatureFlags } from '@/lib/feature-flags/types';
 
 interface Client {
   id: string;
@@ -44,6 +46,7 @@ interface DashboardShellProps {
   clients: Client[];
   isAdmin: boolean;
   isContractor?: boolean;
+  featureFlags: CentralFeatureFlags;
   topShellContext?: TopShellContext;
   impersonation?: {
     userName?: string;
@@ -57,6 +60,7 @@ export function DashboardShell({
   clients,
   isAdmin,
   isContractor = false,
+  featureFlags,
   topShellContext,
   impersonation,
 }: DashboardShellProps) {
@@ -133,47 +137,49 @@ export function DashboardShell({
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-sidebar">
-      {impersonation && (
-        <ImpersonationBanner
-          userName={impersonation.userName}
-          userEmail={impersonation.userEmail}
-        />
-      )}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <StoreHydration />
-        <OuterAppSidebar
-          clients={clients}
-          user={user}
-          isAdmin={isAdmin}
-          isContractor={isContractor}
-          shellContext={shellContext}
-          onSignOut={handleSignOut}
-        />
-        <MobileDashboardNav isAdmin={isAdmin} shellContext={shellContext} />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background lg:mb-0 lg:ml-0 lg:mr-2 lg:mt-2 lg:rounded-xl lg:border lg:shadow-panel">
-          <TopShellContextOverrideProvider registerOverride={registerShellContextOverride}>
-            <TopShellActionsProvider registerActions={registerShellActions}>
-              <TopShellBottomBarProvider registerBottomBar={registerShellBottomBar}>
-                <TopShellToolbarProvider registerToolbar={registerShellToolbar}>
-                  <TopShellHeader
-                    user={user}
-                    isAdmin={isAdmin}
-                    onSignOut={handleSignOut}
-                    shellContext={shellContext}
-                    toolbar={registeredShellToolbar?.toolbar}
-                    primaryActions={registeredShellActions?.actions}
-                  />
-                  <MainWorkShell shellContext={shellContext}>{children}</MainWorkShell>
-                  <AppShellBottomBar>
-                    {registeredShellBottomBar?.content}
-                  </AppShellBottomBar>
-                </TopShellToolbarProvider>
-              </TopShellBottomBarProvider>
-            </TopShellActionsProvider>
-          </TopShellContextOverrideProvider>
+    <CentralFeatureFlagsProvider flags={featureFlags}>
+      <div className="flex h-screen flex-col overflow-hidden bg-sidebar">
+        {impersonation && (
+          <ImpersonationBanner
+            userName={impersonation.userName}
+            userEmail={impersonation.userEmail}
+          />
+        )}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <StoreHydration />
+          <OuterAppSidebar
+            clients={clients}
+            user={user}
+            isAdmin={isAdmin}
+            isContractor={isContractor}
+            shellContext={shellContext}
+            onSignOut={handleSignOut}
+          />
+          <MobileDashboardNav isAdmin={isAdmin} shellContext={shellContext} />
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background lg:mb-0 lg:ml-0 lg:mr-2 lg:mt-2 lg:rounded-xl lg:border lg:shadow-panel">
+            <TopShellContextOverrideProvider registerOverride={registerShellContextOverride}>
+              <TopShellActionsProvider registerActions={registerShellActions}>
+                <TopShellBottomBarProvider registerBottomBar={registerShellBottomBar}>
+                  <TopShellToolbarProvider registerToolbar={registerShellToolbar}>
+                    <TopShellHeader
+                      user={user}
+                      isAdmin={isAdmin}
+                      onSignOut={handleSignOut}
+                      shellContext={shellContext}
+                      toolbar={registeredShellToolbar?.toolbar}
+                      primaryActions={registeredShellActions?.actions}
+                    />
+                    <MainWorkShell shellContext={shellContext}>{children}</MainWorkShell>
+                    <AppShellBottomBar>
+                      {registeredShellBottomBar?.content}
+                    </AppShellBottomBar>
+                  </TopShellToolbarProvider>
+                </TopShellBottomBarProvider>
+              </TopShellActionsProvider>
+            </TopShellContextOverrideProvider>
+          </div>
         </div>
       </div>
-    </div>
+    </CentralFeatureFlagsProvider>
   );
 }

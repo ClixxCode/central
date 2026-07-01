@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser, getImpersonationState } from '@/lib/auth/session';
 import { listClients, checkIsContractor } from '@/lib/actions/clients';
+import { getCentralFeatureFlags } from '@/flags';
 import { DashboardShell } from './DashboardShell';
 
 export default async function DashboardLayout({
@@ -15,9 +16,10 @@ export default async function DashboardLayout({
   }
 
   // Fetch clients with boards for sidebar
-  const [clientsResult, isContractor] = await Promise.all([
+  const [clientsResult, isContractor, featureFlags] = await Promise.all([
     listClients(),
     checkIsContractor(user.id),
+    getCentralFeatureFlags(),
   ]);
   const clients = clientsResult.success ? clientsResult.data ?? [] : [];
 
@@ -45,6 +47,7 @@ export default async function DashboardLayout({
       }))}
       isAdmin={user.role === 'admin'}
       isContractor={isContractor}
+      featureFlags={featureFlags}
       impersonation={impersonation.isImpersonating ? {
         userName: impersonation.userName,
         userEmail: impersonation.userEmail,
