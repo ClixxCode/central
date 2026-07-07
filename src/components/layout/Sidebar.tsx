@@ -578,6 +578,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
 
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
+  const [appSwitcherHovered, setAppSwitcherHovered] = useState(false);
   const [draftHiddenNav, setDraftHiddenNav] = useState<string[]>([]);
   const [draftNavOrder, setDraftNavOrder] = useState<string[]>(DEFAULT_NAV_ORDER);
 
@@ -815,15 +816,57 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
         {/* Header */}
         <div className="flex h-14 items-center justify-between border-b px-4">
           {!isCollapsed && (
-            <Link href="/my-tasks" className="flex items-center gap-2">
-              <Image
-                src={resolvedTheme === 'dark' ? '/clix_logo_white.png' : '/clix_logo_black.png'}
-                alt="Clix Logo"
-                width={32}
-                height={32}
-              />
-              <span className="font-semibold text-foreground">CENTRAL</span>
-            </Link>
+            <div
+              className="relative h-8 flex items-center"
+              style={{ perspective: "600px" }}
+              onMouseEnter={() => setAppSwitcherHovered(true)}
+              onMouseLeave={() => setAppSwitcherHovered(false)}
+            >
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  transformStyle: "preserve-3d",
+                  transition: "transform 0.4s ease",
+                  transform: appSwitcherHovered ? "rotateX(180deg)" : "rotateX(0deg)",
+                }}
+              >
+                {/* Front — Central */}
+                <div
+                  className="absolute inset-0 flex items-center gap-2"
+                  style={{ backfaceVisibility: "hidden" }}
+                >
+                  <Link href="/my-tasks" className="flex items-center gap-2" tabIndex={appSwitcherHovered ? -1 : 0}>
+                    <Image
+                      src={resolvedTheme === 'dark' ? '/clix_logo_white.png' : '/clix_logo_black.png'}
+                      alt="Clix Logo"
+                      width={32}
+                      height={32}
+                    />
+                    <span className="font-semibold text-foreground">CENTRAL</span>
+                  </Link>
+                </div>
+
+                {/* Back — Pulse (shown on hover) */}
+                <div
+                  className="absolute inset-0 flex items-center gap-2 cursor-pointer"
+                  style={{
+                    backfaceVisibility: "hidden",
+                    transform: "rotateX(180deg)",
+                  }}
+                  onClick={() => { window.location.href = "https://pulse.clix.co" }}
+                >
+                  <Image
+                    src={resolvedTheme === 'dark' ? '/clix_logo_white.png' : '/clix_logo_black.png'}
+                    alt="Clix Logo"
+                    width={24}
+                    height={24}
+                  />
+                  <span className="font-semibold text-foreground">PULSE</span>
+                </div>
+              </div>
+            </div>
           )}
           <Button
             variant="ghost"
