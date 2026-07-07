@@ -817,27 +817,22 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
         <div className="flex h-14 items-center justify-between border-b px-4">
           {!isCollapsed && (
             <div
-              className="relative h-8 flex items-center"
-              style={{ perspective: "600px" }}
+              className="relative h-8 overflow-hidden cursor-pointer"
               onMouseEnter={() => setAppSwitcherHovered(true)}
               onMouseLeave={() => setAppSwitcherHovered(false)}
             >
               <div
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  height: "100%",
-                  transformStyle: "preserve-3d",
-                  transition: "transform 0.4s ease",
-                  transform: appSwitcherHovered ? "rotateX(180deg)" : "rotateX(0deg)",
-                }}
+                className="transition-transform duration-300 ease-in-out"
+                style={{ transform: appSwitcherHovered ? "translateY(-100%)" : "translateY(0)" }}
               >
-                {/* Front — Central */}
-                <div
-                  className="absolute inset-0 flex items-center gap-2"
-                  style={{ backfaceVisibility: "hidden" }}
-                >
-                  <Link href="/my-tasks" className="flex items-center gap-2" tabIndex={appSwitcherHovered ? -1 : 0}>
+                {/* Top — Central (current app) */}
+                <div className="h-8 flex items-center gap-2">
+                  <Link
+                    href="/my-tasks"
+                    className="flex items-center gap-2"
+                    tabIndex={appSwitcherHovered ? -1 : 0}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Image
                       src={resolvedTheme === 'dark' ? '/clix_logo_white.png' : '/clix_logo_black.png'}
                       alt="Clix Logo"
@@ -848,13 +843,9 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
                   </Link>
                 </div>
 
-                {/* Back — Pulse (shown on hover) */}
+                {/* Bottom — Pulse (slides up on hover) */}
                 <div
-                  className="absolute inset-0 flex items-center gap-2 cursor-pointer"
-                  style={{
-                    backfaceVisibility: "hidden",
-                    transform: "rotateX(180deg)",
-                  }}
+                  className="h-8 flex items-center gap-2"
                   onClick={() => { window.location.href = "https://pulse.clix.co" }}
                 >
                   <Image
@@ -863,7 +854,8 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
                     width={24}
                     height={24}
                   />
-                  <span className="font-semibold text-foreground">PULSE</span>
+                  <span className="font-semibold text-sm text-foreground">PULSE</span>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
                 </div>
               </div>
             </div>
