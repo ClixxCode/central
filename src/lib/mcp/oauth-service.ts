@@ -72,6 +72,34 @@ function matchesPkceChallenge(verifier: string, expectedChallenge: string): bool
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
+/**
+ * Validate an authorization request before presenting consent. Keeping this in
+ * the credential service prevents an HTTP route from accidentally becoming an
+ * open redirect or issuing a grant outside the client's registered scopes.
+ */
+export async function validateMcpAuthorizationRequest(input: {
+  clientId: string;
+  redirectUri: string;
+  scopes: string[];
+  codeChallenge: string;
+}) {
+  const client = await db.query.mcpOAuthClients.findFirst({
+    where: eq(mcpOAuthClients.clientId, input.clientId),
+  });
+  if (!client) throw new McpOAuthError('invalid_client', 'OAuth client is not registered');
+  if (!client.redirectUris.includes(input.redirectUri)) {
+    throw new McpOAuthError('invalid_grant', 'Redirect URI does not match the registered client');
+  }
+
+  const scopes = assertRequestedScopes(input.scopes, client.allowedScopes);
+  const codeChallenge = input.codeChallenge.trim();
+  if (!/^[A-Za-z0-9_-]{43,128}$/.test(codeChallenge)) {
+    throw new McpOAuthError('invalid_grant', 'A valid S256 PKCE code challenge is required');
+  }
+
+  return { clientId: client.clientId, clientName: client.name, redirectUri: input.redirectUri, scopes, codeChallenge };
+}
+
 export async function registerMcpOAuthClient(input: {
   clientId: string;
   name: string;
@@ -105,19 +133,13 @@ export async function issueMcpAuthorizationCode(input: {
   codeChallenge: string;
   now?: Date;
 }) {
+  const request = await validateMcpAuthorizationRequest(input);
   const client = await db.query.mcpOAuthClients.findFirst({
-    where: eq(mcpOAuthClients.clientId, input.clientId),
+    where: eq(mcpOAuthClients.clientId, request.clientId),
   });
+  // The client was just validated above. The second lookup keeps the returned
+  // database identifier private to this service while tolerating deletion.
   if (!client) throw new McpOAuthError('invalid_client', 'OAuth client is not registered');
-  if (!client.redirectUris.includes(input.redirectUri)) {
-    throw new McpOAuthError('invalid_grant', 'Redirect URI does not match the registered client');
-  }
-
-  const scopes = assertRequestedScopes(input.scopes, client.allowedScopes);
-  const codeChallenge = input.codeChallenge.trim();
-  if (!/^[A-Za-z0-9_-]{43,128}$/.test(codeChallenge)) {
-    throw new McpOAuthError('invalid_grant', 'A valid S256 PKCE code challenge is required');
-  }
 
   const now = input.now ?? new Date();
   const expiresAt = new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS);
@@ -127,16 +149,16 @@ export async function issueMcpAuthorizationCode(input: {
     clientId: client.id,
     userId: input.userId,
     codeHash: hashMcpCredential(authorizationCode),
-    redirectUri: input.redirectUri,
-    scopes,
-    codeChallenge,
+    redirectUri: request.redirectUri,
+    scopes: request.scopes,
+    codeChallenge: request.codeChallenge,
     expiresAt,
   });
   await recordMcpAuditEvent({
     userId: input.userId,
     clientId: client.id,
     eventType: 'oauth.authorization_code_issued',
-    metadata: { scopes, expiresAt: expiresAt.toISOString() },
+    metadata: { scopes: request.scopes, expiresAt: expiresAt.toISOString() },
   });
 
   return { authorizationCode, expiresAt };
