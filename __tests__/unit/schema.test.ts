@@ -112,6 +112,16 @@ describe('Database Schema', () => {
     });
   });
 
+  describe('MCP OAuth', () => {
+    it('exports OAuth credential and audit tables from the canonical schema barrel', () => {
+      expect(schema.mcpOAuthClients).toBeDefined();
+      expect(schema.mcpAuthorizationCodes).toBeDefined();
+      expect(schema.mcpAccessTokens).toBeDefined();
+      expect(schema.mcpRefreshTokens).toBeDefined();
+      expect(schema.mcpAuditEvents).toBeDefined();
+    });
+  });
+
   describe('Type Exports', () => {
     it('exports UserPreferences type', () => {
       // Type-only check - if this compiles, the type exists

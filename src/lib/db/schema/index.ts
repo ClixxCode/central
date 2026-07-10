@@ -54,6 +54,9 @@ export * from './templates';
 // Extension Tokens
 export * from './extension-tokens';
 
+// MCP OAuth credentials and audit events
+export * from './mcp-oauth';
+
 // Async Jobs
 export * from './async-jobs';
 

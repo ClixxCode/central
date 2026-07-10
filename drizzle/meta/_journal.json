@@ -267,6 +267,20 @@
       "when": 1782846752699,
       "tag": "0037_fixed_cargill",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1783685712256,
+      "tag": "0038_flimsy_power_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1783685918304,
+      "tag": "0039_faulty_firestar",
+      "breakpoints": true
     }
   ]
 }
