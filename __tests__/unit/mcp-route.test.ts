@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   listMcpBoards: vi.fn(),
   listMcpTasks: vi.fn(),
   getMcpTask: vi.fn(),
+  createMcpTask: vi.fn(),
+  updateMcpTask: vi.fn(),
 }));
 
 vi.mock('@/lib/mcp/oauth-service', () => ({
@@ -17,6 +19,8 @@ vi.mock('@/lib/mcp/task-tools', () => ({
   listMcpBoards: mocks.listMcpBoards,
   listMcpTasks: mocks.listMcpTasks,
   getMcpTask: mocks.getMcpTask,
+  createMcpTask: mocks.createMcpTask,
+  updateMcpTask: mocks.updateMcpTask,
 }));
 
 import { POST } from '@/app/api/mcp/route';
@@ -30,6 +34,7 @@ const token = {
 };
 const boardId = 'd1111111-1111-4111-8111-111111111111';
 const taskId = 'e1111111-1111-4111-8111-111111111111';
+const createdTaskId = 'f1111111-1111-4111-8111-111111111111';
 
 function mcpRequest(body: object, init: { sessionId?: string; authorization?: string } = {}) {
   return new NextRequest('https://central.example/api/mcp', {
@@ -81,7 +86,7 @@ describe('/api/mcp', () => {
     expect(mocks.validateMcpAccessToken).toHaveBeenCalledTimes(1);
   });
 
-  it('requires tasks:read before MCP dispatch', async () => {
+  it('requires a task scope before MCP dispatch', async () => {
     mocks.validateMcpAccessToken.mockResolvedValue({ ...token, scopes: [] });
     const response = await POST(mcpRequest({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }));
 
@@ -130,5 +135,75 @@ describe('/api/mcp', () => {
     const response = await POST(mcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }, { sessionId }));
 
     expect(response.status).toBe(403);
+  });
+
+  it('does not expose write tools to a read-only token', async () => {
+    const sessionId = await initialize();
+    const response = await POST(mcpRequest({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }, { sessionId }));
+    const result = await response.json();
+
+    expect(result.result.tools.map((tool: { name: string }) => tool.name)).not.toContain('central_create_task');
+
+    const writeCall = await POST(mcpRequest({
+      jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'central_create_task', arguments: { board_id: boardId, title: 'Nope', status: 'todo' } },
+    }, { sessionId }));
+    await expect(writeCall.json()).resolves.toMatchObject({ result: { isError: true, content: [{ text: expect.stringContaining('not found') }] } });
+    expect(mocks.createMcpTask).not.toHaveBeenCalled();
+  });
+
+  it('validates explicit targets and rejects unsupported task fields before mutation', async () => {
+    mocks.validateMcpAccessToken.mockResolvedValue({ ...token, scopes: ['tasks:write'] });
+    const sessionId = await initialize();
+
+    const noTarget = await POST(mcpRequest({
+      jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'central_create_task', arguments: { title: 'Missing board', status: 'todo' } },
+    }, { sessionId }));
+    const unsupported = await POST(mcpRequest({
+      jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'central_update_task', arguments: { task_id: taskId, assignee_ids: [token.userId] } },
+    }, { sessionId }));
+
+    await expect(noTarget.json()).resolves.toMatchObject({ result: { isError: true, content: [{ text: expect.stringContaining('Input validation error') }] } });
+    await expect(unsupported.json()).resolves.toMatchObject({ result: { isError: true, content: [{ text: expect.stringContaining('Unrecognized key') }] } });
+    expect(mocks.createMcpTask).not.toHaveBeenCalled();
+    expect(mocks.updateMcpTask).not.toHaveBeenCalled();
+    expect(mocks.recordMcpAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('runs write mutations only with tasks:write and records redacted, outcome-level audit events', async () => {
+    mocks.validateMcpAccessToken.mockResolvedValue({ ...token, scopes: ['tasks:read', 'tasks:write'] });
+    mocks.createMcpTask.mockResolvedValue({
+      success: true,
+      task: { id: createdTaskId, boardId, title: 'Private launch', shortId: null, status: 'todo', section: null, dueDate: null, parentTaskId: null },
+    });
+    mocks.updateMcpTask.mockResolvedValue({ success: false, error: 'Task not found or access denied' });
+    const sessionId = await initialize();
+
+    const create = await POST(mcpRequest({
+      jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'central_create_task', arguments: { board_id: boardId, title: 'Private launch', status: 'todo' } },
+    }, { sessionId }));
+    const update = await POST(mcpRequest({
+      jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'central_update_task', arguments: { task_id: taskId, title: 'Secret revision' } },
+    }, { sessionId }));
+
+    await expect(create.json()).resolves.toMatchObject({ result: { content: [{ text: expect.stringContaining(createdTaskId) }] } });
+    await expect(update.json()).resolves.toMatchObject({ result: { isError: true, content: [{ text: 'Task not found or access denied' }] } });
+    expect(mocks.createMcpTask).toHaveBeenCalledWith(token.userId, { boardId, title: 'Private launch', status: 'todo', section: undefined, dueDate: undefined });
+    expect(mocks.updateMcpTask).toHaveBeenCalledWith(token.userId, { taskId, title: 'Secret revision', status: undefined, section: undefined, dueDate: undefined });
+    expect(mocks.recordMcpAuditEvent).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      userId: token.userId,
+      clientId: token.clientId,
+      toolName: 'central_create_task',
+      eventType: 'mcp.tool_completed',
+      resourceType: 'board',
+      resourceId: boardId,
+      metadata: expect.objectContaining({ outcome: 'success', input: expect.objectContaining({ title: '[redacted]' }), affectedTaskId: createdTaskId }),
+    }));
+    expect(mocks.recordMcpAuditEvent).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      toolName: 'central_update_task',
+      eventType: 'mcp.tool_completed',
+      resourceType: 'task',
+      resourceId: taskId,
+      metadata: expect.objectContaining({ outcome: 'rejected', input: expect.objectContaining({ title: '[redacted]' }), affectedTaskId: taskId }),
+    }));
   });
 });

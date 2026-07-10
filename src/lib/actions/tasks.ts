@@ -22,7 +22,7 @@ import {
   type AccountTeamMember,
 } from '@/lib/db/schema';
 import { eq, and, or, inArray, notInArray, desc, asc, sql, isNull, isNotNull, lt } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/session';
+import { requireAuth, type SessionUser } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createAssignmentNotification } from './notifications';
 import { logBoardActivity } from './board-activity';
@@ -1437,6 +1437,23 @@ export async function createTask(input: CreateTaskInput): Promise<{
   error?: string;
 }> {
   const user = await requireAuth();
+  return createTaskAsUser(user, input);
+}
+
+/**
+ * Shared task creation domain action for authenticated Central identities.
+ * Transport adapters (such as MCP) must authenticate the user before calling
+ * this function; validation, permission checks, activity, and invariants stay
+ * identical to the browser action above.
+ */
+export async function createTaskAsUser(
+  user: Pick<SessionUser, 'id' | 'role'>,
+  input: CreateTaskInput
+): Promise<{
+  success: boolean;
+  task?: TaskWithAssignees;
+  error?: string;
+}> {
   const isAdmin = user.role === 'admin';
 
   // If creating a subtask, validate parent and inherit boardId
@@ -1595,6 +1612,18 @@ export async function updateTask(input: UpdateTaskInput): Promise<{
   error?: string;
 }> {
   const user = await requireAuth();
+  return updateTaskAsUser(user, input);
+}
+
+/** See createTaskAsUser for why transport-neutral task mutations live here. */
+export async function updateTaskAsUser(
+  user: Pick<SessionUser, 'id' | 'role'>,
+  input: UpdateTaskInput
+): Promise<{
+  success: boolean;
+  task?: TaskWithAssignees;
+  error?: string;
+}> {
   const isAdmin = user.role === 'admin';
 
   // Get existing task and check access

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import { createTaskAsUser, updateTaskAsUser } from '@/lib/actions/tasks';
 import { getBoardAccessLevel, canAccessTask } from '@/lib/actions/board-access';
 import { db } from '@/lib/db';
 import { boards, taskAssignees, tasks, users, type TiptapContent, type TiptapNode } from '@/lib/db/schema';
@@ -33,6 +34,32 @@ export type McpTask = McpTaskSummary & {
   updatedAt: string;
 };
 
+/**
+ * The MCP surface intentionally supports only the portable, low-risk task
+ * fields. Other task properties continue to require Central's UI/API.
+ */
+export type McpCreateTaskInput = {
+  boardId: string;
+  title: string;
+  status: string;
+  section?: string;
+  dueDate?: string;
+};
+
+export type McpUpdateTaskInput = {
+  taskId: string;
+  title?: string;
+  status?: string;
+  section?: string | null;
+  dueDate?: string | null;
+};
+
+export type McpTaskMutation = {
+  success: boolean;
+  task?: McpTaskSummary;
+  error?: string;
+};
+
 async function getMcpUser(userId: string): Promise<McpUser | null> {
   const user = await db.query.users.findFirst({
     where: and(eq(users.id, userId), isNull(users.deactivatedAt)),
@@ -41,7 +68,12 @@ async function getMcpUser(userId: string): Promise<McpUser | null> {
   return user ?? null;
 }
 
-function taskSummary(task: typeof tasks.$inferSelect): McpTaskSummary {
+function taskSummary(
+  task: Pick<
+    typeof tasks.$inferSelect,
+    'id' | 'shortId' | 'boardId' | 'title' | 'status' | 'section' | 'dueDate' | 'parentTaskId'
+  >
+): McpTaskSummary {
   return {
     id: task.id,
     shortId: task.shortId,
@@ -136,4 +168,34 @@ export async function getMcpTask(userId: string, taskId: string): Promise<{ acce
       updatedAt: result.task.updatedAt.toISOString(),
     },
   };
+}
+
+/**
+ * Create through the same Central domain action used by the web application.
+ * The OAuth identity is resolved to a current Central user before the action
+ * applies its board permission checks, activity logging, and invariants.
+ */
+export async function createMcpTask(userId: string, input: McpCreateTaskInput): Promise<McpTaskMutation> {
+  const user = await getMcpUser(userId);
+  if (!user) return { success: false, error: 'Central user is no longer active' };
+
+  const result = await createTaskAsUser(user, input);
+  if (!result.success || !result.task) return { success: false, error: result.error ?? 'Unable to create task' };
+  return { success: true, task: taskSummary(result.task) };
+}
+
+/** See createMcpTask; updates stay on Central's shared task domain action. */
+export async function updateMcpTask(userId: string, input: McpUpdateTaskInput): Promise<McpTaskMutation> {
+  const user = await getMcpUser(userId);
+  if (!user) return { success: false, error: 'Central user is no longer active' };
+
+  const result = await updateTaskAsUser(user, {
+    id: input.taskId,
+    title: input.title,
+    status: input.status,
+    section: input.section,
+    dueDate: input.dueDate,
+  });
+  if (!result.success || !result.task) return { success: false, error: result.error ?? 'Unable to update task' };
+  return { success: true, task: taskSummary(result.task) };
 }

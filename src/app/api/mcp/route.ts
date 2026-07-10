@@ -6,11 +6,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as z from 'zod/v4';
 import { mcpResourceUrl } from '@/lib/mcp/oauth-http';
 import { recordMcpAuditEvent, validateMcpAccessToken } from '@/lib/mcp/oauth-service';
-import { getMcpTask, listMcpBoards, listMcpTasks } from '@/lib/mcp/task-tools';
+import { createMcpTask, getMcpTask, listMcpBoards, listMcpTasks, updateMcpTask } from '@/lib/mcp/task-tools';
 
 export const runtime = 'nodejs';
 
-const REQUIRED_SCOPE = 'tasks:read';
+const READ_SCOPE = 'tasks:read';
+const WRITE_SCOPE = 'tasks:write';
+const TASK_SCOPES = [READ_SCOPE, WRITE_SCOPE];
 
 type McpAccessToken = NonNullable<Awaited<ReturnType<typeof validateMcpAccessToken>>>;
 type McpSession = {
@@ -21,8 +23,8 @@ type McpSession = {
 };
 
 // MCP clients make follow-up requests with this header. Module memory is the
-// appropriate session store for a single Node runtime; deployments that span
-// instances can safely re-initialize because the server exposes read-only tools.
+// appropriate session store for a single Node runtime; clients must reinitialize
+// after an instance recycle and receive only tools allowed by their token scope.
 const sessions = new Map<string, McpSession>();
 
 function protocolError(status: number, code: number, message: string) {
@@ -30,7 +32,7 @@ function protocolError(status: number, code: number, message: string) {
 }
 
 function bearerChallenge(request: NextRequest, error: 'invalid_token' | 'insufficient_scope') {
-  return `Bearer resource="${mcpResourceUrl(request)}", error="${error}", scope="${REQUIRED_SCOPE}"`;
+  return `Bearer resource="${mcpResourceUrl(request)}", error="${error}", scope="${TASK_SCOPES.join(' ')}"`;
 }
 
 function unauthorized(request: NextRequest, insufficientScope = false) {
@@ -47,7 +49,7 @@ async function authenticate(request: NextRequest): Promise<McpAccessToken | Next
 
   const token = await validateMcpAccessToken(match[1]);
   if (!token) return unauthorized(request);
-  if (!token.scopes.includes(REQUIRED_SCOPE)) return unauthorized(request, true);
+  if (!token.scopes.some((scope) => TASK_SCOPES.includes(scope))) return unauthorized(request, true);
   return token;
 }
 
@@ -74,6 +76,39 @@ async function auditInvocation(input: {
   });
 }
 
+function redactedMutationInput(input: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(input).map(([key, value]) => [key, key === 'title' ? '[redacted]' : value])
+  );
+}
+
+async function auditMutation(input: {
+  token: McpAccessToken;
+  toolName: string;
+  resourceType: 'board' | 'task';
+  resourceId: string;
+  outcome: 'success' | 'rejected';
+  mutationInput: Record<string, unknown>;
+  affectedBoardId?: string;
+  affectedTaskId?: string;
+}) {
+  await recordMcpAuditEvent({
+    userId: input.token.userId,
+    clientId: input.token.clientId,
+    accessTokenId: input.token.id,
+    eventType: 'mcp.tool_completed',
+    toolName: input.toolName,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    metadata: {
+      outcome: input.outcome,
+      input: redactedMutationInput(input.mutationInput),
+      affectedBoardId: input.affectedBoardId,
+      affectedTaskId: input.affectedTaskId,
+    },
+  });
+}
+
 function toolError(message: string) {
   return { content: [{ type: 'text' as const, text: message }], isError: true };
 }
@@ -81,7 +116,8 @@ function toolError(message: string) {
 function createMcpServer(token: McpAccessToken): McpServer {
   const server = new McpServer({ name: 'central', version: '1.0.0' });
 
-  server.registerTool(
+  if (token.scopes.includes(READ_SCOPE)) {
+    server.registerTool(
     'central_list_boards',
     {
       title: 'List Central boards',
@@ -93,9 +129,9 @@ function createMcpServer(token: McpAccessToken): McpServer {
       const boards = await listMcpBoards(token.userId);
       return { content: [{ type: 'text', text: JSON.stringify({ boards }) }] };
     }
-  );
+    );
 
-  server.registerTool(
+    server.registerTool(
     'central_list_tasks',
     {
       title: 'List Central tasks',
@@ -118,9 +154,9 @@ function createMcpServer(token: McpAccessToken): McpServer {
       if (!result.access) return toolError('Board not found or access denied.');
       return { content: [{ type: 'text', text: JSON.stringify({ boardId: board_id, tasks: result.tasks }) }] };
     }
-  );
+    );
 
-  server.registerTool(
+    server.registerTool(
     'central_get_task',
     {
       title: 'Get a Central task',
@@ -141,7 +177,87 @@ function createMcpServer(token: McpAccessToken): McpServer {
       if (!result.access || !result.task) return toolError('Task not found or access denied.');
       return { content: [{ type: 'text', text: JSON.stringify({ task: result.task }) }] };
     }
-  );
+    );
+  }
+
+  if (token.scopes.includes(WRITE_SCOPE)) {
+    server.registerTool(
+      'central_create_task',
+      {
+        title: 'Create a Central task',
+        description: 'Create a task on one Central board the connected user can access.',
+        inputSchema: z.object({
+          board_id: z.string().uuid().describe('Explicit Central board ID from central_list_boards.'),
+          title: z.string().trim().min(1).max(500).describe('Task title.'),
+          status: z.string().trim().min(1).max(100).describe('Board workflow status ID.'),
+          section: z.string().trim().min(1).max(100).optional().describe('Optional board section ID.'),
+          due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Optional due date, YYYY-MM-DD.'),
+        }).strict(),
+        annotations: { readOnlyHint: false },
+      },
+      async ({ board_id, title, status, section, due_date }) => {
+        const result = await createMcpTask(token.userId, {
+          boardId: board_id,
+          title,
+          status,
+          section,
+          dueDate: due_date,
+        });
+        await auditMutation({
+          token,
+          toolName: 'central_create_task',
+          resourceType: 'board',
+          resourceId: board_id,
+          outcome: result.success ? 'success' : 'rejected',
+          mutationInput: { board_id, title, status, section, due_date },
+          affectedBoardId: result.task?.boardId ?? board_id,
+          affectedTaskId: result.task?.id,
+        });
+        if (!result.success || !result.task) return toolError(result.error ?? 'Unable to create task.');
+        return { content: [{ type: 'text', text: JSON.stringify({ task: result.task }) }] };
+      }
+    );
+
+    server.registerTool(
+      'central_update_task',
+      {
+        title: 'Update a Central task',
+        description: 'Update approved fields on one Central task the connected user can access.',
+        inputSchema: z.object({
+          task_id: z.string().uuid().describe('Explicit Central task ID.'),
+          title: z.string().trim().min(1).max(500).optional().describe('Replacement task title.'),
+          status: z.string().trim().min(1).max(100).optional().describe('Replacement board workflow status ID.'),
+          section: z.string().trim().min(1).max(100).nullable().optional().describe('Replacement section ID, or null to clear.'),
+          due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().describe('Replacement due date, YYYY-MM-DD, or null to clear.'),
+        }).strict().refine(
+          (value) => value.title !== undefined || value.status !== undefined || value.section !== undefined || value.due_date !== undefined,
+          'At least one supported field must be supplied.'
+        ),
+        annotations: { readOnlyHint: false },
+      },
+      async ({ task_id, title, status, section, due_date }) => {
+        const result = await updateMcpTask(token.userId, {
+          taskId: task_id,
+          title,
+          status,
+          section,
+          dueDate: due_date,
+        });
+        await auditMutation({
+          token,
+          toolName: 'central_update_task',
+          resourceType: 'task',
+          resourceId: result.task?.id ?? task_id,
+          outcome: result.success ? 'success' : 'rejected',
+          mutationInput: { task_id, title, status, section, due_date },
+          affectedBoardId: result.task?.boardId,
+          affectedTaskId: result.task?.id ?? task_id,
+        });
+        if (!result.success || !result.task) return toolError(result.error ?? 'Unable to update task.');
+        return { content: [{ type: 'text', text: JSON.stringify({ task: result.task }) }] };
+      }
+    );
+  }
 
   return server;
 }
