@@ -31,6 +31,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@flags-sdk/vercel": "^1.4.3",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@react-email/components": "^1.0.7",
     "@react-email/render": "^2.0.4",
     "@react-spring/web": "^10.0.3",
