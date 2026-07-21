@@ -8,6 +8,7 @@ import { reconcileAllRollups } from '@/lib/rollups/reconcile';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const MAX_SKEW_SECONDS = 5 * 60;
 
@@ -138,12 +139,26 @@ export async function POST(request: NextRequest) {
       .where(eq(clients.id, existing.id));
 
     // Pod/team/status just changed for this client → re-derive rule-based
-    // rollup membership (fire-and-forget; never blocks the webhook ack).
-    void reconcileAllRollups().catch((e) =>
-      console.error('[pulse-account] rollup reconcile failed', e),
-    );
+    // rollup membership. This MUST be awaited: an un-awaited promise dies at
+    // Vercel's post-response function freeze, which left rollup boards stale
+    // (client row synced, membership didn't — e.g. pod changes never moving
+    // boards between pod rollups). A reconcile failure still acks the webhook
+    // (the client row is already updated); it's reported in the response so
+    // Pulse's push logs surface it.
+    let rollupsReconciled = true;
+    try {
+      await reconcileAllRollups();
+    } catch (e) {
+      rollupsReconciled = false;
+      console.error('[pulse-account] rollup reconcile failed', e);
+    }
 
-    return NextResponse.json({ ok: true, matched: true, client_id: existing.id });
+    return NextResponse.json({
+      ok: true,
+      matched: true,
+      client_id: existing.id,
+      rollups_reconciled: rollupsReconciled,
+    });
   } catch (error) {
     console.error('[pulse-account] processing failed', error);
     return NextResponse.json({ error: 'processing failed' }, { status: 500 });
