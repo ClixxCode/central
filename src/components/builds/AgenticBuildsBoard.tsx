@@ -13,21 +13,15 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Plus, Calendar, ExternalLink, Hammer } from 'lucide-react';
+import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import { AssigneeAvatars } from '@/components/tasks/AssigneePicker';
 import { ClientIcon } from '@/components/clients/ClientIcon';
-import { useAgenticBuilds, useBuildableClients, useCreateBuild, useSetBuildStage } from '@/lib/hooks';
+import { useAgenticBuilds, useBuildableClients, useSetBuildStage } from '@/lib/hooks';
 import { useDragToScroll } from '@/lib/hooks/useDragToScroll';
+import { BuildDialog } from './BuildDialog';
+import { buildTypeMeta, formatMoney, formatDuration } from '@/lib/builds/format';
 import {
   BUILD_STAGES,
   DEFAULT_BUILD_STAGE,
@@ -56,22 +50,62 @@ function PodChip({ pod }: { pod: string }) {
   );
 }
 
+/** Type badge on a build card. */
+function TypeBadge({ build }: { build: AgenticBuild }) {
+  const meta = buildTypeMeta(build.buildType);
+  if (!meta) return null;
+  const cls = meta.fee
+    ? 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'
+    : 'bg-muted text-muted-foreground';
+  return (
+    <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium leading-none', cls)}>
+      {meta.short}
+      {meta.fee && build.projectValue != null ? ` · ${formatMoney(build.projectValue)}` : ''}
+    </span>
+  );
+}
+
 /** Presentational card (drag wiring lives on the wrapper in DraggableBuildCard). */
-function BuildCard({ build, overlay }: { build: AgenticBuild; overlay?: boolean }) {
+function BuildCard({
+  build,
+  overlay,
+  onEdit,
+}: {
+  build: AgenticBuild;
+  overlay?: boolean;
+  onEdit?: (b: AgenticBuild) => void;
+}) {
   const href =
     build.clientSlug && build.boardId
       ? `/clients/${build.clientSlug}/boards/${build.boardId}`
       : undefined;
+  const stageLabel = BUILD_STAGES.find((s) => s.id === build.buildStage)?.label ?? '';
+  const showTimer = build.buildStage !== 'complete' && build.timing.currentStageMs > 3_600_000;
 
   return (
     <div
       className={cn(
-        'rounded-lg border bg-background p-3 shadow-sm transition-all',
+        'group relative rounded-lg border bg-background p-3 shadow-sm transition-all',
         'border-l-[3px]',
         overlay && 'shadow-lg rotate-2 cursor-grabbing'
       )}
       style={{ borderLeftColor: BUILD_ACCENT_COLOR }}
     >
+      {onEdit && !overlay && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(build);
+          }}
+          className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+          title="Edit build"
+          aria-label="Edit build"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      )}
       <div className="flex items-start gap-2">
         <span className="mt-0.5 shrink-0 text-muted-foreground/60">
           <Hammer className="size-3.5" />
@@ -85,6 +119,20 @@ function BuildCard({ build, overlay }: { build: AgenticBuild; overlay?: boolean 
             </div>
           )}
           <p className="text-sm font-medium leading-snug">{build.title}</p>
+          {(build.buildType || showTimer) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <TypeBadge build={build} />
+              {showTimer && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+                  title={`In ${stageLabel} for ${formatDuration(build.timing.currentStageMs)}`}
+                >
+                  <Timer className="size-3" />
+                  {formatDuration(build.timing.currentStageMs)}
+                </span>
+              )}
+            </div>
+          )}
           <div className="mt-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {build.dueDate && (
@@ -112,7 +160,7 @@ function BuildCard({ build, overlay }: { build: AgenticBuild; overlay?: boolean 
 }
 
 /** Draggable wrapper used inside columns (the overlay renders BuildCard directly). */
-function DraggableBuildCard({ build }: { build: AgenticBuild }) {
+function DraggableBuildCard({ build, onEdit }: { build: AgenticBuild; onEdit?: (b: AgenticBuild) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: build.id });
   return (
     <div
@@ -121,7 +169,7 @@ function DraggableBuildCard({ build }: { build: AgenticBuild }) {
       {...attributes}
       {...listeners}
     >
-      <BuildCard build={build} />
+      <BuildCard build={build} onEdit={onEdit} />
     </div>
   );
 }
@@ -129,9 +177,11 @@ function DraggableBuildCard({ build }: { build: AgenticBuild }) {
 function StageColumn({
   stage,
   builds,
+  onEdit,
 }: {
   stage: (typeof BUILD_STAGES)[number];
   builds: AgenticBuild[];
+  onEdit?: (b: AgenticBuild) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   return (
@@ -149,7 +199,7 @@ function StageColumn({
         )}
       >
         {builds.map((b) => (
-          <DraggableBuildCard key={b.id} build={b} />
+          <DraggableBuildCard key={b.id} build={b} onEdit={onEdit} />
         ))}
       </div>
     </div>
@@ -204,14 +254,13 @@ function buildSegments(stages: BuildStage[]): BoardSegment[] {
 export function AgenticBuildsBoard() {
   const { data: builds = [], isLoading } = useAgenticBuilds();
   const { data: clients = [] } = useBuildableClients();
-  const createBuild = useCreateBuild();
   const setStage = useSetBuildStage();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const scrollRef = useDragToScroll();
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
-  const [form, setForm] = React.useState({ clientId: '', title: '', buildStage: DEFAULT_BUILD_STAGE });
+  const [editBuild, setEditBuild] = React.useState<AgenticBuild | null>(null);
 
   const byStage = React.useMemo(() => {
     const map = new Map<string, AgenticBuild[]>();
@@ -235,20 +284,6 @@ export function AgenticBuildsBoard() {
     const build = builds.find((b) => b.id === taskId);
     if (!build || build.buildStage === overStage) return;
     setStage.mutate({ taskId, buildStage: overStage });
-  }
-
-  function handleCreate() {
-    const client = clients.find((c) => c.id === form.clientId);
-    if (!client || !form.title.trim()) return;
-    createBuild.mutate(
-      { boardId: client.boardId, title: form.title.trim(), buildStage: form.buildStage },
-      {
-        onSuccess: () => {
-          setAddOpen(false);
-          setForm({ clientId: '', title: '', buildStage: DEFAULT_BUILD_STAGE });
-        },
-      }
-    );
   }
 
   return (
@@ -293,7 +328,7 @@ export function AgenticBuildsBoard() {
                     </div>
                     <div className="flex gap-4">
                       {seg.stages.map((stage) => (
-                        <StageColumn key={stage.id} stage={stage} builds={byStage.get(stage.id) ?? []} />
+                        <StageColumn key={stage.id} stage={stage} builds={byStage.get(stage.id) ?? []} onEdit={setEditBuild} />
                       ))}
                     </div>
                   </div>
@@ -302,7 +337,7 @@ export function AgenticBuildsBoard() {
               return (
                 <div key={seg.stage.id} className="flex flex-col">
                   <div className="mb-2 h-5" />
-                  <StageColumn stage={seg.stage} builds={byStage.get(seg.stage.id) ?? []} />
+                  <StageColumn stage={seg.stage} builds={byStage.get(seg.stage.id) ?? []} onEdit={setEditBuild} />
                 </div>
               );
             })}
@@ -311,60 +346,15 @@ export function AgenticBuildsBoard() {
         </DndContext>
       )}
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add a website build</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Client</label>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={form.clientId}
-                onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
-              >
-                <option value="">Select a client…</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Build name</label>
-              <Input
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. Riley Hays — main site"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Stage</label>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={form.buildStage}
-                onChange={(e) => setForm((f) => ({ ...f, buildStage: e.target.value }))}
-              >
-                {BUILD_STAGES.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setAddOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreate} disabled={!form.clientId || !form.title.trim() || createBuild.isPending}>
-              Add Build
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BuildDialog mode="add" open={addOpen} onOpenChange={setAddOpen} clients={clients} />
+      {editBuild && (
+        <BuildDialog
+          mode="edit"
+          open={!!editBuild}
+          onOpenChange={(o) => !o && setEditBuild(null)}
+          build={editBuild}
+        />
+      )}
     </div>
   );
 }

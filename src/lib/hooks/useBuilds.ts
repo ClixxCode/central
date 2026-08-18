@@ -7,8 +7,10 @@ import {
   getBuildableClients,
   createAgenticBuild,
   setBuildStage,
+  updateAgenticBuild,
   type AgenticBuild,
   type CreateBuildInput,
+  type UpdateBuildInput,
 } from '@/lib/actions/builds';
 
 export const buildKeys = {
@@ -52,6 +54,22 @@ export function useCreateBuild() {
       toast.success('Build added');
     },
     onError: (e: Error) => toast.error(e.message || 'Failed to add build'),
+  });
+}
+
+export function useUpdateBuild() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ taskId, input }: { taskId: string; input: UpdateBuildInput }) => {
+      const res = await updateAgenticBuild(taskId, input);
+      if (!res.success) throw new Error(res.error);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: buildKeys.list() });
+      toast.success('Build updated');
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to update build'),
   });
 }
 
