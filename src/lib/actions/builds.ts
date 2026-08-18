@@ -42,9 +42,6 @@ export interface AgenticBuild {
 
 export type BuildType = 'proactive_no_fee' | 'proactive_with_fee' | 'budgeted_project';
 
-/** Fee-bearing types require a project value. */
-export const FEE_BUILD_TYPES: BuildType[] = ['proactive_with_fee', 'budgeted_project'];
-
 export interface BuildTiming {
   /** commencement → (completed or now); null when commencement isn't set. */
   totalMs: number | null;
