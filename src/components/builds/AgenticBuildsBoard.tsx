@@ -21,7 +21,7 @@ import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useAgenticBuilds, useBuildableClients, useSetBuildStage } from '@/lib/hooks';
 import { useDragToScroll } from '@/lib/hooks/useDragToScroll';
 import { BuildDialog } from './BuildDialog';
-import { buildTypeMeta, formatMoney, formatDuration } from '@/lib/builds/format';
+import { buildTypeMeta, buildAccentColor, formatMoney, formatDuration } from '@/lib/builds/format';
 import {
   BUILD_STAGES,
   DEFAULT_BUILD_STAGE,
@@ -50,15 +50,17 @@ function PodChip({ pod }: { pod: string }) {
   );
 }
 
-/** Type badge on a build card. */
+/** Type badge on a build card — colour tracks type by salience. */
 function TypeBadge({ build }: { build: AgenticBuild }) {
   const meta = buildTypeMeta(build.buildType);
   if (!meta) return null;
-  const cls = meta.fee
-    ? 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'
-    : 'bg-muted text-muted-foreground';
   return (
-    <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium leading-none', cls)}>
+    <span
+      className={cn(
+        'rounded border px-1.5 py-0.5 text-[10px] font-medium leading-none',
+        meta.badgeClass,
+      )}
+    >
       {meta.short}
       {meta.fee && build.projectValue != null ? ` · ${formatMoney(build.projectValue)}` : ''}
     </span>
@@ -89,7 +91,7 @@ function BuildCard({
         'border-l-[3px]',
         overlay && 'shadow-lg rotate-2 cursor-grabbing'
       )}
-      style={{ borderLeftColor: BUILD_ACCENT_COLOR }}
+      style={{ borderLeftColor: buildAccentColor(build.buildType) }}
     >
       {/* Upper-right: pod tag (always). */}
       {build.podName && (
