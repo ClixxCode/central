@@ -42,7 +42,7 @@ export const DEFAULT_BUILD_STAGE = 'planned';
  * stage's column to mark the line.
  */
 export const BETA_GATE_BEFORE_STAGE_ID = 'qa';
-export const BETA_GATE_LABEL = 'Ready for client beta review';
+export const BETA_GATE_LABEL = 'Client beta review';
 
 const BUILD_STAGE_BY_ID = new Map(BUILD_STAGES.map((s) => [s.id, s]));
 

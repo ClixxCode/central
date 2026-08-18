@@ -142,13 +142,15 @@ function StageColumn({
  *  review — incomplete, but far enough for feedback. */
 function BetaGate() {
   return (
-    <div className="relative flex flex-1 items-stretch justify-center px-1" aria-hidden>
-      <div className="my-1 border-l-2 border-dashed border-muted-foreground/40" />
+    <div className="relative flex flex-1 items-center justify-center" aria-hidden>
+      {/* dashed line spans the full height, behind the label pill */}
+      <div className="absolute inset-y-1 left-1/2 -translate-x-1/2 border-l-2 border-dashed border-muted-foreground/40" />
+      {/* readable pill (bg breaks the line); vertical text reads top→bottom */}
       <span
-        className="pointer-events-none absolute left-1/2 top-1/2 whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70"
-        style={{ writingMode: 'vertical-rl', transform: 'translate(-50%, -50%) rotate(180deg)' }}
+        className="relative whitespace-nowrap rounded-full border border-muted-foreground/25 bg-background px-1.5 py-2 text-[11px] font-medium tracking-wide text-muted-foreground"
+        style={{ writingMode: 'vertical-rl' }}
       >
-        {BETA_GATE_LABEL} →
+        {BETA_GATE_LABEL}
       </span>
     </div>
   );
@@ -256,7 +258,7 @@ export function AgenticBuildsBoard() {
             {segments.map((seg, i) => {
               if (seg.kind === 'gate') {
                 return (
-                  <div key={`gate-${i}`} className="flex w-8 shrink-0 flex-col">
+                  <div key={`gate-${i}`} className="flex w-12 shrink-0 flex-col">
                     <div className="mb-2 h-5" />
                     <BetaGate />
                   </div>
