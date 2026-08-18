@@ -19,6 +19,7 @@ export interface AgenticBuild {
   clientSlug: string | null;
   clientColor: string | null;
   clientIcon: string | null;
+  podName: string | null;
   buildStage: string;
   status: string;
   dueDate: string | null;
@@ -88,6 +89,7 @@ export async function listAgenticBuilds(): Promise<ActionResult<AgenticBuild[]>>
         clientSlug: clients.slug,
         clientColor: clients.color,
         clientIcon: clients.icon,
+        podName: clients.podName,
       })
       .from(tasks)
       .innerJoin(boards, eq(boards.id, tasks.boardId))
@@ -129,6 +131,7 @@ export async function listAgenticBuilds(): Promise<ActionResult<AgenticBuild[]>>
       clientSlug: r.clientSlug,
       clientColor: r.clientColor,
       clientIcon: r.clientIcon,
+      podName: r.podName,
       buildStage: isValidBuildStage(r.buildStage) ? r.buildStage : DEFAULT_BUILD_STAGE,
       status: r.status,
       dueDate: r.dueDate,

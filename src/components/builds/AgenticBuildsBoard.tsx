@@ -38,6 +38,24 @@ import {
 } from '@/lib/builds/stages';
 import type { AgenticBuild } from '@/lib/actions/builds';
 
+/** Small pod tag on a build card, reflecting the account's Pulse-synced pod. */
+function PodChip({ pod }: { pod: string }) {
+  const key = pod.toLowerCase();
+  const cls = key.includes('1')
+    ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+    : key.includes('2')
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+      : 'bg-muted text-muted-foreground';
+  return (
+    <span
+      className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none', cls)}
+      title={`Account pod: ${pod}`}
+    >
+      {pod}
+    </span>
+  );
+}
+
 /** Presentational card (drag wiring lives on the wrapper in DraggableBuildCard). */
 function BuildCard({ build, overlay }: { build: AgenticBuild; overlay?: boolean }) {
   const href =
@@ -63,6 +81,7 @@ function BuildCard({ build, overlay }: { build: AgenticBuild; overlay?: boolean 
             <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
               <ClientIcon icon={build.clientIcon} color={build.clientColor ?? '#6B7280'} name={build.clientName} size="sm" />
               <span className="truncate">{build.clientName}</span>
+              {build.podName && <PodChip pod={build.podName} />}
             </div>
           )}
           <p className="text-sm font-medium leading-snug">{build.title}</p>

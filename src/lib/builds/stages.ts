@@ -24,7 +24,7 @@ export interface BuildStage {
 export const BUILD_STAGES: BuildStage[] = [
   { id: 'planned', label: 'Planned', color: '#A855F7', position: 0 },
   { id: 'next_up', label: 'Next Up', color: '#06B6D4', position: 1 },
-  { id: 'onboarding', label: 'Onboarding', color: '#14B8A6', position: 2 },
+  { id: 'onboarding', label: 'Onboarding', color: '#14B8A6', position: 2, group: 'In Progress' },
   { id: 'design_system', label: 'Design System', color: '#6366F1', position: 3, group: 'In Progress' },
   { id: 'development', label: 'Development', color: '#3B82F6', position: 4, group: 'In Progress' },
   { id: 'qa', label: 'QA', color: '#F59E0B', position: 5 },
