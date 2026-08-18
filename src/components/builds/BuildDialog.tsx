@@ -34,6 +34,15 @@ type Props =
 const selectCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm';
 
+/** Add whole months to a 'YYYY-MM-DD' string (empty/invalid → ''). */
+function addMonths(date: string, months: number): string {
+  if (!date) return '';
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 export function BuildDialog(props: Props) {
   const { mode, open, onOpenChange } = props;
   const createBuild = useCreateBuild();
@@ -45,6 +54,10 @@ export function BuildDialog(props: Props) {
   const [buildType, setBuildType] = React.useState<BuildType | ''>('');
   const [projectValue, setProjectValue] = React.useState('');
   const [commencementDate, setCommencementDate] = React.useState('');
+  // Target end date — every build carries a start + end intent so it can't
+  // linger. Defaults to commencement + 3 months until the user edits it.
+  const [targetEndDate, setTargetEndDate] = React.useState('');
+  const [targetTouched, setTargetTouched] = React.useState(false);
 
   // Seed the form each time it opens.
   React.useEffect(() => {
@@ -56,6 +69,9 @@ export function BuildDialog(props: Props) {
       setBuildType((b.buildType as BuildType | null) ?? '');
       setProjectValue(b.projectValue != null ? String(b.projectValue) : '');
       setCommencementDate(b.commencementDate ?? '');
+      setTargetEndDate(b.dueDate ?? '');
+      // An existing target is treated as user-set — don't auto-recompute it.
+      setTargetTouched(!!b.dueDate);
     } else {
       setClientId('');
       setTitle('');
@@ -63,9 +79,18 @@ export function BuildDialog(props: Props) {
       setBuildType('');
       setProjectValue('');
       setCommencementDate('');
+      setTargetEndDate('');
+      setTargetTouched(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Commencement drives the suggested target end date (commencement + 3mo)
+  // until the user overrides the target.
+  function handleCommencementChange(value: string) {
+    setCommencementDate(value);
+    if (!targetTouched) setTargetEndDate(addMonths(value, 3));
+  }
 
   const feeRequired = buildTypeIsFee(buildType || null);
   const busy = createBuild.isPending || updateBuild.isPending;
@@ -89,7 +114,8 @@ export function BuildDialog(props: Props) {
           buildStage,
           buildType: type,
           projectValue: feeRequired ? valueNum : null,
-          commencementDate: feeRequired && commencementDate ? commencementDate : null,
+          commencementDate: commencementDate || null,
+          dueDate: targetEndDate || undefined,
         },
         { onSuccess: () => onOpenChange(false) }
       );
@@ -102,7 +128,8 @@ export function BuildDialog(props: Props) {
             buildStage,
             buildType: type,
             projectValue: feeRequired ? valueNum : null,
-            commencementDate: feeRequired && commencementDate ? commencementDate : null,
+            commencementDate: commencementDate || null,
+            dueDate: targetEndDate || null,
           },
         },
         { onSuccess: () => onOpenChange(false) }
@@ -165,29 +192,50 @@ export function BuildDialog(props: Props) {
             </div>
           </div>
 
+          {/* Every build carries a start + target end so it can't linger.
+              Target defaults to commencement + 3 months, editable. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium">Start date</label>
+              <Input
+                type="date"
+                value={commencementDate}
+                onChange={(e) => handleCommencementChange(e.target.value)}
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                When work officially starts (starts the timer).
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Target end date</label>
+              <Input
+                type="date"
+                value={targetEndDate}
+                onChange={(e) => {
+                  setTargetEndDate(e.target.value);
+                  setTargetTouched(true);
+                }}
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {targetTouched
+                  ? 'Manually set.'
+                  : 'Suggested: start + 3 months. Adjust as needed.'}
+              </p>
+            </div>
+          </div>
+
           {feeRequired && (
-            <div className="grid grid-cols-2 gap-3 rounded-md border bg-muted/30 p-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium">
-                  Total project value <span className="text-rose-600">*</span>
-                </label>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={projectValue}
-                  onChange={(e) => setProjectValue(e.target.value)}
-                  placeholder="e.g. 8400"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Commencement</label>
-                <Input
-                  type="date"
-                  value={commencementDate}
-                  onChange={(e) => setCommencementDate(e.target.value)}
-                />
-                <p className="mt-1 text-[10px] text-muted-foreground">When work officially started (starts the timer).</p>
-              </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <label className="mb-1 block text-sm font-medium">
+                Total project value <span className="text-rose-600">*</span>
+              </label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                value={projectValue}
+                onChange={(e) => setProjectValue(e.target.value)}
+                placeholder="e.g. 8400"
+              />
             </div>
           )}
 

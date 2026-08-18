@@ -252,6 +252,17 @@ export interface CreateBuildInput {
   commencementDate?: string | null;
 }
 
+/** Add whole months to a 'YYYY-MM-DD' date string, returning the same format
+ *  (or null when the input is empty/invalid). Month-overflow is clamped by the
+ *  Date arithmetic (e.g. Jan 31 + 1mo → Mar 3), which is fine for a suggestion. */
+function addMonthsToDateStr(date: string | null, months: number): string | null {
+  if (!date) return null;
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function createAgenticBuild(input: CreateBuildInput): Promise<ActionResult<{ id: string }>> {
   try {
     const user = await requireAuth();
@@ -279,6 +290,12 @@ export async function createAgenticBuild(input: CreateBuildInput): Promise<Actio
         ? String(input.projectValue)
         : null;
 
+    // Every build gets an intent of start + end so it can't silently linger.
+    // Default the target end date to commencement + 3 months when the caller
+    // didn't supply one; the user can adjust it in the dialog.
+    const dueDate =
+      input.dueDate ?? addMonthsToDateStr(input.commencementDate ?? null, 3) ?? undefined;
+
     const [created] = await db
       .insert(tasks)
       .values({
@@ -291,7 +308,7 @@ export async function createAgenticBuild(input: CreateBuildInput): Promise<Actio
         projectValue,
         commencementDate: input.commencementDate ?? null,
         completedAt: stage === 'complete' ? new Date() : null,
-        dueDate: input.dueDate,
+        dueDate,
         position,
         createdBy: user.id,
       })

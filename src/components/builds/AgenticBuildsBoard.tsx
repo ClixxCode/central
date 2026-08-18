@@ -67,6 +67,20 @@ function TypeBadge({ build }: { build: AgenticBuild }) {
   );
 }
 
+/** Colour the target end date so a slipping build can't hide: red once past
+ *  target, amber within ~2 weeks, muted otherwise. Completed builds stay muted. */
+function dueTone(build: AgenticBuild): string {
+  if (!build.dueDate || build.buildStage === 'complete') return 'text-muted-foreground';
+  const today = new Date().toISOString().slice(0, 10);
+  if (build.dueDate < today) return 'font-medium text-red-600 dark:text-red-400';
+  const days =
+    (new Date(`${build.dueDate}T00:00:00Z`).getTime() -
+      new Date(`${today}T00:00:00Z`).getTime()) /
+    86_400_000;
+  if (days <= 14) return 'text-amber-600 dark:text-amber-400';
+  return 'text-muted-foreground';
+}
+
 /** Presentational card (drag wiring lives on the wrapper in DraggableBuildCard). */
 function BuildCard({
   build,
@@ -144,7 +158,10 @@ function BuildCard({
           <div className="mt-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               {build.dueDate && (
-                <span className="inline-flex items-center gap-1">
+                <span
+                  className={cn('inline-flex items-center gap-1', dueTone(build))}
+                  title={`Target end date: ${build.dueDate}`}
+                >
                   <Calendar className="size-3" />
                   {build.dueDate}
                 </span>
