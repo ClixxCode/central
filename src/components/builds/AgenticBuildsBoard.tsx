@@ -28,7 +28,14 @@ import { AssigneeAvatars } from '@/components/tasks/AssigneePicker';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useAgenticBuilds, useBuildableClients, useCreateBuild, useSetBuildStage } from '@/lib/hooks';
 import { useDragToScroll } from '@/lib/hooks/useDragToScroll';
-import { BUILD_STAGES, DEFAULT_BUILD_STAGE, BUILD_ACCENT_COLOR } from '@/lib/builds/stages';
+import {
+  BUILD_STAGES,
+  DEFAULT_BUILD_STAGE,
+  BUILD_ACCENT_COLOR,
+  BETA_GATE_BEFORE_STAGE_ID,
+  BETA_GATE_LABEL,
+  type BuildStage,
+} from '@/lib/builds/stages';
 import type { AgenticBuild } from '@/lib/actions/builds';
 
 /** Presentational card (drag wiring lives on the wrapper in DraggableBuildCard). */
@@ -130,6 +137,49 @@ function StageColumn({
   );
 }
 
+/** The dashed "beta gate" drawn between Development and QA. Crossing it (a build
+ *  entering QA) means the build is ready to put in front of the client for beta
+ *  review — incomplete, but far enough for feedback. */
+function BetaGate() {
+  return (
+    <div className="relative flex flex-1 items-stretch justify-center px-1" aria-hidden>
+      <div className="my-1 border-l-2 border-dashed border-muted-foreground/40" />
+      <span
+        className="pointer-events-none absolute left-1/2 top-1/2 whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70"
+        style={{ writingMode: 'vertical-rl', transform: 'translate(-50%, -50%) rotate(180deg)' }}
+      >
+        {BETA_GATE_LABEL} →
+      </span>
+    </div>
+  );
+}
+
+type BoardSegment =
+  | { kind: 'stage'; stage: BuildStage }
+  | { kind: 'group'; label: string; stages: BuildStage[] }
+  | { kind: 'gate' };
+
+/** Turn the flat stage list into render segments: adjacent same-group stages
+ *  collapse under one caption, and a beta gate is inserted before its stage. */
+function buildSegments(stages: BuildStage[]): BoardSegment[] {
+  const segments: BoardSegment[] = [];
+  for (let i = 0; i < stages.length; i++) {
+    const stage = stages[i];
+    if (stage.id === BETA_GATE_BEFORE_STAGE_ID) segments.push({ kind: 'gate' });
+    if (stage.group) {
+      const last = segments[segments.length - 1];
+      if (last && last.kind === 'group' && last.label === stage.group) {
+        last.stages.push(stage);
+        continue;
+      }
+      segments.push({ kind: 'group', label: stage.group, stages: [stage] });
+      continue;
+    }
+    segments.push({ kind: 'stage', stage });
+  }
+  return segments;
+}
+
 export function AgenticBuildsBoard() {
   const { data: builds = [], isLoading } = useAgenticBuilds();
   const { data: clients = [] } = useBuildableClients();
@@ -151,6 +201,7 @@ export function AgenticBuildsBoard() {
   }, [builds]);
 
   const activeBuild = activeId ? builds.find((b) => b.id === activeId) ?? null : null;
+  const segments = React.useMemo(() => buildSegments(BUILD_STAGES), []);
 
   function handleDragStart(e: DragStartEvent) {
     setActiveId(String(e.active.id));
@@ -201,10 +252,39 @@ export function AgenticBuildsBoard() {
         <p className="text-sm text-muted-foreground">Loading builds…</p>
       ) : (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-4">
-            {BUILD_STAGES.map((stage) => (
-              <StageColumn key={stage.id} stage={stage} builds={byStage.get(stage.id) ?? []} />
-            ))}
+          <div ref={scrollRef} className="flex items-stretch gap-4 overflow-x-auto pb-4">
+            {segments.map((seg, i) => {
+              if (seg.kind === 'gate') {
+                return (
+                  <div key={`gate-${i}`} className="flex w-8 shrink-0 flex-col">
+                    <div className="mb-2 h-5" />
+                    <BetaGate />
+                  </div>
+                );
+              }
+              if (seg.kind === 'group') {
+                return (
+                  <div key={`group-${seg.label}`} className="flex flex-col">
+                    <div className="mb-2 flex h-5 items-center border-b border-muted-foreground/25 pb-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {seg.label}
+                      </span>
+                    </div>
+                    <div className="flex gap-4">
+                      {seg.stages.map((stage) => (
+                        <StageColumn key={stage.id} stage={stage} builds={byStage.get(stage.id) ?? []} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={seg.stage.id} className="flex flex-col">
+                  <div className="mb-2 h-5" />
+                  <StageColumn stage={seg.stage} builds={byStage.get(seg.stage.id) ?? []} />
+                </div>
+              );
+            })}
           </div>
           <DragOverlay>{activeBuild ? <BuildCard build={activeBuild} overlay /> : null}</DragOverlay>
         </DndContext>
