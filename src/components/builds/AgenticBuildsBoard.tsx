@@ -91,25 +91,28 @@ function BuildCard({
       )}
       style={{ borderLeftColor: BUILD_ACCENT_COLOR }}
     >
-      {/* Upper-right cluster: edit pencil (on hover) + pod tag (always). */}
-      <div className="absolute right-1.5 top-1.5 flex items-center gap-1.5">
-        {onEdit && !overlay && (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(build);
-            }}
-            className="rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-            title="Edit build"
-            aria-label="Edit build"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-        )}
-        {build.podName && <PodChip pod={build.podName} />}
-      </div>
+      {/* Upper-right: pod tag (always). */}
+      {build.podName && (
+        <div className="absolute right-1.5 top-1.5">
+          <PodChip pod={build.podName} />
+        </div>
+      )}
+      {/* Bottom-right: edit pencil (on hover). Solid bg so it reads over avatars. */}
+      {onEdit && !overlay && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(build);
+          }}
+          className="absolute bottom-1.5 right-1.5 rounded border bg-background p-1 text-muted-foreground/60 opacity-0 shadow-sm transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+          title="Edit build"
+          aria-label="Edit build"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      )}
       <div className="flex items-start gap-2">
         <span className="mt-0.5 shrink-0 text-muted-foreground/60">
           <Hammer className="size-3.5" />
