@@ -734,3 +734,17 @@ Subtasks Feature - Implementation Plan
  10. Disconnect: Disconnect Front in settings, verify all front_conversations are cleaned up
  11. Tab visibility: Verify Conversations tab only appears when Front is connected
  12. Empty state: Open Conversations tab on a task with no linked conversations, verify link form is shown
+
+---
+
+## Agentic Website Builds board (2026-08-18)
+
+A team-wide kanban of every AI website build, by stage — separate from client task boards. Backed by `tasks` rows flagged `is_agentic_build=true` (schema `src/lib/db/schema/tasks.ts`), server actions in `src/lib/actions/builds.ts`, UI in `src/components/builds/AgenticBuildsBoard.tsx` (+ `BuildDialog.tsx`), page `/agentic-builds`. Data comes from Pulse (Pulse pushes / Central reads direction).
+
+**Stages** (`src/lib/builds/stages.ts`): Planned → Next Up → **In Progress** {Onboarding · Design System · Development} → *[Client beta review gate]* → QA → Complete. The dashed **beta gate** sits before QA (crossing it = ready to put in front of the client). Drag-and-drop (`@dnd-kit`) moves a build between stages; each move logs a `build_stage_events` row for time-in-stage analytics.
+
+**Build economics** (cols on `tasks`): `buildType` (`proactive_no_fee` | `proactive_with_fee` | `budgeted_project`), `projectValue` (fee types only), `commencementDate` (the start anchor — captured for EVERY build, not just fee types), `completedAt` (stops the timer). `build_stage_events` (id, taskId cascade, stage, enteredAt, movedBy) drives `computeTiming` → per-stage + total durations. **These stage timers are the intended empirical basis for Pulse's effort-anchored website-build pricing engine** (measured design-system/dev/QA duration by build type) — keep them honest.
+
+**Card design:** colour tracks type by salience = importance (`src/lib/builds/format.ts` accent + badgeClass): proactive-no-fee **slate** < proactive-w-fee **blue** < budgeted-project **amber**; untyped = muted slate. Pod tag top-right, edit pencil bottom-right (hover). Every build carries a **start + target-end intent** so it can't linger: target end date defaults to commencement + 3 months (editable; `createAgenticBuild` also defaults `dueDate` server-side), and the card's target date turns amber within ~2 weeks and red once past due (muted when complete).
+
+**Gotcha:** `builds.ts` is a `'use server'` file — it may export ONLY async functions. A stray value/const export (e.g. `export const FEE_BUILD_TYPES`) throws `A "use server" file can only export async functions, found object` at runtime and breaks the whole board (reads like a stale deploy). Keep constants in `src/lib/builds/*` (plain modules), never in the actions file.
