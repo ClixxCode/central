@@ -91,31 +91,34 @@ function BuildCard({
       )}
       style={{ borderLeftColor: BUILD_ACCENT_COLOR }}
     >
-      {onEdit && !overlay && (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(build);
-          }}
-          className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
-          title="Edit build"
-          aria-label="Edit build"
-        >
-          <Pencil className="size-3.5" />
-        </button>
-      )}
+      {/* Upper-right cluster: edit pencil (on hover) + pod tag (always). */}
+      <div className="absolute right-1.5 top-1.5 flex items-center gap-1.5">
+        {onEdit && !overlay && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(build);
+            }}
+            className="rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+            title="Edit build"
+            aria-label="Edit build"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        )}
+        {build.podName && <PodChip pod={build.podName} />}
+      </div>
       <div className="flex items-start gap-2">
         <span className="mt-0.5 shrink-0 text-muted-foreground/60">
           <Hammer className="size-3.5" />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 pr-12">
           {build.clientName && (
             <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
               <ClientIcon icon={build.clientIcon} color={build.clientColor ?? '#6B7280'} name={build.clientName} size="sm" />
               <span className="truncate">{build.clientName}</span>
-              {build.podName && <PodChip pod={build.podName} />}
             </div>
           )}
           <p className="text-sm font-medium leading-snug">{build.title}</p>
