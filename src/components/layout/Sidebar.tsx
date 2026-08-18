@@ -823,7 +823,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
             >
               <div
                 className="transition-transform duration-300 ease-in-out"
-                style={{ transform: appSwitcherHovered ? "translateY(-100%)" : "translateY(0)" }}
+                style={{ transform: appSwitcherHovered ? "translateY(-50%)" : "translateY(0)" }}
               >
                 {/* Top — Central (current app) */}
                 <div className="h-8 flex items-center gap-2">
