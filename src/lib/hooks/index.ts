@@ -31,6 +31,8 @@ export {
   useSubtasks,
   useCreateSubtask,
   usePromoteSubtasks,
+  useParentTaskCandidates,
+  useAddTasksAsSubtasks,
   useArchivedTasks,
   useArchiveTask,
   useUnarchiveTask,

@@ -82,8 +82,10 @@ import { SubtasksTab } from './SubtasksTab';
 import { TaskActivityLog } from './TaskActivityLog';
 import { CompleteParentDialog } from './CompleteParentDialog';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
+import { AddAsSubtaskDialog } from './AddAsSubtaskDialog';
 import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { isCompleteStatus } from '@/lib/utils/status';
+import { getAddAsSubtaskBlockReason } from '@/lib/utils/task-hierarchy';
 import { useArchiveTask, usePromoteSubtasks, useUnarchiveTask } from '@/lib/hooks/useTasks';
 import { useClient } from '@/lib/hooks/useClients';
 import { useNotificationPreferences } from '@/lib/hooks/useNotifications';
@@ -222,12 +224,16 @@ export function TaskModal({
   const [completeParentOpen, setCompleteParentOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [promoteConfirmOpen, setPromoteConfirmOpen] = useState(false);
+  const [addAsSubtaskOpen, setAddAsSubtaskOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
 
   // Archive hooks
   const archiveTaskMutation = useArchiveTask();
   const unarchiveTaskMutation = useUnarchiveTask();
   const promoteSubtasksMutation = usePromoteSubtasks();
+  const addAsSubtaskBlockReason = task && !task.parentTaskId
+    ? getAddAsSubtaskBlockReason([task])
+    : null;
   const prevOpenRef = useRef(false);
   const prevTaskIdRef = useRef<string | null>(null);
   const titleFocusedRef = useRef(false);
@@ -641,7 +647,7 @@ export function TaskModal({
                     Archived {format(new Date(task.archivedAt), 'MMM d, yyyy')}
                   </Badge>
                 )}
-                {!isNew && task?.id && (taskBasePath || task.parentTaskId) && (
+                {!isNew && task?.id && (
                   <div className="ml-auto flex items-center gap-1">
                     {slackChannelUrl && (
                       <Button
@@ -668,6 +674,19 @@ export function TaskModal({
                           <ArrowUpFromLine className="h-3.5 w-3.5" />
                         )}
                         {promoteSubtasksMutation.isPending ? 'Promoting...' : 'Promote to task'}
+                      </Button>
+                    )}
+                    {!task.parentTaskId && !task.archivedAt && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 text-muted-foreground"
+                        onClick={() => setAddAsSubtaskOpen(true)}
+                        disabled={!!addAsSubtaskBlockReason}
+                        title={addAsSubtaskBlockReason ?? undefined}
+                      >
+                        <CornerDownRight className="h-3.5 w-3.5" />
+                        Add as subtask
                       </Button>
                     )}
                     {taskBasePath && (
@@ -1395,6 +1414,14 @@ export function TaskModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {task?.id && (
+        <AddAsSubtaskDialog
+          open={addAsSubtaskOpen}
+          onOpenChange={setAddAsSubtaskOpen}
+          taskIds={[task.id]}
+        />
+      )}
     </Sheet>
   );
 }

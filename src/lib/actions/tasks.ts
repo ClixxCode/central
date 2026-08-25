@@ -20,7 +20,7 @@ import {
   SectionOption,
   type AccountTeamMember,
 } from '@/lib/db/schema';
-import { eq, and, or, not, inArray, notInArray, desc, asc, sql, isNull, isNotNull, lt } from 'drizzle-orm';
+import { eq, and, or, not, inArray, notInArray, desc, asc, sql, isNull, isNotNull, ilike, lt } from 'drizzle-orm';
 import { getCurrentUser, requireAuth, SessionUser } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createAssignmentNotification } from './notifications';
@@ -123,6 +123,24 @@ export interface PromoteSubtasksResult {
   affectedParentIds: string[];
   error?: string;
 }
+
+export interface ParentTaskCandidate {
+  id: string;
+  boardId: string;
+  title: string;
+  status: string;
+  section: string | null;
+}
+
+export interface AddTasksAsSubtasksResult {
+  success: boolean;
+  addedIds: string[];
+  addedCount: number;
+  parentTaskId?: string;
+  error?: string;
+}
+
+class TaskHierarchyValidationError extends Error {}
 
 export type FilterMode = 'is' | 'is_not';
 
@@ -905,41 +923,76 @@ export async function createTask(input: CreateTaskInput): Promise<{
     input.assigneeIds = [user.id];
   }
 
-  // Get max position - scoped to siblings (same parent or top-level)
-  const maxPositionResult = await db
-    .select({ maxPos: sql<number>`COALESCE(MAX(${tasks.position}), -1)` })
-    .from(tasks)
-    .where(
-      input.parentTaskId
-        ? eq(tasks.parentTaskId, input.parentTaskId)
-        : and(eq(tasks.boardId, input.boardId), isNull(tasks.parentTaskId))
-    );
-
-  const position = input.position ?? (maxPositionResult[0]?.maxPos ?? -1) + 1;
-
   // Parse description from JSON string if provided
   const description = input.descriptionJson 
     ? JSON.parse(input.descriptionJson) 
     : input.description;
 
-  // Create task
-  const [newTask] = await db
-    .insert(tasks)
-    .values({
-      boardId: input.boardId,
-      shortId: generateShortId(),
-      title: input.title,
-      description,
-      status: input.status,
-      section: input.section,
-      dueDate: input.dueDate,
-      dateFlexibility: input.dateFlexibility ?? 'not_set',
-      recurringConfig: input.recurringConfig,
-      parentTaskId: input.parentTaskId,
-      position,
-      createdBy: user.id,
-    })
-    .returning();
+  const buildTaskValues = (position: number) => ({
+    boardId: input.boardId,
+    shortId: generateShortId(),
+    title: input.title,
+    description,
+    status: input.status,
+    section: input.section,
+    dueDate: input.dueDate,
+    dateFlexibility: input.dateFlexibility ?? 'not_set' as const,
+    recurringConfig: input.recurringConfig,
+    parentTaskId: input.parentTaskId,
+    position,
+    createdBy: user.id,
+  });
+
+  let newTask: typeof tasks.$inferSelect;
+  try {
+    if (input.parentTaskId) {
+      // Serialize child creation with hierarchy changes. Rechecking the parent
+      // after acquiring the row lock prevents a concurrent demotion from
+      // creating a second hierarchy level.
+      newTask = await db.transaction(async (tx) => {
+        const [lockedParent] = await tx
+          .select({
+            id: tasks.id,
+            boardId: tasks.boardId,
+            parentTaskId: tasks.parentTaskId,
+            archivedAt: tasks.archivedAt,
+          })
+          .from(tasks)
+          .where(eq(tasks.id, input.parentTaskId!))
+          .for('update');
+        if (!lockedParent) throw new TaskHierarchyValidationError('Parent task not found');
+        if (lockedParent.parentTaskId) {
+          throw new TaskHierarchyValidationError('Cannot create subtasks of subtasks');
+        }
+        if (lockedParent.archivedAt) {
+          throw new TaskHierarchyValidationError('Cannot add subtasks to an archived task');
+        }
+        if (lockedParent.boardId !== input.boardId) {
+          throw new TaskHierarchyValidationError('Parent task changed boards; please try again');
+        }
+
+        const [maxPositionResult] = await tx
+          .select({ maxPos: sql<number>`COALESCE(MAX(${tasks.position}), -1)::int` })
+          .from(tasks)
+          .where(eq(tasks.parentTaskId, input.parentTaskId!));
+        const position = input.position ?? (maxPositionResult?.maxPos ?? -1) + 1;
+        const [createdTask] = await tx.insert(tasks).values(buildTaskValues(position)).returning();
+        return createdTask;
+      });
+    } else {
+      const [maxPositionResult] = await db
+        .select({ maxPos: sql<number>`COALESCE(MAX(${tasks.position}), -1)::int` })
+        .from(tasks)
+        .where(and(eq(tasks.boardId, input.boardId), isNull(tasks.parentTaskId)));
+      const position = input.position ?? (maxPositionResult?.maxPos ?? -1) + 1;
+      [newTask] = await db.insert(tasks).values(buildTaskValues(position)).returning();
+    }
+  } catch (error) {
+    if (error instanceof TaskHierarchyValidationError) {
+      return { success: false, error: error.message };
+    }
+    throw error;
+  }
 
   // Add assignees if provided
   if (input.assigneeIds && input.assigneeIds.length > 0) {
@@ -1828,6 +1881,281 @@ export async function promoteSubtasks(taskIds: string[]): Promise<PromoteSubtask
       ...emptyResult,
       error: 'Failed to promote subtasks',
     };
+  }
+}
+
+/**
+ * Return searchable top-level tasks that can receive the selected tasks as
+ * subtasks. Eligibility of the selected tasks is checked here as well so the
+ * picker never presents a target for an operation the server would reject.
+ */
+export async function listParentTaskCandidates(
+  taskIds: string[],
+  search = ''
+): Promise<{ success: boolean; candidates: ParentTaskCandidate[]; error?: string }> {
+  const normalizedTaskIds = Array.from(new Set(taskIds.filter(Boolean)));
+  if (normalizedTaskIds.length === 0) {
+    return { success: false, candidates: [], error: 'No tasks specified' };
+  }
+
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+  const selectedTasks = await db
+    .select({
+      id: tasks.id,
+      boardId: tasks.boardId,
+      parentTaskId: tasks.parentTaskId,
+      recurringConfig: tasks.recurringConfig,
+      recurringGroupId: tasks.recurringGroupId,
+      archivedAt: tasks.archivedAt,
+    })
+    .from(tasks)
+    .where(inArray(tasks.id, normalizedTaskIds));
+
+  if (selectedTasks.length !== normalizedTaskIds.length) {
+    return { success: false, candidates: [], error: 'One or more tasks were not found' };
+  }
+  if (selectedTasks.some((task) => task.parentTaskId !== null)) {
+    return { success: false, candidates: [], error: 'Only top-level tasks can be added as subtasks' };
+  }
+  if (selectedTasks.some((task) => task.archivedAt !== null)) {
+    return { success: false, candidates: [], error: 'Archived tasks cannot be added as subtasks' };
+  }
+  if (selectedTasks.some((task) => task.recurringConfig !== null || task.recurringGroupId !== null)) {
+    return { success: false, candidates: [], error: 'Recurring tasks cannot be added as subtasks' };
+  }
+
+  const boardIds = Array.from(new Set(selectedTasks.map((task) => task.boardId)));
+  if (boardIds.length !== 1) {
+    return { success: false, candidates: [], error: 'Selected tasks must be on the same board' };
+  }
+
+  const child = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(inArray(tasks.parentTaskId, normalizedTaskIds))
+    .limit(1);
+  if (child.length > 0) {
+    return { success: false, candidates: [], error: 'Tasks with subtasks cannot be added as subtasks' };
+  }
+
+  const boardId = boardIds[0];
+  const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+  if (!accessLevel) {
+    return { success: false, candidates: [], error: 'Access denied to one or more tasks' };
+  }
+
+  if (accessLevel === 'assigned_only') {
+    const sourceAssignments = await db
+      .select({ taskId: taskAssignees.taskId })
+      .from(taskAssignees)
+      .where(and(eq(taskAssignees.userId, user.id), inArray(taskAssignees.taskId, normalizedTaskIds)));
+    if (sourceAssignments.length !== normalizedTaskIds.length) {
+      return { success: false, candidates: [], error: 'Access denied to one or more tasks' };
+    }
+  }
+
+  const trimmedSearch = search.trim();
+  const candidateConditions = [
+    eq(tasks.boardId, boardId),
+    isNull(tasks.parentTaskId),
+    isNull(tasks.archivedAt),
+    notInArray(tasks.id, normalizedTaskIds),
+    ...(trimmedSearch ? [ilike(tasks.title, `%${trimmedSearch}%`)] : []),
+    ...(accessLevel === 'assigned_only'
+      ? [sql`EXISTS (
+          SELECT 1 FROM ${taskAssignees}
+          WHERE ${taskAssignees.taskId} = ${tasks.id}
+            AND ${taskAssignees.userId} = ${user.id}
+        )`]
+      : []),
+  ];
+
+  const candidates = await db
+    .select({
+      id: tasks.id,
+      boardId: tasks.boardId,
+      title: tasks.title,
+      status: tasks.status,
+      section: tasks.section,
+    })
+    .from(tasks)
+    .where(and(...candidateConditions))
+    .orderBy(asc(tasks.position), asc(tasks.title))
+    .limit(50);
+
+  return { success: true, candidates };
+}
+
+/**
+ * Attach existing top-level tasks to another top-level task in place.
+ * The operation is all-or-nothing and preserves every related task record.
+ */
+export async function addTasksAsSubtasks(
+  taskIds: string[],
+  parentTaskId: string
+): Promise<AddTasksAsSubtasksResult> {
+  const emptyResult = { addedIds: [], addedCount: 0 };
+  const normalizedTaskIds = Array.from(new Set(taskIds.filter(Boolean)));
+
+  if (normalizedTaskIds.length === 0) {
+    return { success: false, ...emptyResult, error: 'No tasks specified' };
+  }
+  if (!parentTaskId) {
+    return { success: false, ...emptyResult, error: 'No parent task specified' };
+  }
+  if (normalizedTaskIds.includes(parentTaskId)) {
+    return { success: false, ...emptyResult, error: 'A task cannot be its own parent' };
+  }
+
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+  const selectedTasks = await db
+    .select({ id: tasks.id, boardId: tasks.boardId })
+    .from(tasks)
+    .where(inArray(tasks.id, normalizedTaskIds));
+
+  if (selectedTasks.length !== normalizedTaskIds.length) {
+    return { success: false, ...emptyResult, error: 'One or more tasks were not found' };
+  }
+
+  const boardIds = Array.from(new Set(selectedTasks.map((task) => task.boardId)));
+  if (boardIds.length !== 1) {
+    return { success: false, ...emptyResult, error: 'Selected tasks must be on the same board' };
+  }
+
+  const boardId = boardIds[0];
+  const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+  if (!accessLevel) {
+    return { success: false, ...emptyResult, error: 'Access denied to one or more tasks' };
+  }
+
+  const targetTask = await db.query.tasks.findFirst({
+    where: eq(tasks.id, parentTaskId),
+    columns: { id: true, boardId: true },
+  });
+  if (!targetTask) {
+    return { success: false, ...emptyResult, error: 'Parent task not found' };
+  }
+  if (targetTask.boardId !== boardId) {
+    return { success: false, ...emptyResult, error: 'Parent task must be on the same board' };
+  }
+
+  if (accessLevel === 'assigned_only') {
+    const requiredTaskIds = [...normalizedTaskIds, parentTaskId];
+    const assignments = await db
+      .select({ taskId: taskAssignees.taskId })
+      .from(taskAssignees)
+      .where(and(eq(taskAssignees.userId, user.id), inArray(taskAssignees.taskId, requiredTaskIds)));
+    if (new Set(assignments.map((assignment) => assignment.taskId)).size !== requiredTaskIds.length) {
+      return { success: false, ...emptyResult, error: 'Access denied to one or more tasks' };
+    }
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const lockedTasks = await tx
+        .select({
+          id: tasks.id,
+          boardId: tasks.boardId,
+          title: tasks.title,
+          parentTaskId: tasks.parentTaskId,
+          recurringConfig: tasks.recurringConfig,
+          recurringGroupId: tasks.recurringGroupId,
+          archivedAt: tasks.archivedAt,
+        })
+        .from(tasks)
+        .where(inArray(tasks.id, [...normalizedTaskIds, parentTaskId]))
+        .orderBy(asc(tasks.id))
+        .for('update');
+
+      if (lockedTasks.length !== normalizedTaskIds.length + 1) {
+        throw new TaskHierarchyValidationError('One or more tasks were not found');
+      }
+
+      const lockedById = new Map(lockedTasks.map((task) => [task.id, task]));
+      const parentTask = lockedById.get(parentTaskId)!;
+      const sourceTasks = normalizedTaskIds.map((id) => lockedById.get(id)!);
+
+      if (parentTask.parentTaskId !== null) {
+        throw new TaskHierarchyValidationError('A subtask cannot be selected as the parent');
+      }
+      if (parentTask.archivedAt !== null) {
+        throw new TaskHierarchyValidationError('An archived task cannot be selected as the parent');
+      }
+      if (sourceTasks.some((task) => task.parentTaskId !== null)) {
+        throw new TaskHierarchyValidationError('Only top-level tasks can be added as subtasks');
+      }
+      if (sourceTasks.some((task) => task.archivedAt !== null)) {
+        throw new TaskHierarchyValidationError('Archived tasks cannot be added as subtasks');
+      }
+      if (sourceTasks.some((task) => task.recurringConfig !== null || task.recurringGroupId !== null)) {
+        throw new TaskHierarchyValidationError('Recurring tasks cannot be added as subtasks');
+      }
+      if (
+        parentTask.boardId !== boardId ||
+        sourceTasks.some((task) => task.boardId !== boardId)
+      ) {
+        throw new TaskHierarchyValidationError('Parent task must be on the same board');
+      }
+
+      const existingChild = await tx
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(inArray(tasks.parentTaskId, normalizedTaskIds))
+        .limit(1);
+      if (existingChild.length > 0) {
+        throw new TaskHierarchyValidationError('Tasks with subtasks cannot be added as subtasks');
+      }
+
+      const [maxPositionResult] = await tx
+        .select({ maxPosition: sql<number>`COALESCE(MAX(${tasks.position}), -1)::int` })
+        .from(tasks)
+        .where(eq(tasks.parentTaskId, parentTaskId));
+      let nextPosition = (maxPositionResult?.maxPosition ?? -1) + 1;
+      const changedAt = new Date();
+
+      for (const task of sourceTasks) {
+        const updated = await tx
+          .update(tasks)
+          .set({ parentTaskId, position: nextPosition, updatedAt: changedAt })
+          .where(and(eq(tasks.id, task.id), isNull(tasks.parentTaskId)))
+          .returning({ id: tasks.id });
+        if (updated.length !== 1) {
+          throw new TaskHierarchyValidationError('One or more tasks are no longer eligible');
+        }
+        nextPosition += 1;
+      }
+
+      await tx.insert(boardActivityLog).values(
+        sourceTasks.map((task) => ({
+          boardId,
+          taskId: task.id,
+          taskTitle: task.title,
+          userId: user.id,
+          action: 'task_added_as_subtask',
+          metadata: {
+            parentTaskId,
+            parentTaskTitle: parentTask.title,
+          },
+        }))
+      );
+
+      return {
+        addedIds: sourceTasks.map((task) => task.id),
+        addedCount: sourceTasks.length,
+        parentTaskId,
+      };
+    });
+
+    revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
+    return { success: true, ...result };
+  } catch (error) {
+    if (error instanceof TaskHierarchyValidationError) {
+      return { success: false, ...emptyResult, error: error.message };
+    }
+    console.error('Failed to add tasks as subtasks:', error);
+    return { success: false, ...emptyResult, error: 'Failed to add tasks as subtasks' };
   }
 }
 

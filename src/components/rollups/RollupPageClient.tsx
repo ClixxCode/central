@@ -8,12 +8,14 @@ import { TaskFilterBar } from '@/components/tasks/TaskFilterBar';
 import { TableColumnsButton } from '@/components/shared/TableColumnsButton';
 import { MultiSelectFloatingBar, type BulkEditPayload } from '@/components/tasks/MultiSelectFloatingBar';
 import { MoveTasksDialog } from '@/components/tasks/MoveTasksDialog';
+import { AddAsSubtaskDialog } from '@/components/tasks/AddAsSubtaskDialog';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useRollupTasks, rollupKeys } from '@/lib/hooks/useRollupBoards';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import { useBulkUpdateTasks, useBulkDuplicateTasks, useBulkDeleteTasks, usePromoteSubtasks } from '@/lib/hooks/useTasks';
 import type { TaskFilters, TaskSortOptions } from '@/lib/actions/tasks';
 import type { RollupBoardWithSources } from '@/lib/actions/rollups';
+import { getAddAsSubtaskBlockReason } from '@/lib/utils/task-hierarchy';
 
 interface RollupPageClientProps {
   rollupBoard: RollupBoardWithSources;
@@ -108,6 +110,7 @@ export function RollupPageClient({
     open: boolean;
     payload: BulkEditPayload | null;
   }>({ open: false, payload: null });
+  const [addAsSubtaskOpen, setAddAsSubtaskOpen] = React.useState(false);
 
   const clearSelection = React.useCallback(() => {
     setSelectedTaskIds(new Set());
@@ -151,6 +154,16 @@ export function RollupPageClient({
   const selectedSubtaskCount = React.useMemo(
     () => tasks.filter((task) => selectedTaskIds.has(task.id) && !!task.parentTaskId).length,
     [tasks, selectedTaskIds]
+  );
+  const selectedTasks = React.useMemo(
+    () => tasks.filter((task) => selectedTaskIds.has(task.id)),
+    [tasks, selectedTaskIds]
+  );
+  const addAsSubtaskDisabledReason = React.useMemo(
+    () => selectedTasks.length !== selectedTaskIds.size
+      ? 'One or more selected tasks are no longer available'
+      : getAddAsSubtaskBlockReason(selectedTasks),
+    [selectedTasks, selectedTaskIds.size]
   );
 
   const handleRemoveAllAssignees = React.useCallback(() => {
@@ -354,6 +367,7 @@ export function RollupPageClient({
           onApply={handleBulkApply}
           onDuplicate={handleBulkDuplicate}
           onPromote={handlePromoteSubtasks}
+          onAddAsSubtask={() => setAddAsSubtaskOpen(true)}
           onDelete={handleBulkDelete}
           onRemoveAllAssignees={handleRemoveAllAssignees}
           onCancel={clearSelection}
@@ -363,6 +377,7 @@ export function RollupPageClient({
           isDeleting={bulkDelete.isPending}
           selectedTasksHaveAssignees={selectedTasksHaveAssignees}
           selectedSubtaskCount={selectedSubtaskCount}
+          addAsSubtaskDisabledReason={addAsSubtaskDisabledReason}
           bottomOffset={reviewMode ? '112px' : undefined}
         />
       )}
@@ -376,6 +391,12 @@ export function RollupPageClient({
         taskCount={selectedTaskIds.size}
         targetBoardName={moveDialog.payload?.targetBoardName ?? ''}
         onConfirm={handleConfirmMove}
+      />
+      <AddAsSubtaskDialog
+        open={addAsSubtaskOpen}
+        onOpenChange={setAddAsSubtaskOpen}
+        taskIds={Array.from(selectedTaskIds)}
+        onAdded={clearSelection}
       />
     </div>
   );
