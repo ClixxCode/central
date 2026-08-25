@@ -5,6 +5,10 @@ import { TaskModal } from '@/components/tasks/TaskModal';
 import type { TaskWithAssignees } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 
+const { mockPromoteMutate } = vi.hoisted(() => ({
+  mockPromoteMutate: vi.fn(),
+}));
+
 // Mock next/navigation
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -41,6 +45,7 @@ vi.mock('@/lib/hooks/useNotifications', () => ({
 vi.mock('@/lib/hooks/useTasks', () => ({
   useArchiveTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUnarchiveTask: () => ({ mutate: vi.fn(), isPending: false }),
+  usePromoteSubtasks: () => ({ mutate: mockPromoteMutate, isPending: false }),
 }));
 
 vi.mock('@/lib/hooks/useRealtimeInvalidation', () => ({
@@ -228,5 +233,89 @@ describe('TaskModal - Copy Link', () => {
     expect(mockWriteText).toHaveBeenCalledWith(
       expect.stringContaining('/clients/acme-corp/boards/board-1?task=task-123')
     );
+  });
+});
+
+describe('TaskModal - Promote Subtask', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const subtask = {
+    ...mockTask,
+    parentTaskId: 'parent-456',
+    parentTaskTitle: 'Parent Task',
+  };
+
+  it('shows Promote to task immediately before Copy link for a subtask', () => {
+    render(
+      <TaskModal
+        {...defaultProps}
+        task={subtask}
+        taskBasePath="/clients/test-client/boards/board-1"
+        onOpenSubtask={vi.fn()}
+      />
+    );
+
+    const promoteButton = screen.getByRole('button', { name: 'Promote to task' });
+    const copyButton = screen.getByRole('button', { name: /Copy link/i });
+
+    expect(promoteButton.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+  });
+
+  it('confirms before promoting the same task ID and keeps the sheet open', async () => {
+    mockPromoteMutate.mockImplementationOnce(
+      (_taskIds: string[], options?: { onSuccess?: () => void }) => options?.onSuccess?.()
+    );
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <TaskModal
+        {...defaultProps}
+        task={subtask}
+        taskBasePath="/clients/test-client/boards/board-1"
+        onOpenSubtask={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Promote to task' }));
+    expect(screen.getByText('Promote this subtask to a task?')).toBeInTheDocument();
+    expect(screen.getByText(/comments, attachments, assignees, and other details/i)).toBeInTheDocument();
+
+    const confirmationButtons = screen.getAllByRole('button', { name: 'Promote to task' });
+    await user.click(confirmationButtons.at(-1)!);
+
+    expect(mockPromoteMutate).toHaveBeenCalledWith(
+      ['task-123'],
+      expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
+    expect(screen.getByDisplayValue('Test Task')).toBeInTheDocument();
+
+    rerender(
+      <TaskModal
+        {...defaultProps}
+        task={{ ...subtask, parentTaskId: null, parentTaskTitle: null }}
+        taskBasePath="/clients/test-client/boards/board-1"
+        onOpenSubtask={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Promote to task' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Parent Task' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Subtasks' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Test Task')).toBeInTheDocument();
+  });
+
+  it('does not show promotion for a regular task', () => {
+    render(
+      <TaskModal
+        {...defaultProps}
+        task={mockTask}
+        taskBasePath="/clients/test-client/boards/board-1"
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Promote to task' })).not.toBeInTheDocument();
   });
 });

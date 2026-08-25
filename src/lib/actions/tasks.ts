@@ -13,6 +13,7 @@ import {
   comments,
   attachments,
   taskViews,
+  boardActivityLog,
   TiptapContent,
   RecurringConfig,
   StatusOption,
@@ -112,6 +113,15 @@ export interface UpdateTaskInput {
   subtasksSequentialEnabled?: boolean;
   /** When completing a parent task, also mark all subtasks as complete */
   completeSubtasks?: boolean;
+}
+
+export interface PromoteSubtasksResult {
+  success: boolean;
+  promotedIds: string[];
+  promotedCount: number;
+  skippedCount: number;
+  affectedParentIds: string[];
+  error?: string;
 }
 
 export type FilterMode = 'is' | 'is_not';
@@ -1620,6 +1630,205 @@ export async function listSubtasks(parentTaskId: string): Promise<{
   });
 
   return { success: true, tasks: subtasksWithAssignees };
+}
+
+/**
+ * Promote selected subtasks to regular top-level tasks in place.
+ *
+ * All selected tasks are access-checked before any writes occur. Regular tasks
+ * are safe to include and are reported as skipped. Each promoted task keeps its
+ * identity and related records; only its parent, top-level position, and
+ * updated timestamp change.
+ */
+export async function promoteSubtasks(taskIds: string[]): Promise<PromoteSubtasksResult> {
+  const emptyResult = {
+    promotedIds: [],
+    promotedCount: 0,
+    skippedCount: 0,
+    affectedParentIds: [],
+  };
+  const normalizedTaskIds = Array.from(new Set(taskIds.filter(Boolean)));
+
+  if (normalizedTaskIds.length === 0) {
+    return { success: true, ...emptyResult };
+  }
+
+  const user = await requireAuth();
+  const isAdmin = user.role === 'admin';
+
+  // Resolve every selected task before starting the transaction so a missing or
+  // inaccessible item cannot result in a partial promotion.
+  const selectedTasks = await db
+    .select({ id: tasks.id, boardId: tasks.boardId })
+    .from(tasks)
+    .where(inArray(tasks.id, normalizedTaskIds));
+
+  if (selectedTasks.length !== normalizedTaskIds.length) {
+    return {
+      success: false,
+      ...emptyResult,
+      error: 'One or more tasks were not found',
+    };
+  }
+
+  const selectedTasksByBoard = new Map<string, string[]>();
+  for (const task of selectedTasks) {
+    const boardTaskIds = selectedTasksByBoard.get(task.boardId) ?? [];
+    boardTaskIds.push(task.id);
+    selectedTasksByBoard.set(task.boardId, boardTaskIds);
+  }
+
+  for (const [boardId, boardTaskIds] of selectedTasksByBoard) {
+    const accessLevel = await getBoardAccessLevel(user.id, boardId, isAdmin);
+    if (!accessLevel) {
+      return {
+        success: false,
+        ...emptyResult,
+        error: 'Access denied to one or more tasks',
+      };
+    }
+
+    if (accessLevel === 'assigned_only') {
+      const assignments = await db
+        .select({ taskId: taskAssignees.taskId })
+        .from(taskAssignees)
+        .where(
+          and(
+            eq(taskAssignees.userId, user.id),
+            inArray(taskAssignees.taskId, boardTaskIds)
+          )
+        );
+
+      if (assignments.length !== boardTaskIds.length) {
+        return {
+          success: false,
+          ...emptyResult,
+          error: 'Access denied to one or more tasks',
+        };
+      }
+    }
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Lock rows in a deterministic order so concurrent calls either see the
+      // task as a subtask or safely skip it after another promotion commits.
+      const lockedTasks = await tx
+        .select({
+          id: tasks.id,
+          boardId: tasks.boardId,
+          title: tasks.title,
+          parentTaskId: tasks.parentTaskId,
+        })
+        .from(tasks)
+        .where(inArray(tasks.id, normalizedTaskIds))
+        .orderBy(asc(tasks.boardId), asc(tasks.id))
+        .for('update');
+
+      if (lockedTasks.length !== normalizedTaskIds.length) {
+        throw new Error('One or more tasks were not found');
+      }
+
+      const eligibleTasks = lockedTasks.filter(
+        (task): task is typeof task & { parentTaskId: string } => task.parentTaskId !== null
+      );
+
+      if (eligibleTasks.length === 0) {
+        return {
+          ...emptyResult,
+          skippedCount: normalizedTaskIds.length,
+        };
+      }
+
+      const boardIds = Array.from(new Set(eligibleTasks.map((task) => task.boardId))).sort();
+
+      // Advisory transaction locks serialize promotion ordering per board,
+      // including calls that promote tasks from several boards at once.
+      for (const boardId of boardIds) {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`promote-subtasks:${boardId}`}))`
+        );
+      }
+
+      const maxPositions = await tx
+        .select({
+          boardId: tasks.boardId,
+          maxPosition: sql<number>`COALESCE(MAX(${tasks.position}), -1)::int`,
+        })
+        .from(tasks)
+        .where(and(inArray(tasks.boardId, boardIds), isNull(tasks.parentTaskId)))
+        .groupBy(tasks.boardId);
+
+      const nextPositionByBoard = new Map(
+        boardIds.map((boardId) => [
+          boardId,
+          (maxPositions.find((row) => row.boardId === boardId)?.maxPosition ?? -1) + 1,
+        ])
+      );
+      const selectionOrder = new Map(normalizedTaskIds.map((id, index) => [id, index]));
+      const orderedEligibleTasks = [...eligibleTasks].sort(
+        (a, b) => (selectionOrder.get(a.id) ?? 0) - (selectionOrder.get(b.id) ?? 0)
+      );
+      const promotedAt = new Date();
+
+      for (const task of orderedEligibleTasks) {
+        const nextPosition = nextPositionByBoard.get(task.boardId)!;
+        await tx
+          .update(tasks)
+          .set({
+            parentTaskId: null,
+            position: nextPosition,
+            updatedAt: promotedAt,
+          })
+          .where(and(eq(tasks.id, task.id), isNotNull(tasks.parentTaskId)));
+        nextPositionByBoard.set(task.boardId, nextPosition + 1);
+      }
+
+      const affectedParentIds = Array.from(
+        new Set(orderedEligibleTasks.map((task) => task.parentTaskId))
+      );
+      const formerParents = await tx
+        .select({ id: tasks.id, title: tasks.title })
+        .from(tasks)
+        .where(inArray(tasks.id, affectedParentIds));
+      const formerParentTitleById = new Map(
+        formerParents.map((parent) => [parent.id, parent.title])
+      );
+
+      await tx.insert(boardActivityLog).values(
+        orderedEligibleTasks.map((task) => ({
+          boardId: task.boardId,
+          taskId: task.id,
+          taskTitle: task.title,
+          userId: user.id,
+          action: 'subtask_promoted',
+          metadata: {
+            formerParentId: task.parentTaskId,
+            formerParentTitle: formerParentTitleById.get(task.parentTaskId) ?? null,
+          },
+        }))
+      );
+
+      const promotedIds = orderedEligibleTasks.map((task) => task.id);
+      return {
+        promotedIds,
+        promotedCount: promotedIds.length,
+        skippedCount: normalizedTaskIds.length - promotedIds.length,
+        affectedParentIds,
+      };
+    });
+
+    revalidatePath(`/clients/[clientSlug]/boards/[boardId]`, 'page');
+
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('Failed to promote subtasks:', error);
+    return {
+      success: false,
+      ...emptyResult,
+      error: 'Failed to promote subtasks',
+    };
+  }
 }
 
 /**

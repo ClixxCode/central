@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import {
   listTasks,
   listSubtasks,
+  promoteSubtasks,
   getTask,
   createTask,
   updateTask,
@@ -609,6 +610,51 @@ export function useCreateSubtask(parentTaskId: string, boardId: string) {
       queryClient.invalidateQueries({ queryKey: taskKeys.subtasks(parentTaskId) });
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.detail(parentTaskId) });
+    },
+  });
+}
+
+/**
+ * Promote one or more subtasks to regular tasks and refresh every view whose
+ * parent context or top-level ordering may have changed.
+ */
+export function usePromoteSubtasks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskIds: string[]) => {
+      const result = await promoteSubtasks(taskIds);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to promote subtasks');
+      }
+      return result;
+    },
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: taskKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: taskKeys.details() }),
+        queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'subtasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['myTasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['board-activity'] }),
+        queryClient.invalidateQueries({ queryKey: ['task-activity'] }),
+      ]);
+
+      if (result.promotedCount === 0) {
+        toast.success('No selected subtasks needed promotion');
+        return;
+      }
+
+      const promotedMessage = result.promotedCount === 1
+        ? 'Promoted 1 subtask to a task'
+        : `Promoted ${result.promotedCount} subtasks to tasks`;
+      const skippedMessage = result.skippedCount > 0
+        ? `; ${result.skippedCount} selected regular task${result.skippedCount === 1 ? '' : 's'} unchanged`
+        : '';
+      toast.success(`${promotedMessage}${skippedMessage}`);
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to promote subtasks');
     },
   });
 }

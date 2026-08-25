@@ -11,7 +11,7 @@ import { MoveTasksDialog } from '@/components/tasks/MoveTasksDialog';
 import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useRollupTasks, rollupKeys } from '@/lib/hooks/useRollupBoards';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
-import { useBulkUpdateTasks, useBulkDuplicateTasks, useBulkDeleteTasks } from '@/lib/hooks/useTasks';
+import { useBulkUpdateTasks, useBulkDuplicateTasks, useBulkDeleteTasks, usePromoteSubtasks } from '@/lib/hooks/useTasks';
 import type { TaskFilters, TaskSortOptions } from '@/lib/actions/tasks';
 import type { RollupBoardWithSources } from '@/lib/actions/rollups';
 
@@ -99,6 +99,7 @@ export function RollupPageClient({
   const bulkUpdate = useBulkUpdateTasks();
   const bulkDuplicate = useBulkDuplicateTasks();
   const bulkDelete = useBulkDeleteTasks();
+  const promoteSubtasks = usePromoteSubtasks();
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<Set<string>>(new Set());
   const lastSelectedIdRef = React.useRef<string | null>(null);
   const isMultiSelectMode = selectedTaskIds.size > 0;
@@ -147,6 +148,11 @@ export function RollupPageClient({
     );
   }, [tasks, selectedTaskIds]);
 
+  const selectedSubtaskCount = React.useMemo(
+    () => tasks.filter((task) => selectedTaskIds.has(task.id) && !!task.parentTaskId).length,
+    [tasks, selectedTaskIds]
+  );
+
   const handleRemoveAllAssignees = React.useCallback(() => {
     bulkUpdate.mutate(
       {
@@ -189,6 +195,12 @@ export function RollupPageClient({
       onSuccess: () => clearSelection(),
     });
   }, [selectedTaskIds, bulkDelete, clearSelection]);
+
+  const handlePromoteSubtasks = React.useCallback(() => {
+    promoteSubtasks.mutate(Array.from(selectedTaskIds), {
+      onSuccess: () => clearSelection(),
+    });
+  }, [selectedTaskIds, promoteSubtasks, clearSelection]);
 
   const handleConfirmMove = React.useCallback(() => {
     if (!moveDialog.payload) return;
@@ -341,13 +353,16 @@ export function RollupPageClient({
           currentBoardId=""
           onApply={handleBulkApply}
           onDuplicate={handleBulkDuplicate}
+          onPromote={handlePromoteSubtasks}
           onDelete={handleBulkDelete}
           onRemoveAllAssignees={handleRemoveAllAssignees}
           onCancel={clearSelection}
           isPending={bulkUpdate.isPending}
           isDuplicating={bulkDuplicate.isPending}
+          isPromoting={promoteSubtasks.isPending}
           isDeleting={bulkDelete.isPending}
           selectedTasksHaveAssignees={selectedTasksHaveAssignees}
+          selectedSubtaskCount={selectedSubtaskCount}
           bottomOffset={reviewMode ? '112px' : undefined}
         />
       )}

@@ -34,6 +34,7 @@ import {
   useBulkUpdateTasks,
   useBulkDuplicateTasks,
   useBulkDeleteTasks,
+  usePromoteSubtasks,
   taskKeys,
 } from '@/lib/hooks/useTasks';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
@@ -117,6 +118,7 @@ export function BoardPageClient({
   const bulkUpdate = useBulkUpdateTasks();
   const bulkDuplicate = useBulkDuplicateTasks();
   const bulkDelete = useBulkDeleteTasks();
+  const promoteSubtasks = usePromoteSubtasks();
 
   // Realtime: invalidate board tasks when any task in this board changes
   useRealtimeInvalidation({
@@ -238,6 +240,11 @@ export function BoardPageClient({
     );
   }, [tasks, selectedTaskIds]);
 
+  const selectedSubtaskCount = React.useMemo(
+    () => tasks.filter((task) => selectedTaskIds.has(task.id) && !!task.parentTaskId).length,
+    [tasks, selectedTaskIds]
+  );
+
   // Handle remove all assignees
   const handleRemoveAllAssignees = React.useCallback(() => {
     bulkUpdate.mutate(
@@ -284,6 +291,12 @@ export function BoardPageClient({
       onSuccess: () => clearSelection(),
     });
   }, [selectedTaskIds, bulkDelete, clearSelection]);
+
+  const handlePromoteSubtasks = React.useCallback(() => {
+    promoteSubtasks.mutate(Array.from(selectedTaskIds), {
+      onSuccess: () => clearSelection(),
+    });
+  }, [selectedTaskIds, promoteSubtasks, clearSelection]);
 
   // Handle confirmed move
   const handleConfirmMove = React.useCallback(() => {
@@ -586,13 +599,16 @@ export function BoardPageClient({
           currentBoardId={boardId}
           onApply={handleBulkApply}
           onDuplicate={handleBulkDuplicate}
+          onPromote={handlePromoteSubtasks}
           onDelete={handleBulkDelete}
           onRemoveAllAssignees={handleRemoveAllAssignees}
           onCancel={clearSelection}
           isPending={bulkUpdate.isPending}
           isDuplicating={bulkDuplicate.isPending}
+          isPromoting={promoteSubtasks.isPending}
           isDeleting={bulkDelete.isPending}
           selectedTasksHaveAssignees={selectedTasksHaveAssignees}
+          selectedSubtaskCount={selectedSubtaskCount}
         />
       )}
       {isSubtaskOnlyMode && !isMultiSelectMode && (
