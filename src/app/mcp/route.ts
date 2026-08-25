@@ -2,7 +2,7 @@ import { createMcpHandler } from '@modelcontextprotocol/server';
 import { buildCentralMcpServer } from '@/lib/mcp/server';
 import { verifyMcpBearer } from '@/lib/oauth/tokens';
 import { assertCanonicalRequestHost } from '@/lib/oauth/http';
-import { protectedResourceMetadataUrl } from '@/lib/oauth/config';
+import { OAUTH_SCOPES, protectedResourceMetadataUrl } from '@/lib/oauth/config';
 import type { SessionUser } from '@/lib/auth/session';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +29,7 @@ function challenge(status = 401, error = 'invalid_token', description = 'A valid
       status,
       headers: {
         'Cache-Control': 'no-store',
-        'WWW-Authenticate': `Bearer resource_metadata="${protectedResourceMetadataUrl()}", scope="central:read"${
+        'WWW-Authenticate': `Bearer resource_metadata="${protectedResourceMetadataUrl()}", scope="${OAUTH_SCOPES.join(' ')}"${
           error ? `, error="${error}"` : ''
         }`,
       },
