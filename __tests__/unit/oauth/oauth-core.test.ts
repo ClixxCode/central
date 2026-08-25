@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, vi } from 'vitest';
 import { base64UrlSha256, signTransaction, verifyPkce, verifyTransaction } from '@/lib/oauth/crypto';
-import { oauthErrorResponse, parseScopes } from '@/lib/oauth/http';
+import { oauthErrorResponse, oauthRedirectResponse, parseScopes } from '@/lib/oauth/http';
 import { parseOAuthClientMetadata, validateRedirectUri } from '@/lib/oauth/clients';
 import { clientCredentialsFromRequest } from '@/lib/oauth/client-auth';
 import { textToTiptap, tiptapToText } from '@/lib/mcp/text';
@@ -122,6 +122,17 @@ describe('OAuth core security helpers', () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it('constructs OAuth redirects with mutable headers and a transaction cookie', () => {
+    const response = oauthRedirectResponse('https://central.test/oauth/consent', {
+      'Set-Cookie': 'central-oauth-transaction=signed; Path=/oauth; HttpOnly',
+    });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe('https://central.test/oauth/consent');
+    expect(response.headers.get('set-cookie')).toContain('central-oauth-transaction=signed');
+    expect(() => response.headers.set('X-Test', 'mutable')).not.toThrow();
   });
 });
 

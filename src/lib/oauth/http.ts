@@ -78,6 +78,15 @@ export function noStoreJson(data: unknown, init?: ResponseInit): Response {
   return Response.json(data, { ...init, headers });
 }
 
+export function oauthRedirectResponse(
+  location: URL | string,
+  headers?: HeadersInit
+): Response {
+  const responseHeaders = new Headers(headers);
+  responseHeaders.set('Location', location.toString());
+  return new Response(null, { status: 302, headers: responseHeaders });
+}
+
 export function assertCanonicalRequestHost(request: Request): void {
   if (new URL(request.url).origin !== oauthIssuer()) {
     throw new OAuthRequestError('invalid_request', 'OAuth request host does not match the configured issuer');

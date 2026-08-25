@@ -8,7 +8,12 @@ import {
   parseAuthorizationRequest,
   type AuthorizationTransaction,
 } from '@/lib/oauth/authorization';
-import { assertCanonicalRequestHost, oauthErrorResponse, OAuthRequestError } from '@/lib/oauth/http';
+import {
+  assertCanonicalRequestHost,
+  oauthErrorResponse,
+  oauthRedirectResponse,
+  OAuthRequestError,
+} from '@/lib/oauth/http';
 import { signTransaction, verifyTransaction } from '@/lib/oauth/crypto';
 import {
   createAuthorizationCode,
@@ -75,12 +80,9 @@ export async function GET(request: Request) {
         })
       );
     }
-    const response = Response.redirect(new URL('/oauth/consent', url.origin));
-    response.headers.append(
-      'Set-Cookie',
-      `${OAUTH_TRANSACTION_COOKIE}=${signTransaction({ ...transaction })}; Path=/oauth; HttpOnly; SameSite=Lax; Max-Age=600${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
-    );
-    return response;
+    return oauthRedirectResponse(new URL('/oauth/consent', url.origin), {
+      'Set-Cookie': `${OAUTH_TRANSACTION_COOKIE}=${signTransaction({ ...transaction })}; Path=/oauth; HttpOnly; SameSite=Lax; Max-Age=600${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`,
+    });
   } catch (error) {
     return oauthErrorResponse(error);
   }
@@ -114,12 +116,9 @@ export async function POST(request: Request) {
         error_description: 'The user denied the authorization request',
       });
     }
-    const response = Response.redirect(target);
-    response.headers.append(
-      'Set-Cookie',
-      `${OAUTH_TRANSACTION_COOKIE}=; Path=/oauth; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
-    );
-    return response;
+    return oauthRedirectResponse(target, {
+      'Set-Cookie': `${OAUTH_TRANSACTION_COOKIE}=; Path=/oauth; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`,
+    });
   } catch (error) {
     return oauthErrorResponse(error);
   }
