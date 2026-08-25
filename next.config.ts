@@ -89,7 +89,11 @@ const withPWA = withPWAInit({
     {
       urlPattern: ({ url }: { url: URL }) => {
         const isSameOrigin = self.origin === url.origin;
-        return isSameOrigin;
+        const isProtocolRoute =
+          url.pathname === '/mcp' ||
+          url.pathname.startsWith('/oauth/') ||
+          url.pathname.startsWith('/.well-known/');
+        return isSameOrigin && !isProtocolRoute;
       },
       handler: "NetworkFirst",
       options: {

@@ -253,6 +253,13 @@
       "when": 1787070462439,
       "tag": "0035_agentic_build_economics",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1787662952860,
+      "tag": "0036_spicy_cable",
+      "breakpoints": true
     }
   ]
 }
