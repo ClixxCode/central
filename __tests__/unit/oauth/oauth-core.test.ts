@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeAll } from 'vitest';
+import { describe, expect, it, beforeAll, vi } from 'vitest';
 import { base64UrlSha256, signTransaction, verifyPkce, verifyTransaction } from '@/lib/oauth/crypto';
-import { parseScopes } from '@/lib/oauth/http';
+import { oauthErrorResponse, parseScopes } from '@/lib/oauth/http';
 import { parseOAuthClientMetadata, validateRedirectUri } from '@/lib/oauth/clients';
 import { clientCredentialsFromRequest } from '@/lib/oauth/client-auth';
 import { textToTiptap, tiptapToText } from '@/lib/mcp/text';
@@ -100,6 +100,28 @@ describe('OAuth core security helpers', () => {
       clientSecret: 'basic-secret',
       method: 'client_secret_basic',
     });
+  });
+
+  it('logs unexpected OAuth failures while returning a generic server error', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const response = oauthErrorResponse(new Error('database connection failed'));
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: 'server_error',
+        error_description: 'The authorization server could not complete the request',
+      });
+      expect(consoleError).toHaveBeenCalledOnce();
+      expect(JSON.parse(String(consoleError.mock.calls[0]?.[0]))).toMatchObject({
+        level: 'error',
+        message: 'Unexpected OAuth request failure',
+        errorName: 'Error',
+        errorMessage: 'database connection failed',
+      });
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
 
