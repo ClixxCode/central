@@ -12,6 +12,7 @@ export * from './boards';
 
 // Tasks & Related
 export * from './tasks';
+export * from './build-stage-events';
 export * from './comments';
 export * from './comment-reactions';
 export * from './attachments';

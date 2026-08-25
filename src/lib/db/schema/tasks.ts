@@ -5,6 +5,7 @@ import {
   timestamp,
   date,
   integer,
+  numeric,
   jsonb,
   primaryKey,
   boolean,
@@ -73,6 +74,17 @@ export const tasks = pgTable('tasks', {
   // from BUILD_STAGES in src/lib/builds/stages.ts.
   isAgenticBuild: boolean('is_agentic_build').notNull().default(false),
   buildStage: varchar('build_stage', { length: 50 }),
+  // Agentic-build economics (only meaningful when isAgenticBuild).
+  // proactive_no_fee = proactive migration absorbed by the current fee;
+  // proactive_with_fee = proactive migration billed as a project;
+  // budgeted_project = a scoped, budgeted build.
+  buildType: varchar('build_type', { length: 32 }),
+  // Total project value in USD (required for the two fee-bearing types).
+  projectValue: numeric('project_value', { precision: 12, scale: 2 }),
+  // When work officially started — the anchor for the project timer.
+  commencementDate: date('commencement_date'),
+  // Set when the build reaches the Complete stage — stops the timer.
+  completedAt: timestamp('completed_at'),
   position: integer('position').notNull().default(0),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),

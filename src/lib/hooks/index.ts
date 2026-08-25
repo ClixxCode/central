@@ -170,6 +170,7 @@ export {
   useAgenticBuilds,
   useBuildableClients,
   useCreateBuild,
+  useUpdateBuild,
   useSetBuildStage,
   buildKeys,
 } from './useBuilds';
