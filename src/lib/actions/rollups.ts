@@ -35,6 +35,7 @@ import {
 import type { TaskFilters, TaskSortOptions } from './tasks';
 import { getSiteSettings } from './site-settings';
 import { getOrgToday } from '@/lib/utils/timezone';
+import { buildActiveRollupTaskConditions } from '@/lib/rollups/task-query';
 
 // Types
 export interface RollupBoardSummary {
@@ -852,8 +853,8 @@ export async function getRollupTasks(
 
     const sourceBoardIds = rollup.rollupSources.map((s) => s.sourceBoardId);
 
-    // Build task query conditions — exclude subtasks from rollup views
-    const conditions = [inArray(tasks.boardId, sourceBoardIds), isNull(tasks.parentTaskId)];
+    // Build task query conditions — exclude subtasks and archived tasks from rollup views
+    const conditions = buildActiveRollupTaskConditions(sourceBoardIds);
 
     // Build mappings from status/section ID to all equivalent IDs across source boards
     // (different boards may use different IDs for the same label)
@@ -1126,7 +1127,12 @@ export async function getRollupTasks(
               count: sql<number>`COUNT(*)::int`,
             })
             .from(tasks)
-            .where(inArray(tasks.parentTaskId, taskIds))
+            .where(
+              and(
+                inArray(tasks.parentTaskId, taskIds),
+                isNull(tasks.archivedAt)
+              )
+            )
             .groupBy(tasks.parentTaskId)
         : [];
 
@@ -1160,7 +1166,8 @@ export async function getRollupTasks(
             .where(
               and(
                 inArray(tasks.parentTaskId, taskIds),
-                inArray(tasks.status, completeStatusIds)
+                inArray(tasks.status, completeStatusIds),
+                isNull(tasks.archivedAt)
               )
             )
             .groupBy(tasks.parentTaskId)

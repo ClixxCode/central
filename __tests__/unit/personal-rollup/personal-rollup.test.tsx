@@ -190,6 +190,10 @@ const createMockTasksByClient = (): MyTasksByClient[] => [
       slug: 'acme',
       color: '#3B82F6',
       icon: null,
+      pulseAccountId: null,
+      accountStatus: null,
+      accountTeam: [],
+      accountServices: [],
     },
     boards: [
       {
@@ -222,6 +226,10 @@ const createMockTasksByClient = (): MyTasksByClient[] => [
       slug: 'beta',
       color: '#10B981',
       icon: null,
+      pulseAccountId: null,
+      accountStatus: null,
+      accountTeam: [],
+      accountServices: [],
     },
     boards: [
       {

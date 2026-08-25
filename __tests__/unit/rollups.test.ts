@@ -4,6 +4,9 @@ import {
   updateRollupSourcesSchema,
   updateRollupBoardSchema,
 } from '@/lib/validations/rollup';
+import { and } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { buildActiveRollupTaskConditions } from '@/lib/rollups/task-query';
 
 describe('Rollup Validations', () => {
   const validUUID1 = '550e8400-e29b-41d4-a716-446655440000';
@@ -154,6 +157,15 @@ describe('Rollup Validations', () => {
 
 describe('Rollup Task Aggregation Logic', () => {
   // These are logic tests that don't require database access
+
+  it('excludes archived tasks from the base rollup query', () => {
+    const conditions = buildActiveRollupTaskConditions([
+      '550e8400-e29b-41d4-a716-446655440000',
+    ]);
+    const query = new PgDialect().sqlToQuery(and(...conditions)!);
+
+    expect(query.sql).toContain('"tasks"."archived_at" is null');
+  });
 
   describe('Task grouping by status', () => {
     interface MockTask {

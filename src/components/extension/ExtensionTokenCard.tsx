@@ -23,6 +23,15 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+function formatDate(date: Date | null) {
+  if (!date) return 'Never';
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 export function ExtensionTokenCard() {
   const { data: tokens, isLoading } = useExtensionTokens();
   const createMutation = useCreateExtensionToken();
@@ -64,15 +73,6 @@ export function ExtensionTokenCard() {
     });
   };
 
-  const formatDate = (date: Date | null) => {
-    if (!date) return 'Never';
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -95,7 +95,7 @@ export function ExtensionTokenCard() {
               <code className="flex-1 truncate rounded bg-background px-2 py-1 text-xs font-mono">
                 {revealedToken}
               </code>
-              <Button variant="outline" size="sm" onClick={handleCopy}>
+              <Button variant="outline" size="sm" onClick={handleCopy} aria-label="Copy generated token">
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               </Button>
             </div>
@@ -155,6 +155,7 @@ export function ExtensionTokenCard() {
                       variant="ghost"
                       size="sm"
                       disabled={revokeMutation.isPending}
+                      aria-label={`Revoke ${token.name || 'unnamed token'}`}
                     >
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
                     </Button>

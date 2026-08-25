@@ -651,6 +651,7 @@ export function useArchiveTask() {
       queryClient.invalidateQueries({ queryKey: taskKeys.details() });
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
     },
   });
 }
@@ -676,6 +677,7 @@ export function useUnarchiveTask() {
       queryClient.invalidateQueries({ queryKey: taskKeys.details() });
       queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'archived'] });
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
     },
   });
 }
@@ -728,6 +730,7 @@ export function useBulkArchiveDone(boardId: string) {
       queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
       queryClient.invalidateQueries({ queryKey: taskKeys.archivedTasks(boardId) });
       queryClient.invalidateQueries({ queryKey: ['myTasks'] });
+      queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] });
     },
   });
 }
