@@ -9,6 +9,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,6 +75,7 @@ import {
   Hash,
   Pencil,
   Activity,
+  ArrowUpFromLine,
 } from 'lucide-react';
 import { RecurringPicker, RecurringIndicator } from './RecurringPicker';
 import { SubtasksTab } from './SubtasksTab';
@@ -73,7 +84,7 @@ import { CompleteParentDialog } from './CompleteParentDialog';
 import { DeleteTaskDialog } from './DeleteTaskDialog';
 import { getRecurrenceDescription } from '@/lib/utils/recurring';
 import { isCompleteStatus } from '@/lib/utils/status';
-import { useArchiveTask, useUnarchiveTask } from '@/lib/hooks/useTasks';
+import { useArchiveTask, usePromoteSubtasks, useUnarchiveTask } from '@/lib/hooks/useTasks';
 import { useClient } from '@/lib/hooks/useClients';
 import { useNotificationPreferences } from '@/lib/hooks/useNotifications';
 import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
@@ -210,11 +221,13 @@ export function TaskModal({
   const [highlightedAttachmentId, setHighlightedAttachmentId] = useState<string | null>(null);
   const [completeParentOpen, setCompleteParentOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [promoteConfirmOpen, setPromoteConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
 
   // Archive hooks
   const archiveTaskMutation = useArchiveTask();
   const unarchiveTaskMutation = useUnarchiveTask();
+  const promoteSubtasksMutation = usePromoteSubtasks();
   const prevOpenRef = useRef(false);
   const prevTaskIdRef = useRef<string | null>(null);
   const titleFocusedRef = useRef(false);
@@ -628,7 +641,7 @@ export function TaskModal({
                     Archived {format(new Date(task.archivedAt), 'MMM d, yyyy')}
                   </Badge>
                 )}
-                {!isNew && task?.id && taskBasePath && (
+                {!isNew && task?.id && (taskBasePath || task.parentTaskId) && (
                   <div className="ml-auto flex items-center gap-1">
                     {slackChannelUrl && (
                       <Button
@@ -641,15 +654,33 @@ export function TaskModal({
                         Slack
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 gap-1.5 text-muted-foreground"
-                      onClick={handleCopyLink}
-                    >
-                      <Link2 className="h-3.5 w-3.5" />
-                      Copy link
-                    </Button>
+                    {task.parentTaskId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 text-muted-foreground"
+                        onClick={() => setPromoteConfirmOpen(true)}
+                        disabled={promoteSubtasksMutation.isPending}
+                      >
+                        {promoteSubtasksMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ArrowUpFromLine className="h-3.5 w-3.5" />
+                        )}
+                        {promoteSubtasksMutation.isPending ? 'Promoting...' : 'Promote to task'}
+                      </Button>
+                    )}
+                    {taskBasePath && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 text-muted-foreground"
+                        onClick={handleCopyLink}
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        Copy link
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1326,6 +1357,44 @@ export function TaskModal({
           }
         }}
       />
+
+      <AlertDialog open={promoteConfirmOpen} onOpenChange={setPromoteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Promote this subtask to a task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will detach &ldquo;{task?.title}&rdquo; from
+              {task?.parentTaskTitle ? ` “${task.parentTaskTitle}”` : ' its parent'} and append it to
+              the board as a regular task. Its comments, attachments, assignees, and other details
+              will be preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={promoteSubtasksMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!task?.id || promoteSubtasksMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!task?.id) return;
+                promoteSubtasksMutation.mutate([task.id], {
+                  onSuccess: () => setPromoteConfirmOpen(false),
+                });
+              }}
+            >
+              {promoteSubtasksMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Promoting...
+                </>
+              ) : (
+                'Promote to task'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   );
 }

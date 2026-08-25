@@ -40,6 +40,8 @@ function buildDescription(entry: BoardActivityEntry): string {
       return `${userName} added a subtask`;
     case 'subtask_deleted':
       return `${userName} deleted a subtask`;
+    case 'subtask_promoted':
+      return `${userName} promoted this subtask to a task from ${meta.formerParentTitle ?? 'its parent'}`;
     case 'task_status_changed':
       return `${userName} changed status from ${meta.oldLabel ?? meta.oldValue} to ${meta.newLabel ?? meta.newValue}`;
     case 'task_title_changed':

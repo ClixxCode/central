@@ -30,6 +30,7 @@ export {
   useBulkDeleteTasks,
   useSubtasks,
   useCreateSubtask,
+  usePromoteSubtasks,
   useArchivedTasks,
   useArchiveTask,
   useUnarchiveTask,

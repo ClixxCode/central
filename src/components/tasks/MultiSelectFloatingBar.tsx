@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
-import { Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy, Trash2 } from 'lucide-react';
+import { ArrowUpFromLine, Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -43,13 +43,16 @@ interface MultiSelectFloatingBarProps {
   currentBoardId: string;
   onApply: (updates: BulkEditPayload) => void;
   onDuplicate: () => void;
+  onPromote: () => void;
   onDelete: () => void;
   onRemoveAllAssignees: () => void;
   onCancel: () => void;
   isPending: boolean;
   isDuplicating: boolean;
+  isPromoting: boolean;
   isDeleting: boolean;
   selectedTasksHaveAssignees: boolean;
+  selectedSubtaskCount: number;
   bottomOffset?: string;
 }
 
@@ -61,13 +64,16 @@ export function MultiSelectFloatingBar({
   currentBoardId,
   onApply,
   onDuplicate,
+  onPromote,
   onDelete,
   onRemoveAllAssignees,
   onCancel,
   isPending,
   isDuplicating,
+  isPromoting,
   isDeleting,
   selectedTasksHaveAssignees,
+  selectedSubtaskCount,
   bottomOffset,
 }: MultiSelectFloatingBarProps) {
   const ignoreWeekends = useIgnoreWeekends();
@@ -540,6 +546,47 @@ export function MultiSelectFloatingBar({
 
         {/* Divider */}
         <div className="mx-1 h-6 w-px bg-border" />
+
+        {/* Promote selected subtasks */}
+        {selectedSubtaskCount > 0 && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                disabled={isPromoting}
+                className="gap-1 text-xs h-8 px-2"
+              >
+                <ArrowUpFromLine className="h-3.5 w-3.5" />
+                {isPromoting ? 'Promoting...' : 'Promote'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Promote {selectedSubtaskCount} subtask{selectedSubtaskCount === 1 ? '' : 's'} to {selectedSubtaskCount === 1 ? 'a task' : 'tasks'}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {selectedSubtaskCount} selected subtask{selectedSubtaskCount === 1 ? '' : 's'} will be detached from {selectedSubtaskCount === 1 ? 'its parent' : 'their parents'} and appended to {selectedSubtaskCount === 1 ? 'its board' : 'their boards'} as {selectedSubtaskCount === 1 ? 'a regular task' : 'regular tasks'}.{' '}
+                  {selectedCount - selectedSubtaskCount} selected regular task{selectedCount - selectedSubtaskCount === 1 ? '' : 's'} will remain unchanged.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isPromoting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={isPromoting}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    onPromote();
+                  }}
+                >
+                  {isPromoting ? 'Promoting...' : 'Promote'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
 
         {/* Duplicate */}
         <AlertDialog>
