@@ -12,10 +12,26 @@ export class OAuthRequestError extends Error {
 }
 
 export function oauthErrorResponse(error: unknown): Response {
-  const normalized =
-    error instanceof OAuthRequestError
-      ? error
-      : new OAuthRequestError('server_error', 'The authorization server could not complete the request', 500);
+  const expected = error instanceof OAuthRequestError;
+  if (!expected) {
+    const cause = error instanceof Error ? error : new Error(String(error));
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        message: 'Unexpected OAuth request failure',
+        errorName: cause.name,
+        errorMessage: cause.message,
+        stack: cause.stack,
+      })
+    );
+  }
+  const normalized = expected
+    ? error
+    : new OAuthRequestError(
+        'server_error',
+        'The authorization server could not complete the request',
+        500
+      );
   return Response.json(
     { error: normalized.code, error_description: normalized.message },
     {
