@@ -39,13 +39,13 @@ export function useFavorites() {
 }
 
 /**
- * Add a board or rollup to favorites
+ * Add a board, rollup, or saved view to favorites
  */
 export function useAddFavorite() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { entityType: 'board' | 'rollup'; entityId: string }) => {
+    mutationFn: async (input: { entityType: 'board' | 'rollup' | 'view'; entityId: string }) => {
       const result = await addFavorite(input);
       if (!result.success) {
         throw new Error(result.error ?? 'Failed to add favorite');
@@ -167,7 +167,7 @@ export function useToggleFavorite() {
   const removeMutation = useRemoveFavorite();
 
   return {
-    toggle: (entityType: 'board' | 'rollup', entityId: string) => {
+    toggle: (entityType: 'board' | 'rollup' | 'view', entityId: string) => {
       const data = queryClient.getQueryData<FavoritesData>(favoriteKeys.list());
       const isFav = data?.favorites?.some((f) => f.entityId === entityId);
 

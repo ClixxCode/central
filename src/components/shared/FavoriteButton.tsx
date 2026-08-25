@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/tooltip';
 
 interface FavoriteButtonProps {
-  entityType: 'board' | 'rollup';
+  entityType: 'board' | 'rollup' | 'view';
   entityId: string;
   className?: string;
 }

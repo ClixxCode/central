@@ -28,7 +28,7 @@ export const favorites = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    entityType: varchar('entity_type', { length: 20 }).notNull(), // 'board' | 'rollup'
+    entityType: varchar('entity_type', { length: 20 }).notNull(), // 'board' | 'rollup' | 'view'
     entityId: uuid('entity_id').notNull(),
     folderId: uuid('folder_id').references(() => favoriteFolders.id, { onDelete: 'set null' }),
     position: integer('position').notNull().default(0),
@@ -37,7 +37,7 @@ export const favorites = pgTable(
   (table) => [
     check(
       'valid_entity_type',
-      sql`${table.entityType} IN ('board', 'rollup')`
+      sql`${table.entityType} IN ('board', 'rollup', 'view')`
     ),
   ]
 );
@@ -60,7 +60,7 @@ export const favoritesRelations = relations(favorites, ({ one }) => ({
 // Type for favorite with board details
 export interface FavoriteWithDetails {
   id: string;
-  entityType: 'board' | 'rollup';
+  entityType: 'board' | 'rollup' | 'view';
   entityId: string;
   position: number;
   folderId: string | null;

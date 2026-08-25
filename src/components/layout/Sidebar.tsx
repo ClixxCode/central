@@ -10,12 +10,10 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
-  FolderKanban,
   LayoutTemplate,
   Layers,
   PanelLeftClose,
   PanelLeft,
-  Star,
   MoreHorizontal,
   X,
   Building2,
@@ -27,6 +25,7 @@ import {
   ArrowRight,
   ArrowUp,
   Hammer,
+  Eye,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -134,12 +133,16 @@ function buildFlatFavoritesList(data: FavoritesData): FavoriteWithDetails[] {
 
 function getFavoriteHref(favorite: FavoriteWithDetails): string {
   if (favorite.boardType === 'personal') return '/my-tasks?tab=personal';
+  if (favorite.entityType === 'view') return `/views/${favorite.entityId}`;
   if (favorite.entityType === 'board' && favorite.clientSlug)
     return `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`;
   return `/rollups/${favorite.entityId}`;
 }
 
 function FavoriteIcon({ favorite, size = 'sm' }: { favorite: FavoriteWithDetails; size?: 'sm' | 'xs' }) {
+  if (favorite.entityType === 'view') {
+    return <Eye className={cn(size === 'xs' ? 'h-3.5 w-3.5' : 'h-5 w-5', 'shrink-0 text-muted-foreground')} />;
+  }
   if (favorite.entityType === 'rollup') {
     return <Layers className={cn(size === 'xs' ? 'h-3.5 w-3.5' : 'h-5 w-5', 'shrink-0 text-muted-foreground')} />;
   }
@@ -191,9 +194,9 @@ function SortableFavoriteItem({
     id: favorite.id,
   });
 
-  if (isDragging) {
-    wasDragged.current = true;
-  }
+  useEffect(() => {
+    if (isDragging) wasDragged.current = true;
+  }, [isDragging]);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -490,7 +493,11 @@ function SortableFolderItem({
   );
 }
 
-const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Builds', 'Schedule', 'Templates'];
+const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Views', 'Builds', 'Schedule', 'Templates'];
+
+function normalizeNavOrder(order: string[]) {
+  return [...new Set(order.map((label) => label === 'Rollups' ? 'Views' : label))];
+}
 
 interface SortableNavEditItemProps {
   id: string;
@@ -550,7 +557,7 @@ interface SidebarProps {
   isContractor?: boolean;
 }
 
-export function Sidebar({ clients, isAdmin = false, isContractor = false }: SidebarProps) {
+export function Sidebar({ clients, isContractor = false }: SidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isClient = useIsClient();
@@ -594,9 +601,9 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
   }, [creatingFolder]);
 
   const enterEditMode = () => {
-    setDraftHiddenNav(sidebarPrefs?.hiddenNavItems ?? []);
+    setDraftHiddenNav((sidebarPrefs?.hiddenNavItems ?? []).map((label) => label === 'Rollups' ? 'Views' : label));
     const savedOrder = sidebarPrefs?.navOrder;
-    setDraftNavOrder(savedOrder && savedOrder.length > 0 ? savedOrder : DEFAULT_NAV_ORDER);
+    setDraftNavOrder(savedOrder && savedOrder.length > 0 ? normalizeNavOrder(savedOrder) : DEFAULT_NAV_ORDER);
     setEditMode(true);
   };
 
@@ -629,7 +636,7 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
   // Exit edit mode when sidebar is collapsed
   useEffect(() => {
     if (sidebarCollapsed) {
-      setEditMode(false);
+      queueMicrotask(() => setEditMode(false));
     }
   }, [sidebarCollapsed]);
 
@@ -733,15 +740,15 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
   const isCollapsed = isClient ? sidebarCollapsed : false;
   const clientsExpanded = isClient ? expandedClients : [];
 
-  const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
+  const hiddenNavItems = (sidebarPrefs?.hiddenNavItems ?? []).map((label) => label === 'Rollups' ? 'Views' : label);
   const savedNavOrder = sidebarPrefs?.navOrder;
-  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_NAV_ORDER;
+  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? normalizeNavOrder(savedNavOrder) : DEFAULT_NAV_ORDER;
 
   const navItemDefs: Record<string, { href: string; label: string; icon: LucideIcon; alwaysVisible: boolean }> = {
     'My Work': { href: '/my-tasks', label: 'My Work', icon: LayoutDashboard, alwaysVisible: true },
     'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
     'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
-    'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
+    'Views': { href: '/views', label: 'Views', icon: Eye, alwaysVisible: false },
     'Builds': { href: '/agentic-builds', label: 'Builds', icon: Hammer, alwaysVisible: false },
     'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
   };
@@ -959,7 +966,11 @@ export function Sidebar({ clients, isAdmin = false, isContractor = false }: Side
           {/* Main Navigation */}
           <nav className="space-y-1">
             {navItems.map((item) => {
-              const isActive = item.label === 'Clients' ? pathname === '/clients' : pathname === item.href;
+              const isActive = item.label === 'Clients'
+                ? pathname === '/clients'
+                : item.label === 'Views'
+                  ? pathname.startsWith('/views')
+                  : pathname === item.href;
               const Icon = item.icon;
 
               if (isCollapsed) {

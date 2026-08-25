@@ -178,3 +178,4 @@ export {
 export { useMyWorkPreferences } from './useMyWorkPreferences';
 export { useIgnoreWeekends } from './useIgnoreWeekends';
 export { useDragToScroll } from './useDragToScroll';
+export * from './useSavedViews';

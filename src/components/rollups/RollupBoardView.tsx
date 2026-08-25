@@ -41,6 +41,33 @@ interface BoardGroup {
   tasks: RollupTaskWithAssignees[];
 }
 
+function compareRollupTasks(
+  a: RollupTaskWithAssignees,
+  b: RollupTaskWithAssignees,
+  sort: TableSortOptions,
+  statusOptions: StatusOption[]
+) {
+  let comparison = 0;
+  switch (sort.field) {
+    case 'title': comparison = a.title.localeCompare(b.title); break;
+    case 'status': {
+      const statusA = statusOptions.find((status) => status.id === a.status)?.position ?? 0;
+      const statusB = statusOptions.find((status) => status.id === b.status)?.position ?? 0;
+      comparison = statusA - statusB;
+      break;
+    }
+    case 'dueDate': {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      comparison = dateA - dateB;
+      break;
+    }
+    case 'client': comparison = (a.clientName ?? '').localeCompare(b.clientName ?? ''); break;
+    default: comparison = a.position - b.position;
+  }
+  return sort.direction === 'asc' ? comparison : -comparison;
+}
+
 interface RollupBoardViewProps {
   rollupBoard: RollupBoardWithSources;
   tasks: RollupTaskWithAssignees[];
@@ -50,6 +77,8 @@ interface RollupBoardViewProps {
   viewMode?: RollupViewMode;
   tableColumns?: TableColumnConfig;
   hiddenCardItems?: Set<string>;
+  tableSort?: TableSortOptions;
+  onTableSortChange?: (sort: TableSortOptions) => void;
   reviewMode?: boolean;
   reviewIndex?: number;
   onReviewIndexChange?: (index: number) => void;
@@ -68,6 +97,8 @@ export function RollupBoardView({
   viewMode = 'swimlane',
   tableColumns,
   hiddenCardItems,
+  tableSort: controlledTableSort,
+  onTableSortChange,
   reviewMode = false,
   reviewIndex = 0,
   onReviewIndexChange,
@@ -118,13 +149,15 @@ export function RollupBoardView({
       return a.boardName.localeCompare(b.boardName);
     });
 
-    // Sort tasks within each group by position
+    // Saved Views can provide a controlled sort; legacy Rollups keep board position order.
     groups.forEach((group) => {
-      group.tasks.sort((a, b) => a.position - b.position);
+      group.tasks.sort((a, b) => controlledTableSort
+        ? compareRollupTasks(a, b, controlledTableSort, statusOptions)
+        : a.position - b.position);
     });
 
     return groups;
-  }, [tasks]);
+  }, [tasks, controlledTableSort, statusOptions]);
 
   // How many distinct boards each client contributes to this rollup. Used to
   // decide whether the "/ board" suffix in a group header adds information —
@@ -200,6 +233,7 @@ export function RollupBoardView({
     // Sort tasks within each group by client, then position
     Object.keys(grouped).forEach((status) => {
       grouped[status].sort((a, b) => {
+        if (controlledTableSort) return compareRollupTasks(a, b, controlledTableSort, statusOptions);
         // Sort by client name first
         const clientA = a.clientName ?? '';
         const clientB = b.clientName ?? '';
@@ -212,7 +246,7 @@ export function RollupBoardView({
     });
 
     return grouped;
-  }, [tasks, statusOptions]);
+  }, [tasks, statusOptions, controlledTableSort]);
 
   // Get selected task for modal — check rollup tasks first, then fetch individually (for subtasks)
   const rollupTask = React.useMemo(
@@ -248,10 +282,12 @@ export function RollupBoardView({
   );
 
   // Table view state
-  const [tableSort, setTableSort] = React.useState<TableSortOptions>({
+  const [internalTableSort, setInternalTableSort] = React.useState<TableSortOptions>({
     field: 'client',
     direction: 'asc',
   });
+  const tableSort = controlledTableSort ?? internalTableSort;
+  const setTableSort = onTableSortChange ?? setInternalTableSort;
 
   // Sorted tasks for table view
   const sortedTasks = React.useMemo(() => {
@@ -411,6 +447,7 @@ export function RollupBoardView({
                       updateTaskPositions.mutate(updates);
                     }}
                     hiddenCardItems={hiddenCardItems}
+                    taskSort={controlledTableSort}
                     reviewMode={reviewMode}
                     selectedTaskIds={selectedTaskIds}
                     isMultiSelectMode={isMultiSelectMode}
@@ -469,6 +506,7 @@ interface RollupBoardSwimlaneProps {
   onNavigateToBoard: () => void;
   onTaskPositionsChange: (updates: { id: string; position: number; status?: string }[]) => void;
   hiddenCardItems?: Set<string>;
+  taskSort?: TableSortOptions;
   reviewMode?: boolean;
   selectedTaskIds?: Set<string>;
   isMultiSelectMode?: boolean;
@@ -494,6 +532,7 @@ function RollupBoardSwimlane({
   onNavigateToBoard,
   onTaskPositionsChange,
   hiddenCardItems,
+  taskSort,
   reviewMode = false,
   selectedTaskIds,
   isMultiSelectMode,
@@ -524,10 +563,12 @@ function RollupBoardSwimlane({
       }
     });
     Object.keys(grouped).forEach((status) => {
-      grouped[status].sort((a, b) => a.position - b.position);
+      grouped[status].sort((a, b) => taskSort
+        ? compareRollupTasks(a, b, taskSort, statusOptions)
+        : a.position - b.position);
     });
     return grouped;
-  }, [group.tasks, statusOptions]);
+  }, [group.tasks, statusOptions, taskSort]);
 
   // Handle drag end - update task status and position when dropped
   const handleDragEnd = React.useCallback(

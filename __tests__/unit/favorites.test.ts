@@ -70,6 +70,7 @@ vi.mock('@/lib/db/schema', () => ({
   favorites: { id: 'favorites.id', userId: 'favorites.userId', entityType: 'favorites.entityType', entityId: 'favorites.entityId', position: 'favorites.position', folderId: 'favorites.folderId' },
   favoriteFolders: { id: 'favoriteFolders.id', userId: 'favoriteFolders.userId', name: 'favoriteFolders.name', position: 'favoriteFolders.position' },
   boards: { id: 'boards.id', name: 'boards.name', clientId: 'boards.clientId' },
+  savedViews: { id: 'savedViews.id', name: 'savedViews.name' },
   clients: { id: 'clients.id', name: 'clients.name', slug: 'clients.slug', color: 'clients.color' },
 }));
 

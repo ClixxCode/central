@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { X, LayoutDashboard, CalendarDays, FolderKanban, LayoutTemplate, Layers, Users, Settings, ChevronRight, Building2, Plus } from 'lucide-react';
+import { X, LayoutDashboard, CalendarDays, LayoutTemplate, Layers, Users, Settings, ChevronRight, Building2, Plus, Eye } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores';
@@ -43,15 +43,17 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
   // Don't render the sheet until client-side to prevent hydration mismatch
   const isOpen = isClient ? sidebarOpen : false;
 
-  const hiddenNavItems = sidebarPrefs?.hiddenNavItems ?? [];
-  const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Rollups', 'Schedule', 'Templates'];
+  const hiddenNavItems = (sidebarPrefs?.hiddenNavItems ?? []).map((label) => label === 'Rollups' ? 'Views' : label);
+  const DEFAULT_NAV_ORDER = ['My Work', 'Clients', 'Views', 'Schedule', 'Templates'];
   const savedNavOrder = sidebarPrefs?.navOrder;
-  const navOrder = savedNavOrder && savedNavOrder.length > 0 ? savedNavOrder : DEFAULT_NAV_ORDER;
+  const navOrder = savedNavOrder && savedNavOrder.length > 0
+    ? [...new Set(savedNavOrder.map((label) => label === 'Rollups' ? 'Views' : label))]
+    : DEFAULT_NAV_ORDER;
 
   const navItemDefs: Record<string, { href: string; label: string; icon: LucideIcon; alwaysVisible: boolean }> = {
     'My Work': { href: '/my-tasks', label: 'My Tasks', icon: LayoutDashboard, alwaysVisible: true },
     'Schedule': { href: '/schedule', label: 'Schedule', icon: CalendarDays, alwaysVisible: true },
-    'Rollups': { href: '/rollups', label: 'Rollups', icon: FolderKanban, alwaysVisible: false },
+    'Views': { href: '/views', label: 'Views', icon: Eye, alwaysVisible: false },
     'Templates': { href: '/templates', label: 'Templates', icon: LayoutTemplate, alwaysVisible: false },
     'Clients': { href: '/clients', label: 'Clients', icon: Building2, alwaysVisible: false },
   };
@@ -95,7 +97,7 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
             {/* Main Navigation */}
             <nav className="space-y-1">
               {navItems.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = item.label === 'Views' ? pathname.startsWith('/views') : pathname === item.href;
                 const Icon = item.icon;
 
                 return (
@@ -128,7 +130,9 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
                 <div className="space-y-1">
                   {favorites.map((favorite) => {
                     const href =
-                      favorite.boardType === 'personal'
+                      favorite.entityType === 'view'
+                        ? `/views/${favorite.entityId}`
+                        : favorite.boardType === 'personal'
                         ? '/my-tasks?tab=personal'
                         : favorite.entityType === 'board' && favorite.clientSlug
                         ? `/clients/${favorite.clientSlug}/boards/${favorite.entityId}`
@@ -149,7 +153,9 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
                             : 'text-muted-foreground hover:bg-accent'
                         )}
                       >
-                        {favorite.entityType === 'rollup' ? (
+                        {favorite.entityType === 'view' ? (
+                          <Eye className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        ) : favorite.entityType === 'rollup' ? (
                           <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         ) : favorite.boardType === 'personal' ? (
                           <span
@@ -248,7 +254,7 @@ export function MobileNav({ clients, isAdmin = false, isContractor = false }: Mo
                 </div>
                 <nav className="space-y-1">
                   {adminItems.map((item) => {
-                    const isActive = pathname === item.href;
+                    const isActive = item.label === 'Views' ? pathname.startsWith('/views') : pathname === item.href;
                     const Icon = item.icon;
 
                     return (

@@ -1,9 +1,9 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { favorites, favoriteFolders, boards, clients } from '@/lib/db/schema';
+import { favorites, favoriteFolders, boards, clients, savedViews } from '@/lib/db/schema';
 import type { FavoriteWithDetails, FavoriteFolder, FavoritesData } from '@/lib/db/schema';
-import { eq, and, desc, isNull, max } from 'drizzle-orm';
+import { eq, and, isNull, max } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 
@@ -27,6 +27,7 @@ export async function listFavorites(): Promise<{
           position: favorites.position,
           folderId: favorites.folderId,
           boardName: boards.name,
+          viewName: savedViews.name,
           boardType: boards.type,
           boardColor: boards.color,
           boardIcon: boards.icon,
@@ -37,6 +38,7 @@ export async function listFavorites(): Promise<{
         })
         .from(favorites)
         .leftJoin(boards, eq(favorites.entityId, boards.id))
+        .leftJoin(savedViews, eq(favorites.entityId, savedViews.id))
         .leftJoin(clients, eq(boards.clientId, clients.id))
         .where(eq(favorites.userId, user.id))
         .orderBy(favorites.position),
@@ -53,11 +55,11 @@ export async function listFavorites(): Promise<{
 
     const favoritesData: FavoriteWithDetails[] = favoritesList.map((f) => ({
       id: f.id,
-      entityType: f.entityType as 'board' | 'rollup',
+      entityType: f.entityType as 'board' | 'rollup' | 'view',
       entityId: f.entityId,
       position: f.position,
       folderId: f.folderId,
-      name: f.boardName ?? 'Unknown',
+      name: (f.entityType === 'view' ? f.viewName : f.boardName) ?? 'Unknown',
       clientName: f.clientName ?? undefined,
       clientSlug: f.clientSlug ?? undefined,
       clientColor: f.clientColor ?? undefined,
@@ -84,7 +86,7 @@ export async function listFavorites(): Promise<{
  * Add a favorite
  */
 export async function addFavorite(input: {
-  entityType: 'board' | 'rollup';
+  entityType: 'board' | 'rollup' | 'view';
   entityId: string;
 }): Promise<{
   success: boolean;

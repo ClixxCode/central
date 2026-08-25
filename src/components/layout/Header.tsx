@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Menu, LogOut, Settings, User, Keyboard, Users, ShieldCheck, Building2, Plus, Moon, Sun, Monitor } from 'lucide-react';
@@ -40,10 +40,13 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
   const { setSidebarOpen, sidebarOpen } = useUIStore();
   const { openQuickAdd, quickAddOpen, closeQuickAdd } = useQuickActionsStore();
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = React.useSyncExternalStore(
+    React.useCallback(() => () => undefined, []),
+    React.useCallback(() => true, []),
+    React.useCallback(() => false, [])
+  );
   const { data: favoritesData } = useFavorites();
-  const favorites = favoritesData?.favorites ?? [];
+  const favorites = React.useMemo(() => favoritesData?.favorites ?? [], [favoritesData?.favorites]);
 
   // Build favorite shortcuts (b then 1-9)
   const favoriteShortcuts = React.useMemo(() => {
@@ -52,7 +55,9 @@ export function Header({ user, isAdmin = false, onSignOut }: HeaderProps) {
       description: `Go to ${fav.name}`,
       handler: () => {
         const href =
-          fav.entityType === 'board' && fav.clientSlug
+          fav.entityType === 'view'
+            ? `/views/${fav.entityId}`
+            : fav.entityType === 'board' && fav.clientSlug
             ? `/clients/${fav.clientSlug}/boards/${fav.entityId}`
             : `/rollups/${fav.entityId}`;
         router.push(href);

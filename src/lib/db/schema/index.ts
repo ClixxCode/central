@@ -31,6 +31,9 @@ export * from './sections';
 // Rollup Sharing
 export * from './rollups';
 
+// Saved Views
+export * from './saved-views';
+
 // Task Views (for "new" badge)
 export * from './task-views';
 

@@ -9,7 +9,6 @@ import {
   rollupInvitations,
   boardAccess,
   teamMembers,
-  teams,
   tasks,
   taskAssignees,
   users,
@@ -780,7 +779,8 @@ export async function deleteRollupBoard(
 export async function getRollupTasks(
   rollupBoardId: string,
   filters?: TaskFilters,
-  sort?: TaskSortOptions
+  sort?: TaskSortOptions,
+  sourceBoardIdsOverride?: string[]
 ): Promise<ActionResult<{
   tasks: RollupTaskWithAssignees[];
   statusOptions: StatusOption[];
@@ -790,23 +790,46 @@ export async function getRollupTasks(
     const user = await requireAuth();
     const userIsAdmin = user.role === 'admin';
 
-    // Get the rollup board and its sources
-    const rollup = await db.query.boards.findFirst({
-      where: and(eq(boards.id, rollupBoardId), eq(boards.type, 'rollup')),
-      with: {
-        rollupSources: {
+    // Saved Views and the live builder can provide an already-authorized source set.
+    // They still pass through the per-board access check below.
+    const rollup = sourceBoardIdsOverride
+      ? {
+          id: rollupBoardId,
+          rollupSources: sourceBoardIdsOverride.length === 0
+            ? []
+            : (
+                await db.query.boards.findMany({
+                  where: and(
+                    eq(boards.type, 'standard'),
+                    inArray(boards.id, sourceBoardIdsOverride)
+                  ),
+                  with: {
+                    client: {
+                      columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
+                    },
+                  },
+                })
+              ).map((sourceBoard) => ({
+                sourceBoardId: sourceBoard.id,
+                sourceBoard,
+              })),
+        }
+      : await db.query.boards.findFirst({
+          where: and(eq(boards.id, rollupBoardId), eq(boards.type, 'rollup')),
           with: {
-            sourceBoard: {
+            rollupSources: {
               with: {
-                client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
+                sourceBoard: {
+                  with: {
+                    client: {
+                      columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
+                    },
+                  },
                 },
               },
             },
           },
-        },
-      },
-    });
+        });
 
     if (!rollup) {
       return { success: false, error: 'Rollup board not found' };
@@ -814,7 +837,7 @@ export async function getRollupTasks(
 
     // Verify user has access to this rollup (private by default)
     const isContractor = await isUserInContractorTeam(user.id);
-    if (!isContractor) {
+    if (!sourceBoardIdsOverride && !isContractor) {
       const accessibleIds = await getAccessibleRollupIds(user.id);
       if (!accessibleIds.has(rollup.id)) {
         return { success: false, error: 'You do not have access to this rollup' };
@@ -1329,6 +1352,21 @@ export async function getRollupTasks(
     console.error('getRollupTasks error:', error);
     return { success: false, error: 'Failed to get rollup tasks' };
   }
+}
+
+/** Permission-aware aggregation used by the unsaved View builder. */
+export async function getTasksForBoards(
+  sourceBoardIds: string[],
+  filters?: TaskFilters,
+  sort?: TaskSortOptions
+) {
+  if (sourceBoardIds.length === 0) {
+    return {
+      success: true as const,
+      data: { tasks: [], statusOptions: [], sectionOptions: [] },
+    };
+  }
+  return getRollupTasks('00000000-0000-0000-0000-000000000000', filters, sort, sourceBoardIds);
 }
 
 /**
