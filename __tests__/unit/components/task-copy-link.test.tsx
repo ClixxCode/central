@@ -5,8 +5,9 @@ import { TaskModal } from '@/components/tasks/TaskModal';
 import type { TaskWithAssignees } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 
-const { mockPromoteMutate } = vi.hoisted(() => ({
+const { mockPromoteMutate, mockAddAsSubtaskMutateAsync } = vi.hoisted(() => ({
   mockPromoteMutate: vi.fn(),
+  mockAddAsSubtaskMutateAsync: vi.fn(),
 }));
 
 // Mock next/navigation
@@ -46,6 +47,12 @@ vi.mock('@/lib/hooks/useTasks', () => ({
   useArchiveTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUnarchiveTask: () => ({ mutate: vi.fn(), isPending: false }),
   usePromoteSubtasks: () => ({ mutate: mockPromoteMutate, isPending: false }),
+  useParentTaskCandidates: () => ({
+    data: [{ id: 'parent-789', boardId: 'board-1', title: 'Parent Candidate', status: 'todo', section: null }],
+    isLoading: false,
+    error: null,
+  }),
+  useAddTasksAsSubtasks: () => ({ mutateAsync: mockAddAsSubtaskMutateAsync, isPending: false }),
 }));
 
 vi.mock('@/lib/hooks/useRealtimeInvalidation', () => ({
@@ -317,5 +324,42 @@ describe('TaskModal - Promote Subtask', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'Promote to task' })).not.toBeInTheDocument();
+  });
+});
+
+describe('TaskModal - Add as subtask', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAddAsSubtaskMutateAsync.mockResolvedValue({
+      success: true,
+      addedIds: ['task-123'],
+      addedCount: 1,
+      parentTaskId: 'parent-789',
+    });
+  });
+
+  it('selects a parent and attaches the same task ID', async () => {
+    const user = userEvent.setup();
+    render(<TaskModal {...defaultProps} task={mockTask} />);
+
+    await user.click(screen.getByRole('button', { name: 'Add as subtask' }));
+    expect(screen.getByText('Choose a parent task from the same board. Task details, comments, attachments, and assignees will be preserved.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Parent Candidate' }));
+    const addButtons = screen.getAllByRole('button', { name: 'Add as subtask' });
+    await user.click(addButtons.at(-1)!);
+
+    expect(mockAddAsSubtaskMutateAsync).toHaveBeenCalledWith({
+      taskIds: ['task-123'],
+      parentTaskId: 'parent-789',
+    });
+  });
+
+  it('disables the action when the task already has subtasks', () => {
+    render(<TaskModal {...defaultProps} task={{ ...mockTask, subtaskCount: 2 }} />);
+
+    const button = screen.getByRole('button', { name: 'Add as subtask' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'Tasks with subtasks cannot be added as subtasks');
   });
 });

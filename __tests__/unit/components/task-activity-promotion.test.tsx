@@ -25,6 +25,25 @@ vi.mock('@/lib/hooks', () => ({
           avatarUrl: null,
         },
       },
+      {
+        id: 'activity-2',
+        boardId: 'board-1',
+        taskId: 'task-1',
+        taskTitle: 'Demoted Task',
+        userId: 'user-1',
+        action: 'task_added_as_subtask',
+        metadata: {
+          parentTaskId: 'parent-2',
+          parentTaskTitle: 'New Parent',
+        },
+        createdAt: new Date(),
+        user: {
+          id: 'user-1',
+          name: 'Alex Smith',
+          email: 'alex@example.com',
+          avatarUrl: null,
+        },
+      },
     ],
   }),
 }));
@@ -35,6 +54,14 @@ describe('TaskActivityLog promotion activity', () => {
 
     expect(
       screen.getByText('Alex Smith promoted this subtask to a task from Former Parent')
+    ).toBeInTheDocument();
+  });
+
+  it('renders the new parent context for demotion', () => {
+    render(<TaskActivityLog taskId="task-1" />);
+
+    expect(
+      screen.getByText('Alex Smith added this task as a subtask of New Parent')
     ).toBeInTheDocument();
   });
 });

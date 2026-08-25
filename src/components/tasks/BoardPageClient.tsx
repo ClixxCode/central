@@ -22,6 +22,7 @@ import { TaskModal } from './TaskModal';
 import { MultiSelectFloatingBar, type BulkEditPayload } from './MultiSelectFloatingBar';
 import { SubtaskOnlyFloatingBar } from './SubtaskOnlyFloatingBar';
 import { MoveTasksDialog } from './MoveTasksDialog';
+import { AddAsSubtaskDialog } from './AddAsSubtaskDialog';
 import { useBoardViewStore, type GroupBy } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
 import {
@@ -41,6 +42,7 @@ import { useRealtimeInvalidation } from '@/lib/hooks/useRealtimeInvalidation';
 import type { TaskFilters, TaskSortOptions, CreateTaskInput } from '@/lib/actions/tasks';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import { trackEvent } from '@/lib/analytics';
+import { getAddAsSubtaskBlockReason } from '@/lib/utils/task-hierarchy';
 
 interface BoardPageClientProps {
   boardId: string;
@@ -142,6 +144,7 @@ export function BoardPageClient({
     open: boolean;
     payload: BulkEditPayload | null;
   }>({ open: false, payload: null });
+  const [addAsSubtaskOpen, setAddAsSubtaskOpen] = React.useState(false);
 
   const clearSelection = React.useCallback(() => {
     setSelectedTaskIds(new Set());
@@ -243,6 +246,16 @@ export function BoardPageClient({
   const selectedSubtaskCount = React.useMemo(
     () => tasks.filter((task) => selectedTaskIds.has(task.id) && !!task.parentTaskId).length,
     [tasks, selectedTaskIds]
+  );
+  const selectedTasks = React.useMemo(
+    () => tasks.filter((task) => selectedTaskIds.has(task.id)),
+    [tasks, selectedTaskIds]
+  );
+  const addAsSubtaskDisabledReason = React.useMemo(
+    () => selectedTasks.length !== selectedTaskIds.size
+      ? 'One or more selected tasks are no longer available'
+      : getAddAsSubtaskBlockReason(selectedTasks),
+    [selectedTasks, selectedTaskIds.size]
   );
 
   // Handle remove all assignees
@@ -600,6 +613,7 @@ export function BoardPageClient({
           onApply={handleBulkApply}
           onDuplicate={handleBulkDuplicate}
           onPromote={handlePromoteSubtasks}
+          onAddAsSubtask={() => setAddAsSubtaskOpen(true)}
           onDelete={handleBulkDelete}
           onRemoveAllAssignees={handleRemoveAllAssignees}
           onCancel={clearSelection}
@@ -609,6 +623,7 @@ export function BoardPageClient({
           isDeleting={bulkDelete.isPending}
           selectedTasksHaveAssignees={selectedTasksHaveAssignees}
           selectedSubtaskCount={selectedSubtaskCount}
+          addAsSubtaskDisabledReason={addAsSubtaskDisabledReason}
         />
       )}
       {isSubtaskOnlyMode && !isMultiSelectMode && (
@@ -624,6 +639,12 @@ export function BoardPageClient({
         taskCount={selectedTaskIds.size}
         targetBoardName={moveDialog.payload?.targetBoardName ?? ''}
         onConfirm={handleConfirmMove}
+      />
+      <AddAsSubtaskDialog
+        open={addAsSubtaskOpen}
+        onOpenChange={setAddAsSubtaskOpen}
+        taskIds={Array.from(selectedTaskIds)}
+        onAdded={clearSelection}
       />
     </div>
   );

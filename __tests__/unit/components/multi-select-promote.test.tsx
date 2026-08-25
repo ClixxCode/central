@@ -23,6 +23,7 @@ function renderBar(overrides: Partial<ComponentProps<typeof MultiSelectFloatingB
     onApply: vi.fn(),
     onDuplicate: vi.fn(),
     onPromote: vi.fn(),
+    onAddAsSubtask: vi.fn(),
     onDelete: vi.fn(),
     onRemoveAllAssignees: vi.fn(),
     onCancel: vi.fn(),
@@ -37,6 +38,29 @@ function renderBar(overrides: Partial<ComponentProps<typeof MultiSelectFloatingB
   const view = render(<MultiSelectFloatingBar {...props} />);
   return { props, ...view };
 }
+
+describe('MultiSelectFloatingBar add as subtask', () => {
+  it('calls the parent picker callback for an eligible selection', async () => {
+    const onAddAsSubtask = vi.fn();
+    const user = userEvent.setup();
+    renderBar({ selectedCount: 2, selectedSubtaskCount: 0, onAddAsSubtask });
+
+    await user.click(screen.getByRole('button', { name: 'Add as subtask' }));
+    expect(onAddAsSubtask).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the eligibility reason and disables the action', () => {
+    renderBar({
+      selectedCount: 1,
+      selectedSubtaskCount: 0,
+      addAsSubtaskDisabledReason: 'Tasks with subtasks cannot be added as subtasks',
+    });
+
+    const button = screen.getByRole('button', { name: 'Add as subtask' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'Tasks with subtasks cannot be added as subtasks');
+  });
+});
 
 describe('MultiSelectFloatingBar promotion', () => {
   it('only shows Promote when at least one selected item is a subtask', () => {

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
-import { ArrowUpFromLine, Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy, Trash2 } from 'lucide-react';
+import { ArrowUpFromLine, Building2, CalendarIcon, CircleDot, User, FolderOpen, X, Copy, Trash2, CornerDownRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -44,6 +44,7 @@ interface MultiSelectFloatingBarProps {
   onApply: (updates: BulkEditPayload) => void;
   onDuplicate: () => void;
   onPromote: () => void;
+  onAddAsSubtask: () => void;
   onDelete: () => void;
   onRemoveAllAssignees: () => void;
   onCancel: () => void;
@@ -53,6 +54,7 @@ interface MultiSelectFloatingBarProps {
   isDeleting: boolean;
   selectedTasksHaveAssignees: boolean;
   selectedSubtaskCount: number;
+  addAsSubtaskDisabledReason?: string | null;
   bottomOffset?: string;
 }
 
@@ -65,6 +67,7 @@ export function MultiSelectFloatingBar({
   onApply,
   onDuplicate,
   onPromote,
+  onAddAsSubtask,
   onDelete,
   onRemoveAllAssignees,
   onCancel,
@@ -74,6 +77,7 @@ export function MultiSelectFloatingBar({
   isDeleting,
   selectedTasksHaveAssignees,
   selectedSubtaskCount,
+  addAsSubtaskDisabledReason,
   bottomOffset,
 }: MultiSelectFloatingBarProps) {
   const ignoreWeekends = useIgnoreWeekends();
@@ -587,6 +591,19 @@ export function MultiSelectFloatingBar({
             </AlertDialogContent>
           </AlertDialog>
         )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          onClick={onAddAsSubtask}
+          disabled={!!addAsSubtaskDisabledReason}
+          title={addAsSubtaskDisabledReason ?? undefined}
+          className="gap-1 text-xs h-8 px-2"
+        >
+          <CornerDownRight className="h-3.5 w-3.5" />
+          Add as subtask
+        </Button>
 
         {/* Duplicate */}
         <AlertDialog>

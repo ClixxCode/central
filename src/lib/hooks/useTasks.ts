@@ -6,6 +6,8 @@ import {
   listTasks,
   listSubtasks,
   promoteSubtasks,
+  listParentTaskCandidates,
+  addTasksAsSubtasks,
   getTask,
   createTask,
   updateTask,
@@ -27,6 +29,7 @@ import {
   MyTasksByClient,
   ArchivedTaskSummary,
   BulkUpdateTasksInput,
+  ParentTaskCandidate,
 } from '@/lib/actions/tasks';
 import posthog from 'posthog-js';
 import { trackEvent } from '@/lib/analytics';
@@ -52,6 +55,8 @@ export const taskKeys = {
     [...taskKeys.all, 'subtasks', parentTaskId] as const,
   archivedTasks: (boardId: string) =>
     [...taskKeys.all, 'archived', boardId] as const,
+  parentCandidates: (taskIds: string[], search: string) =>
+    [...taskKeys.all, 'parentCandidates', [...taskIds].sort(), search] as const,
 };
 
 /**
@@ -655,6 +660,60 @@ export function usePromoteSubtasks() {
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to promote subtasks');
+    },
+  });
+}
+
+/** Fetch eligible parent tasks for one or more top-level tasks. */
+export function useParentTaskCandidates(
+  taskIds: string[],
+  search: string,
+  options?: { enabled?: boolean }
+) {
+  return useQuery<ParentTaskCandidate[]>({
+    queryKey: taskKeys.parentCandidates(taskIds, search),
+    queryFn: async () => {
+      const result = await listParentTaskCandidates(taskIds, search);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to load parent tasks');
+      }
+      return result.candidates;
+    },
+    enabled: (options?.enabled ?? true) && taskIds.length > 0,
+  });
+}
+
+/** Attach existing top-level tasks to a parent and refresh hierarchy caches. */
+export function useAddTasksAsSubtasks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ taskIds, parentTaskId }: { taskIds: string[]; parentTaskId: string }) => {
+      const result = await addTasksAsSubtasks(taskIds, parentTaskId);
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to add tasks as subtasks');
+      }
+      return result;
+    },
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: taskKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: taskKeys.details() }),
+        queryClient.invalidateQueries({ queryKey: [...taskKeys.all, 'subtasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['myTasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['rollups', 'tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['saved-views'] }),
+        queryClient.invalidateQueries({ queryKey: ['board-activity'] }),
+        queryClient.invalidateQueries({ queryKey: ['task-activity'] }),
+      ]);
+      toast.success(
+        result.addedCount === 1
+          ? 'Added 1 task as a subtask'
+          : `Added ${result.addedCount} tasks as subtasks`
+      );
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to add tasks as subtasks');
     },
   });
 }
