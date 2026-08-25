@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { getActorOverride } from './actor-context';
 
 export type SessionUser = {
   id: string;
@@ -26,6 +27,9 @@ export const getSession = cache(async () => {
  * Used by impersonation actions to verify the real user is admin.
  */
 export async function getRealUser(): Promise<SessionUser | null> {
+  const actor = getActorOverride();
+  if (actor) return actor;
+
   const session = await getSession();
 
   if (!session?.user) {
@@ -46,6 +50,9 @@ export async function getRealUser(): Promise<SessionUser | null> {
  * If impersonation cookie is set and real user is admin, returns the impersonated user.
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
+  const actor = getActorOverride();
+  if (actor) return actor;
+
   const realUser = await getRealUser();
   if (!realUser) return null;
 

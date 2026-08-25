@@ -54,6 +54,9 @@ export * from './templates';
 // Extension Tokens
 export * from './extension-tokens';
 
+// OAuth / MCP
+export * from './oauth';
+
 // Front Conversations
 export * from './front';
 
