@@ -12,6 +12,19 @@ import { OAuthRequestError } from './http';
 
 const CIMD_MAX_BYTES = 64 * 1024;
 const CIMD_CACHE_MS = 10 * 60 * 1000;
+const UNSAFE_NATIVE_REDIRECT_PROTOCOLS = new Set([
+  'about:',
+  'blob:',
+  'data:',
+  'file:',
+  'ftp:',
+  'javascript:',
+  'mailto:',
+  'tel:',
+  'urn:',
+  'ws:',
+  'wss:',
+]);
 
 export interface ResolvedOAuthClient {
   clientId: string;
@@ -80,7 +93,7 @@ async function assertPublicHttpsUrl(raw: string, field: string): Promise<URL> {
   return url;
 }
 
-export function validateRedirectUri(raw: string): string {
+export function validateRedirectUri(raw: string, applicationType = 'web'): string {
   if (raw.length > 2048) {
     throw new OAuthRequestError('invalid_redirect_uri', 'redirect_uri must be at most 2048 characters');
   }
@@ -93,22 +106,30 @@ export function validateRedirectUri(raw: string): string {
   const loopback =
     url.protocol === 'http:' &&
     (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]');
+  const privateUseScheme =
+    applicationType === 'native' &&
+    url.protocol !== 'http:' &&
+    url.protocol !== 'https:' &&
+    !UNSAFE_NATIVE_REDIRECT_PROTOCOLS.has(url.protocol);
   if (url.username || url.password || url.hash) {
     throw new OAuthRequestError(
       'invalid_redirect_uri',
       'redirect_uri must not contain credentials or a fragment'
     );
   }
-  if (url.protocol !== 'https:' && !loopback) {
+  if (url.protocol !== 'https:' && !loopback && !privateUseScheme) {
     throw new OAuthRequestError(
       'invalid_redirect_uri',
-      'redirect_uri must use HTTPS or an HTTP localhost loopback address'
+      'redirect_uri must use HTTPS, an HTTP localhost loopback address, or a private-use URI scheme for a native client'
     );
   }
   return url.toString();
 }
 
-function parseMetadata(clientId: string, value: Record<string, unknown>): ResolvedOAuthClient {
+export function parseOAuthClientMetadata(
+  clientId: string,
+  value: Record<string, unknown>
+): ResolvedOAuthClient {
   if (value.client_id !== clientId) {
     throw new OAuthRequestError('invalid_client_metadata', 'Metadata client_id must exactly match its URL');
   }
@@ -118,11 +139,28 @@ function parseMetadata(clientId: string, value: Record<string, unknown>): Resolv
   if (!Array.isArray(value.redirect_uris) || value.redirect_uris.length === 0) {
     throw new OAuthRequestError('invalid_client_metadata', 'redirect_uris must be a non-empty array');
   }
+  const applicationType =
+    typeof value.application_type === 'string'
+      ? value.application_type
+      : value.redirect_uris.some((uri) => {
+          if (typeof uri !== 'string') return false;
+          try {
+            const protocol = new URL(uri).protocol;
+            return protocol !== 'http:' && protocol !== 'https:';
+          } catch {
+            return false;
+          }
+        })
+        ? 'native'
+        : 'web';
+  if (!['web', 'native'].includes(applicationType)) {
+    throw new OAuthRequestError('invalid_client_metadata', 'application_type must be web or native');
+  }
   const redirectUris = value.redirect_uris.map((uri) => {
     if (typeof uri !== 'string') {
       throw new OAuthRequestError('invalid_client_metadata', 'redirect_uris must contain strings');
     }
-    return validateRedirectUri(uri);
+    return validateRedirectUri(uri, applicationType);
   });
   const grantTypes = Array.isArray(value.grant_types)
     ? value.grant_types.filter((item): item is string => typeof item === 'string')
@@ -141,11 +179,6 @@ function parseMetadata(clientId: string, value: Record<string, unknown>): Resolv
     : ['code'];
   if (responseTypes.length !== 1 || responseTypes[0] !== 'code') {
     throw new OAuthRequestError('invalid_client_metadata', 'Client metadata must use response_type code');
-  }
-  const applicationType =
-    typeof value.application_type === 'string' ? value.application_type : 'web';
-  if (!['web', 'native'].includes(applicationType)) {
-    throw new OAuthRequestError('invalid_client_metadata', 'application_type must be web or native');
   }
   return {
     clientId,
@@ -169,7 +202,7 @@ async function fetchClientMetadata(clientId: string): Promise<ResolvedOAuthClien
       gt(oauthClientMetadataCache.expiresAt, new Date())
     ),
   });
-  if (cached) return parseMetadata(clientId, cached.document);
+  if (cached) return parseOAuthClientMetadata(clientId, cached.document);
 
   const url = await assertPublicHttpsUrl(clientId, 'client_id');
   const controller = new AbortController();
@@ -197,7 +230,7 @@ async function fetchClientMetadata(clientId: string): Promise<ResolvedOAuthClien
     } catch {
       throw new OAuthRequestError('invalid_client_metadata', 'Client metadata document is not valid JSON');
     }
-    const client = parseMetadata(clientId, document);
+    const client = parseOAuthClientMetadata(clientId, document);
     await db
       .insert(oauthClientMetadataCache)
       .values({ clientId, document, expiresAt: new Date(Date.now() + CIMD_CACHE_MS) })
@@ -283,10 +316,13 @@ export async function registerOAuthClient(input: RegisterOAuthClientInput) {
   if (input.redirectUris.length === 0 || input.redirectUris.length > 10) {
     throw new OAuthRequestError('invalid_client_metadata', 'Provide between one and ten redirect URIs');
   }
-  if (!['web', 'native'].includes(input.applicationType ?? 'web')) {
+  const applicationType = input.applicationType ?? 'web';
+  if (!['web', 'native'].includes(applicationType)) {
     throw new OAuthRequestError('invalid_client_metadata', 'application_type must be web or native');
   }
-  const redirectUris = [...new Set(input.redirectUris.map(validateRedirectUri))];
+  const redirectUris = [
+    ...new Set(input.redirectUris.map((uri) => validateRedirectUri(uri, applicationType))),
+  ];
   const clientId = randomOpaqueToken('central_client_');
   const clientSecret =
     input.tokenEndpointAuthMethod === 'none' ? undefined : randomOpaqueToken('central_secret_');
@@ -301,7 +337,7 @@ export async function registerOAuthClient(input: RegisterOAuthClientInput) {
     grantTypes: ['authorization_code', 'refresh_token'],
     responseTypes: ['code'],
     tokenEndpointAuthMethod: input.tokenEndpointAuthMethod,
-    applicationType: input.applicationType ?? 'web',
+    applicationType,
     registrationType: input.registrationType,
     createdBy: input.createdBy,
   });

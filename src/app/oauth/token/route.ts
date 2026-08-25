@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       if (typeof code !== 'string' || typeof redirectUri !== 'string' || typeof codeVerifier !== 'string') {
         throw new OAuthRequestError('invalid_request', 'code, redirect_uri, and code_verifier are required');
       }
-      const normalizedRedirectUri = validateRedirectUri(redirectUri);
+      const normalizedRedirectUri = validateRedirectUri(redirectUri, client.applicationType);
       if (!client.redirectUris.includes(normalizedRedirectUri)) {
         throw new OAuthRequestError('invalid_grant', 'redirect_uri is not registered for this client');
       }

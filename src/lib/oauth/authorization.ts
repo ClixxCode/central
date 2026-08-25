@@ -31,7 +31,10 @@ export function parseAuthorizationRequest(
     throw new OAuthRequestError('invalid_request', 'Only response_mode=query is supported');
   }
   const redirectUri = searchParams.get('redirect_uri');
-  if (!redirectUri || !client.redirectUris.includes(validateRedirectUri(redirectUri))) {
+  if (
+    !redirectUri ||
+    !client.redirectUris.includes(validateRedirectUri(redirectUri, client.applicationType))
+  ) {
     throw new OAuthRequestError('invalid_request', 'redirect_uri is not registered for this client');
   }
   const codeChallenge = searchParams.get('code_challenge');
@@ -56,7 +59,7 @@ export function parseAuthorizationRequest(
   }
   return {
     clientId,
-    redirectUri: validateRedirectUri(redirectUri),
+    redirectUri: validateRedirectUri(redirectUri, client.applicationType),
     scopes: parseScopes(searchParams.get('scope')),
     resource,
     state: state ?? undefined,

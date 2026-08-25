@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll } from 'vitest';
 import { base64UrlSha256, signTransaction, verifyPkce, verifyTransaction } from '@/lib/oauth/crypto';
 import { parseScopes } from '@/lib/oauth/http';
-import { validateRedirectUri } from '@/lib/oauth/clients';
+import { parseOAuthClientMetadata, validateRedirectUri } from '@/lib/oauth/clients';
 import { clientCredentialsFromRequest } from '@/lib/oauth/client-auth';
 import { textToTiptap, tiptapToText } from '@/lib/mcp/text';
 
@@ -32,15 +32,41 @@ describe('OAuth core security helpers', () => {
     expect(() => parseScopes('central:admin')).toThrow(/Only central:read/);
   });
 
-  it('allows HTTPS and loopback redirects but rejects unsafe HTTP redirects', () => {
+  it('allows HTTPS, loopback, and native app redirects while rejecting unsafe redirects', () => {
     expect(validateRedirectUri('https://claude.ai/api/mcp/auth_callback')).toBe(
       'https://claude.ai/api/mcp/auth_callback'
     );
     expect(validateRedirectUri('http://127.0.0.1:3456/callback')).toBe(
       'http://127.0.0.1:3456/callback'
     );
+    expect(validateRedirectUri('com.raycast:/oauth', 'native')).toBe('com.raycast:/oauth');
+    expect(validateRedirectUri('raycast://mcp-oauth-callback', 'native')).toBe(
+      'raycast://mcp-oauth-callback'
+    );
+    expect(() => validateRedirectUri('com.raycast:/oauth')).toThrow(/native client/);
     expect(() => validateRedirectUri('http://example.com/callback')).toThrow(/HTTPS/);
+    expect(() => validateRedirectUri('javascript:alert(1)', 'native')).toThrow(/private-use/);
     expect(() => validateRedirectUri('https://user:pass@example.com/callback')).toThrow(/credentials/);
+  });
+
+  it('infers Raycast client metadata as native when application_type is omitted', () => {
+    const clientId = 'https://www.raycast.com/.well-known/oauth-client-metadata/raycast.json';
+    const client = parseOAuthClientMetadata(clientId, {
+      client_id: clientId,
+      client_name: 'Raycast',
+      grant_types: ['authorization_code', 'refresh_token'],
+      redirect_uris: [
+        'com.raycast.development:/oauth',
+        'com.raycast:/oauth',
+        'raycast://mcp-oauth-callback',
+        'http://127.0.0.1/callback',
+      ],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+    });
+
+    expect(client.applicationType).toBe('native');
+    expect(client.redirectUris).toContain('com.raycast:/oauth');
   });
 
   it('distinguishes public, basic-auth, and form-secret clients', () => {
