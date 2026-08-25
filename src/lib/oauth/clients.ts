@@ -162,13 +162,13 @@ export function parseOAuthClientMetadata(
     }
     return validateRedirectUri(uri, applicationType);
   });
-  const grantTypes = Array.isArray(value.grant_types)
+  const declaredGrantTypes = Array.isArray(value.grant_types)
     ? value.grant_types.filter((item): item is string => typeof item === 'string')
     : ['authorization_code', 'refresh_token'];
-  if (
-    !grantTypes.includes('authorization_code') ||
-    grantTypes.some((value) => !['authorization_code', 'refresh_token'].includes(value))
-  ) {
+  const grantTypes = declaredGrantTypes.filter((grantType) =>
+    ['authorization_code', 'refresh_token'].includes(grantType)
+  );
+  if (!grantTypes.includes('authorization_code')) {
     throw new OAuthRequestError(
       'invalid_client_metadata',
       'Client metadata must support the authorization_code grant'

@@ -69,6 +69,41 @@ describe('OAuth core security helpers', () => {
     expect(client.redirectUris).toContain('com.raycast:/oauth');
   });
 
+  it('accepts Claude client metadata while ignoring unsupported grant types', () => {
+    const clientId = 'https://claude.ai/oauth/mcp-oauth-client-metadata';
+    const client = parseOAuthClientMetadata(clientId, {
+      client_id: clientId,
+      client_name: 'Claude',
+      client_uri: 'https://claude.ai/',
+      redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+      grant_types: [
+        'authorization_code',
+        'refresh_token',
+        'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      ],
+      response_types: ['code'],
+      token_endpoint_auth_method: 'none',
+    });
+
+    expect(client.grantTypes).toEqual(['authorization_code', 'refresh_token']);
+    expect(client.responseTypes).toEqual(['code']);
+    expect(client.redirectUris).toEqual(['https://claude.ai/api/mcp/auth_callback']);
+  });
+
+  it('rejects client metadata that cannot use the authorization code flow', () => {
+    const clientId = 'https://client.example.com/oauth/metadata.json';
+
+    expect(() =>
+      parseOAuthClientMetadata(clientId, {
+        client_id: clientId,
+        client_name: 'Unsupported client',
+        redirect_uris: ['https://client.example.com/oauth/callback'],
+        grant_types: ['urn:ietf:params:oauth:grant-type:jwt-bearer'],
+        response_types: ['code'],
+      })
+    ).toThrow(/authorization_code/);
+  });
+
   it('distinguishes public, basic-auth, and form-secret clients', () => {
     const publicForm = new FormData();
     publicForm.set('client_id', 'public-client');
