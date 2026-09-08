@@ -13,9 +13,10 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer } from 'lucide-react';
+import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AssigneeAvatars } from '@/components/tasks/AssigneePicker';
 import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useAgenticBuilds, useBuildableClients, useSetBuildStage } from '@/lib/hooks';
@@ -29,6 +30,7 @@ import {
   BETA_GATE_BEFORE_STAGE_ID,
   BETA_GATE_LABEL,
   type BuildStage,
+  type StageInfo,
 } from '@/lib/builds/stages';
 import type { AgenticBuild } from '@/lib/actions/builds';
 
@@ -199,6 +201,63 @@ function DraggableBuildCard({ build, onEdit }: { build: AgenticBuild; onEdit?: (
   );
 }
 
+/** ℹ️ popover on a column header explaining what the stage means + its
+ *  components. Content is column-level, so Complete lists every launch path. */
+function StageInfoPopover({ label, info }: { label: string; info: StageInfo }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+          aria-label={`What "${label}" means`}
+          title={`What "${label}" means`}
+        >
+          <Info className="size-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 space-y-3 text-xs">
+        <div>
+          <p className="text-sm font-semibold">{label}</p>
+          <p className="mt-0.5 text-muted-foreground">{info.definition}</p>
+        </div>
+
+        {info.launchPaths && info.launchPaths.length > 0 && (
+          <div>
+            <p className="mb-1 font-medium">Production launch — by project type</p>
+            <ul className="space-y-1">
+              {info.launchPaths.map((p) => (
+                <li key={p.type} className="text-muted-foreground">
+                  <span className="font-medium text-foreground">{p.type}:</span> {p.step}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div>
+          <p className="mb-1 font-medium">{info.launchPaths ? 'Also includes' : 'Includes'}</p>
+          <ul className="space-y-1">
+            {info.components.map((c) => (
+              <li key={c} className="flex gap-1.5 text-muted-foreground">
+                <span className="mt-0.5 shrink-0" style={{ color: BUILD_ACCENT_COLOR }}>
+                  •
+                </span>
+                <span>{c}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="border-t pt-2">
+          <span className="font-medium">Done when: </span>
+          <span className="text-muted-foreground">{info.doneWhen}</span>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function StageColumn({
   stage,
   builds,
@@ -215,6 +274,11 @@ function StageColumn({
         <span className="size-2.5 rounded-full" style={{ backgroundColor: stage.color }} />
         <h3 className="text-sm font-semibold">{stage.label}</h3>
         <span className="text-xs text-muted-foreground">{builds.length}</span>
+        {stage.info && (
+          <span className="ml-auto">
+            <StageInfoPopover label={stage.label} info={stage.info} />
+          </span>
+        )}
       </div>
       <div
         ref={setNodeRef}
