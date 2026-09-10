@@ -29,6 +29,9 @@ export interface AgenticBuild {
   projectValue: number | null;
   commencementDate: string | null;
   completedAt: string | null;
+  /** Set when the build was manually marked "shown to the client" for beta
+   *  review (ISO). Null = not yet shown. */
+  clientShownAt: string | null;
   /** Computed durations (ms). See computeTiming. */
   timing: BuildTiming;
   assignees: {
@@ -145,6 +148,7 @@ export async function listAgenticBuilds(): Promise<ActionResult<AgenticBuild[]>>
         projectValue: tasks.projectValue,
         commencementDate: tasks.commencementDate,
         completedAt: tasks.completedAt,
+        clientShownAt: tasks.clientShownAt,
       })
       .from(tasks)
       .innerJoin(boards, eq(boards.id, tasks.boardId))
@@ -209,6 +213,7 @@ export async function listAgenticBuilds(): Promise<ActionResult<AgenticBuild[]>>
       projectValue: r.projectValue != null ? Number(r.projectValue) : null,
       commencementDate: r.commencementDate,
       completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+      clientShownAt: r.clientShownAt ? r.clientShownAt.toISOString() : null,
       timing: computeTiming(eventsByTask.get(r.id) ?? [], r.commencementDate, r.completedAt, now),
       assignees: byTask.get(r.id) ?? [],
     }));
@@ -378,6 +383,9 @@ export interface UpdateBuildInput {
   projectValue?: number | null;
   commencementDate?: string | null;
   dueDate?: string | null;
+  /** ISO date/timestamp when shown to the client, or null to clear. Only applied
+   *  when the key is present. */
+  clientShownAt?: string | null;
   assigneeIds?: string[];
 }
 
@@ -398,6 +406,9 @@ export async function updateAgenticBuild(taskId: string, input: UpdateBuildInput
     if ('buildType' in input) set.buildType = input.buildType ?? null;
     if ('commencementDate' in input) set.commencementDate = input.commencementDate ?? null;
     if ('dueDate' in input) set.dueDate = input.dueDate ?? null;
+    if ('clientShownAt' in input) {
+      set.clientShownAt = input.clientShownAt ? new Date(input.clientShownAt) : null;
+    }
 
     // Project value follows the (new or existing) build type: only fee types keep it.
     const nextType = ('buildType' in input ? input.buildType : current.buildType) ?? null;

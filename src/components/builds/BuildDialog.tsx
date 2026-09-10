@@ -34,6 +34,11 @@ type Props =
 const selectCls =
   'h-9 w-full rounded-md border border-input bg-background px-3 text-sm';
 
+/** Today as 'YYYY-MM-DD' (UTC). */
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 /** Add whole months to a 'YYYY-MM-DD' string (empty/invalid → ''). */
 function addMonths(date: string, months: number): string {
   if (!date) return '';
@@ -58,6 +63,9 @@ export function BuildDialog(props: Props) {
   // linger. Defaults to commencement + 3 months until the user edits it.
   const [targetEndDate, setTargetEndDate] = React.useState('');
   const [targetTouched, setTargetTouched] = React.useState(false);
+  // "Shown to client" beta-review marker. Non-null date = shown.
+  const [shownToClient, setShownToClient] = React.useState(false);
+  const [shownDate, setShownDate] = React.useState('');
 
   // Seed the form each time it opens.
   React.useEffect(() => {
@@ -72,6 +80,8 @@ export function BuildDialog(props: Props) {
       setTargetEndDate(b.dueDate ?? '');
       // An existing target is treated as user-set — don't auto-recompute it.
       setTargetTouched(!!b.dueDate);
+      setShownToClient(!!b.clientShownAt);
+      setShownDate(b.clientShownAt ? b.clientShownAt.slice(0, 10) : todayStr());
     } else {
       setClientId('');
       setTitle('');
@@ -81,6 +91,8 @@ export function BuildDialog(props: Props) {
       setCommencementDate('');
       setTargetEndDate('');
       setTargetTouched(false);
+      setShownToClient(false);
+      setShownDate(todayStr());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -130,6 +142,7 @@ export function BuildDialog(props: Props) {
             projectValue: feeRequired ? valueNum : null,
             commencementDate: commencementDate || null,
             dueDate: targetEndDate || null,
+            clientShownAt: shownToClient ? shownDate || todayStr() : null,
           },
         },
         { onSuccess: () => onOpenChange(false) }
@@ -236,6 +249,36 @@ export function BuildDialog(props: Props) {
                 onChange={(e) => setProjectValue(e.target.value)}
                 placeholder="e.g. 8400"
               />
+            </div>
+          )}
+
+          {mode === 'edit' && (
+            <div className="rounded-md border bg-muted/30 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={shownToClient}
+                  onChange={(e) => {
+                    setShownToClient(e.target.checked);
+                    if (e.target.checked && !shownDate) setShownDate(todayStr());
+                  }}
+                />
+                Shown to client (beta review)
+              </label>
+              {shownToClient && (
+                <div className="mt-2">
+                  <label className="mb-1 block text-xs text-muted-foreground">Date shown</label>
+                  <Input
+                    type="date"
+                    value={shownDate}
+                    onChange={(e) => setShownDate(e.target.value)}
+                  />
+                </div>
+              )}
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Marks that the build has been put in front of the client, independent of stage.
+              </p>
             </div>
           )}
 

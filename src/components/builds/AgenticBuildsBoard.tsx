@@ -13,7 +13,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer, Info } from 'lucide-react';
+import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer, Info, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -166,6 +166,15 @@ function BuildCard({
                 >
                   <Calendar className="size-3" />
                   {build.dueDate}
+                </span>
+              )}
+              {build.clientShownAt && (
+                <span
+                  className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400"
+                  title={`Shown to client for beta review: ${build.clientShownAt.slice(0, 10)}`}
+                >
+                  <Eye className="size-3" />
+                  Shown {build.clientShownAt.slice(0, 10)}
                 </span>
               )}
               {href && (

@@ -85,6 +85,10 @@ export const tasks = pgTable('tasks', {
   commencementDate: date('commencement_date'),
   // Set when the build reaches the Complete stage — stops the timer.
   completedAt: timestamp('completed_at'),
+  // Set when a build has been shown to the client for beta review (manual toggle
+  // on the Agentic Builds board, independent of stage). Non-null = shown; the
+  // date drives the card badge and doubles as a beta-review timing datapoint.
+  clientShownAt: timestamp('client_shown_at'),
   position: integer('position').notNull().default(0),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
