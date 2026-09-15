@@ -19,6 +19,7 @@ import {
 } from '@/lib/db/schema';
 import type { StatusOption, SectionOption, TiptapContent, RecurringConfig, RollupRule, AccountTeamMember } from '@/lib/db/schema';
 import { eq, and, or, inArray, notInArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
+import { filterActiveRollupSources } from '@/lib/rollups/active-sources';
 import { getCurrentUser, requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { reconcileRollup } from '@/lib/rollups/reconcile';
@@ -822,10 +823,17 @@ export async function getRollupTasks(
       }
     }
 
+    // Rollups show LIVE client work only. A terminated account's board is
+    // dropped here, before access checks and before the task query, so every
+    // downstream derivation (source ids, status/section label maps, the group
+    // the view builds from the returned tasks) follows from one decision
+    // rather than each re-deciding.
+    const activeSources = filterActiveRollupSources(rollup.rollupSources);
+
     // Verify access to all source boards
     const accessLevels = new Map<string, AccessLevel>();
 
-    for (const source of rollup.rollupSources) {
+    for (const source of activeSources) {
       const level = await getBoardAccessLevel(
         user.id,
         source.sourceBoardId,
@@ -840,7 +848,7 @@ export async function getRollupTasks(
       accessLevels.set(source.sourceBoardId, level);
     }
 
-    if (rollup.rollupSources.length === 0) {
+    if (activeSources.length === 0) {
       return {
         success: true,
         data: {
@@ -851,7 +859,7 @@ export async function getRollupTasks(
       };
     }
 
-    const sourceBoardIds = rollup.rollupSources.map((s) => s.sourceBoardId);
+    const sourceBoardIds = activeSources.map((s) => s.sourceBoardId);
 
     // Build task query conditions — exclude subtasks and archived tasks from rollup views
     const conditions = buildActiveRollupTaskConditions(sourceBoardIds);
@@ -862,7 +870,7 @@ export async function getRollupTasks(
     const labelToStatusIds = new Map<string, string[]>();
     const sectionIdToLabel = new Map<string, string>();
     const labelToSectionIds = new Map<string, string[]>();
-    for (const source of rollup.rollupSources) {
+    for (const source of activeSources) {
       const sourceBoard = source.sourceBoard as { statusOptions?: StatusOption[]; sectionOptions?: SectionOption[] };
       for (const status of sourceBoard?.statusOptions ?? []) {
         statusIdToLabel.set(status.id, status.label);
@@ -966,7 +974,7 @@ export async function getRollupTasks(
     if (filters?.overdue) {
       const { data: siteSettingsData } = await getSiteSettings();
       const todayStr = getOrgToday(siteSettingsData?.timezone);
-      const allStatusOptions = rollup.rollupSources.flatMap(
+      const allStatusOptions = activeSources.flatMap(
         (s) => (s.sourceBoard as { statusOptions?: StatusOption[] }).statusOptions ?? []
       );
       const doneStatusIds = allStatusOptions
@@ -1142,7 +1150,7 @@ export async function getRollupTasks(
     }
 
     // Get completed subtask counts — collect all status options across source boards
-    const allBoardStatusOptions = rollup.rollupSources.flatMap(
+    const allBoardStatusOptions = activeSources.flatMap(
       (s) => (s.sourceBoard as { statusOptions?: StatusOption[] }).statusOptions ?? []
     );
     const completeStatusIds = allBoardStatusOptions
@@ -1180,7 +1188,7 @@ export async function getRollupTasks(
 
     // Build source board lookup
     const boardLookup = new Map(
-      rollup.rollupSources.map((s) => [
+      activeSources.map((s) => [
         s.sourceBoardId,
         {
           boardName: s.sourceBoard.name,
@@ -1282,7 +1290,7 @@ export async function getRollupTasks(
     const canonicalStatusId = new Map<string, string>();
     const canonicalSectionId = new Map<string, string>();
 
-    for (const source of rollup.rollupSources) {
+    for (const source of activeSources) {
       const sourceBoard = source.sourceBoard as { statusOptions?: StatusOption[]; sectionOptions?: SectionOption[] };
 
       if (sourceBoard) {
