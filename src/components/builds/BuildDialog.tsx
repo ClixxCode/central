@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -29,6 +30,8 @@ type Props =
       onOpenChange: (o: boolean) => void;
       build: AgenticBuild;
       clients?: undefined;
+      /** Hands the build off to the archive flow (reason picker lives there). */
+      onArchive?: (b: AgenticBuild) => void;
     };
 
 const selectCls =
@@ -285,13 +288,31 @@ export function BuildDialog(props: Props) {
           {mode === 'edit' && <TimingBreakdown build={props.build} />}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
+          {mode === 'edit' && props.onArchive ? (
+            <Button
+              variant="ghost"
+              className="text-muted-foreground hover:text-destructive"
+              disabled={busy}
+              onClick={() => {
+                onOpenChange(false);
+                props.onArchive?.(props.build);
+              }}
+            >
+              <Archive className="mr-2 size-4" />
+              Archive…
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit}>
             {mode === 'add' ? 'Add build' : 'Save changes'}
           </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

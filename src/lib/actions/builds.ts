@@ -2,11 +2,13 @@
 
 import { db } from '@/lib/db';
 import { tasks, taskAssignees, boards, boardAccess, teamMembers, users, clients, buildStageEvents } from '@/lib/db/schema';
-import { eq, and, inArray, isNull, asc, sql } from 'drizzle-orm';
+import { eq, and, inArray, isNull, isNotNull, asc, desc, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { requireAuth } from '@/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 import { createAssignmentNotification } from './notifications';
 import { DEFAULT_BUILD_STAGE, isValidBuildStage } from '@/lib/builds/stages';
+import { isValidBuildArchiveReason } from '@/lib/builds/archive-reasons';
 
 export interface AgenticBuild {
   id: string;
@@ -32,6 +34,11 @@ export interface AgenticBuild {
   /** Set when the build was manually marked "shown to the client" for beta
    *  review (ISO). Null = not yet shown. */
   clientShownAt: string | null;
+  /** Archive state. Null on an active build; set together when archived. */
+  archivedAt: string | null;
+  archiveReason: string | null;
+  archiveNote: string | null;
+  archivedByName: string | null;
   /** Computed durations (ms). See computeTiming. */
   timing: BuildTiming;
   assignees: {
@@ -105,123 +112,185 @@ async function isContractor(userId: string): Promise<boolean> {
   return rows.some((r) => r.team?.excludeFromPublic);
 }
 
+/** Board ids a user may see builds on, or null when unrestricted.
+ *  Contractors are limited to boards they hold explicit access to. */
+async function visibleBoardIds(user: { id: string; role: string }): Promise<string[] | null> {
+  if (user.role === 'admin' || !(await isContractor(user.id))) return null;
+  const access = await db.query.boardAccess.findMany({
+    where: eq(boardAccess.userId, user.id),
+    columns: { boardId: true },
+  });
+  return access.map((a) => a.boardId);
+}
+
+/** Guard for every build mutation: the build must exist, be a build, and sit on
+ *  a board the user may see. Without this a contractor could move, edit or
+ *  delete a build on a board they have no access to by knowing its id. */
+async function assertBuildAccess(
+  user: { id: string; role: string },
+  taskId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const allowed = await visibleBoardIds(user);
+  if (allowed === null) return { ok: true };
+  if (allowed.length === 0) return { ok: false, error: 'Build not found' };
+  const row = await db.query.tasks.findFirst({
+    where: and(eq(tasks.id, taskId), eq(tasks.isAgenticBuild, true)),
+    columns: { boardId: true },
+  });
+  if (!row || !allowed.includes(row.boardId)) return { ok: false, error: 'Build not found' };
+  return { ok: true };
+}
+
+/** Shared loader behind the active board and the archived drawer. */
+async function queryBuilds(
+  user: { id: string; role: string },
+  opts: { archived: boolean },
+): Promise<AgenticBuild[]> {
+  const where = [
+    eq(tasks.isAgenticBuild, true),
+    opts.archived ? isNotNull(tasks.archivedAt) : isNull(tasks.archivedAt),
+  ];
+
+  const allowed = await visibleBoardIds(user);
+  if (allowed !== null) {
+    if (allowed.length === 0) return [];
+    where.push(inArray(tasks.boardId, allowed));
+  }
+
+  const archiver = alias(users, 'archiver');
+  const rows = await db
+    .select({
+      id: tasks.id,
+      shortId: tasks.shortId,
+      title: tasks.title,
+      boardId: tasks.boardId,
+      boardName: boards.name,
+      buildStage: tasks.buildStage,
+      status: tasks.status,
+      dueDate: tasks.dueDate,
+      position: tasks.position,
+      clientId: clients.id,
+      clientName: clients.name,
+      clientSlug: clients.slug,
+      clientColor: clients.color,
+      clientIcon: clients.icon,
+      podName: clients.podName,
+      buildType: tasks.buildType,
+      projectValue: tasks.projectValue,
+      commencementDate: tasks.commencementDate,
+      completedAt: tasks.completedAt,
+      clientShownAt: tasks.clientShownAt,
+      archivedAt: tasks.archivedAt,
+      archiveReason: tasks.buildArchiveReason,
+      archiveNote: tasks.buildArchiveNote,
+      archivedByName: archiver.name,
+    })
+    .from(tasks)
+    .innerJoin(boards, eq(boards.id, tasks.boardId))
+    .leftJoin(clients, eq(clients.id, boards.clientId))
+    .leftJoin(archiver, eq(archiver.id, tasks.buildArchivedBy))
+    .where(and(...where))
+    .orderBy(opts.archived ? desc(tasks.archivedAt) : asc(tasks.position));
+
+  if (rows.length === 0) return [];
+
+  // Batch assignees for all builds.
+  const taskIds = rows.map((r) => r.id);
+  const assigneeRows = await db
+    .select({
+      taskId: taskAssignees.taskId,
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+      deactivatedAt: users.deactivatedAt,
+    })
+    .from(taskAssignees)
+    .innerJoin(users, eq(users.id, taskAssignees.userId))
+    .where(inArray(taskAssignees.taskId, taskIds));
+
+  const byTask = new Map<string, AgenticBuild['assignees']>();
+  for (const a of assigneeRows) {
+    const list = byTask.get(a.taskId) ?? [];
+    list.push({ id: a.id, email: a.email, name: a.name, avatarUrl: a.avatarUrl, deactivatedAt: a.deactivatedAt });
+    byTask.set(a.taskId, list);
+  }
+
+  // Stage events for timing (one query for all builds).
+  const eventRows = await db
+    .select({ taskId: buildStageEvents.taskId, stage: buildStageEvents.stage, enteredAt: buildStageEvents.enteredAt })
+    .from(buildStageEvents)
+    .where(inArray(buildStageEvents.taskId, taskIds))
+    .orderBy(asc(buildStageEvents.enteredAt));
+  const eventsByTask = new Map<string, { stage: string; enteredAt: Date }[]>();
+  for (const e of eventRows) {
+    const list = eventsByTask.get(e.taskId) ?? [];
+    list.push({ stage: e.stage, enteredAt: e.enteredAt });
+    eventsByTask.set(e.taskId, list);
+  }
+  const now = Date.now();
+
+  return rows.map((r) => ({
+    id: r.id,
+    shortId: r.shortId,
+    title: r.title,
+    boardId: r.boardId,
+    boardName: r.boardName,
+    clientId: r.clientId,
+    clientName: r.clientName,
+    clientSlug: r.clientSlug,
+    clientColor: r.clientColor,
+    clientIcon: r.clientIcon,
+    podName: r.podName,
+    buildStage: isValidBuildStage(r.buildStage) ? r.buildStage : DEFAULT_BUILD_STAGE,
+    status: r.status,
+    dueDate: r.dueDate,
+    position: r.position,
+    buildType: (r.buildType as BuildType | null) ?? null,
+    projectValue: r.projectValue != null ? Number(r.projectValue) : null,
+    commencementDate: r.commencementDate,
+    completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+    clientShownAt: r.clientShownAt ? r.clientShownAt.toISOString() : null,
+    archivedAt: r.archivedAt ? r.archivedAt.toISOString() : null,
+    archiveReason: r.archiveReason,
+    archiveNote: r.archiveNote,
+    archivedByName: r.archivedByName,
+    // Timing stops at completion for a finished build; an archived build keeps
+    // accruing nothing further because archivedAt caps it (see computeTiming
+    // callers below — we pass completedAt ?? archivedAt).
+    timing: computeTiming(
+      eventsByTask.get(r.id) ?? [],
+      r.commencementDate,
+      r.completedAt ?? r.archivedAt,
+      now,
+    ),
+    assignees: byTask.get(r.id) ?? [],
+  }));
+}
+
 /**
- * All agentic-build cards across every board the user may see, flat. The board
- * UI groups them into BUILD_STAGES columns. Builds with a null/unknown stage
- * are coerced to the default stage so they never vanish.
+ * All active agentic-build cards across every board the user may see, flat. The
+ * board UI groups them into BUILD_STAGES columns. Builds with a null/unknown
+ * stage are coerced to the default stage so they never vanish.
  */
 export async function listAgenticBuilds(): Promise<ActionResult<AgenticBuild[]>> {
   try {
     const user = await requireAuth();
-
-    const where = [eq(tasks.isAgenticBuild, true), isNull(tasks.archivedAt)];
-
-    // Restrict contractors to boards they have explicit access to.
-    if (user.role !== 'admin' && (await isContractor(user.id))) {
-      const access = await db.query.boardAccess.findMany({
-        where: eq(boardAccess.userId, user.id),
-        columns: { boardId: true },
-      });
-      const ids = access.map((a) => a.boardId);
-      if (ids.length === 0) return { success: true, data: [] };
-      where.push(inArray(tasks.boardId, ids));
-    }
-
-    const rows = await db
-      .select({
-        id: tasks.id,
-        shortId: tasks.shortId,
-        title: tasks.title,
-        boardId: tasks.boardId,
-        boardName: boards.name,
-        buildStage: tasks.buildStage,
-        status: tasks.status,
-        dueDate: tasks.dueDate,
-        position: tasks.position,
-        clientId: clients.id,
-        clientName: clients.name,
-        clientSlug: clients.slug,
-        clientColor: clients.color,
-        clientIcon: clients.icon,
-        podName: clients.podName,
-        buildType: tasks.buildType,
-        projectValue: tasks.projectValue,
-        commencementDate: tasks.commencementDate,
-        completedAt: tasks.completedAt,
-        clientShownAt: tasks.clientShownAt,
-      })
-      .from(tasks)
-      .innerJoin(boards, eq(boards.id, tasks.boardId))
-      .leftJoin(clients, eq(clients.id, boards.clientId))
-      .where(and(...where));
-
-    if (rows.length === 0) return { success: true, data: [] };
-
-    // Batch assignees for all builds.
-    const taskIds = rows.map((r) => r.id);
-    const assigneeRows = await db
-      .select({
-        taskId: taskAssignees.taskId,
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        avatarUrl: users.avatarUrl,
-        deactivatedAt: users.deactivatedAt,
-      })
-      .from(taskAssignees)
-      .innerJoin(users, eq(users.id, taskAssignees.userId))
-      .where(inArray(taskAssignees.taskId, taskIds));
-
-    const byTask = new Map<string, AgenticBuild['assignees']>();
-    for (const a of assigneeRows) {
-      const list = byTask.get(a.taskId) ?? [];
-      list.push({ id: a.id, email: a.email, name: a.name, avatarUrl: a.avatarUrl, deactivatedAt: a.deactivatedAt });
-      byTask.set(a.taskId, list);
-    }
-
-    // Stage events for timing (one query for all builds).
-    const eventRows = await db
-      .select({ taskId: buildStageEvents.taskId, stage: buildStageEvents.stage, enteredAt: buildStageEvents.enteredAt })
-      .from(buildStageEvents)
-      .where(inArray(buildStageEvents.taskId, taskIds))
-      .orderBy(asc(buildStageEvents.enteredAt));
-    const eventsByTask = new Map<string, { stage: string; enteredAt: Date }[]>();
-    for (const e of eventRows) {
-      const list = eventsByTask.get(e.taskId) ?? [];
-      list.push({ stage: e.stage, enteredAt: e.enteredAt });
-      eventsByTask.set(e.taskId, list);
-    }
-    const now = Date.now();
-
-    const data: AgenticBuild[] = rows.map((r) => ({
-      id: r.id,
-      shortId: r.shortId,
-      title: r.title,
-      boardId: r.boardId,
-      boardName: r.boardName,
-      clientId: r.clientId,
-      clientName: r.clientName,
-      clientSlug: r.clientSlug,
-      clientColor: r.clientColor,
-      clientIcon: r.clientIcon,
-      podName: r.podName,
-      buildStage: isValidBuildStage(r.buildStage) ? r.buildStage : DEFAULT_BUILD_STAGE,
-      status: r.status,
-      dueDate: r.dueDate,
-      position: r.position,
-      buildType: (r.buildType as BuildType | null) ?? null,
-      projectValue: r.projectValue != null ? Number(r.projectValue) : null,
-      commencementDate: r.commencementDate,
-      completedAt: r.completedAt ? r.completedAt.toISOString() : null,
-      clientShownAt: r.clientShownAt ? r.clientShownAt.toISOString() : null,
-      timing: computeTiming(eventsByTask.get(r.id) ?? [], r.commencementDate, r.completedAt, now),
-      assignees: byTask.get(r.id) ?? [],
-    }));
-
-    return { success: true, data };
+    return { success: true, data: await queryBuilds(user, { archived: false }) };
   } catch (err) {
     console.error('listAgenticBuilds error:', err);
     return { success: false, error: 'Failed to load builds' };
+  }
+}
+
+/** Builds taken off the board, newest-archived first. Backs the Archived drawer. */
+export async function listArchivedAgenticBuilds(): Promise<ActionResult<AgenticBuild[]>> {
+  try {
+    const user = await requireAuth();
+    return { success: true, data: await queryBuilds(user, { archived: true }) };
+  } catch (err) {
+    console.error('listArchivedAgenticBuilds error:', err);
+    return { success: false, error: 'Failed to load archived builds' };
   }
 }
 
@@ -278,6 +347,11 @@ export async function createAgenticBuild(input: CreateBuildInput): Promise<Actio
       columns: { id: true, statusOptions: true, clientId: true },
     });
     if (!board) return { success: false, error: 'Target board not found' };
+
+    const allowedBoards = await visibleBoardIds(user);
+    if (allowedBoards !== null && !allowedBoards.includes(board.id)) {
+      return { success: false, error: 'Target board not found' };
+    }
 
     // Builds ride the board's first status; the meaningful axis is buildStage.
     const firstStatus = board.statusOptions?.[0]?.id ?? 'todo';
@@ -345,6 +419,9 @@ export async function setBuildStage(taskId: string, buildStage: string): Promise
     const user = await requireAuth();
     if (!isValidBuildStage(buildStage)) return { success: false, error: 'Invalid build stage' };
 
+    const access = await assertBuildAccess(user, taskId);
+    if (!access.ok) return { success: false, error: access.error };
+
     // Read the current stage so we only log real transitions + manage completedAt.
     const current = await db.query.tasks.findFirst({
       where: and(eq(tasks.id, taskId), eq(tasks.isAgenticBuild, true)),
@@ -394,6 +471,9 @@ export interface UpdateBuildInput {
 export async function updateAgenticBuild(taskId: string, input: UpdateBuildInput): Promise<ActionResult<null>> {
   try {
     const user = await requireAuth();
+
+    const access = await assertBuildAccess(user, taskId);
+    if (!access.ok) return { success: false, error: access.error };
 
     const current = await db.query.tasks.findFirst({
       where: and(eq(tasks.id, taskId), eq(tasks.isAgenticBuild, true)),
@@ -446,5 +526,143 @@ export async function updateAgenticBuild(taskId: string, input: UpdateBuildInput
   } catch (err) {
     console.error('updateAgenticBuild error:', err);
     return { success: false, error: 'Failed to update build' };
+  }
+}
+
+export interface ArchiveBuildInput {
+  /** A BUILD_ARCHIVE_REASONS id — required, so a build is never taken off the
+   *  board without a recorded why. */
+  reason: string;
+  /** Optional free-text context. */
+  note?: string | null;
+}
+
+/**
+ * Take a build off the Agentic Builds board, with a reason.
+ *
+ * Soft by design: the task row and its build_stage_events survive, so the
+ * effort already measured (six weeks in Design System before the client
+ * cancelled) stays available to Pulse's pricing engine. The reason's
+ * `excludeFromAnalytics` flag is what separates real abandoned effort from
+ * bookkeeping noise — see src/lib/builds/archive-reasons.ts.
+ *
+ * Reuses the shared `tasks.archivedAt` column, so the build also drops out of
+ * its client board and the pod rollups, exactly like an archived task.
+ */
+export async function archiveAgenticBuild(
+  taskId: string,
+  input: ArchiveBuildInput,
+): Promise<ActionResult<null>> {
+  try {
+    const user = await requireAuth();
+    if (!isValidBuildArchiveReason(input.reason)) {
+      return { success: false, error: 'Pick a reason for archiving this build' };
+    }
+
+    const access = await assertBuildAccess(user, taskId);
+    if (!access.ok) return { success: false, error: access.error };
+
+    const current = await db.query.tasks.findFirst({
+      where: and(eq(tasks.id, taskId), eq(tasks.isAgenticBuild, true)),
+      columns: { id: true, archivedAt: true },
+    });
+    if (!current) return { success: false, error: 'Build not found' };
+    if (current.archivedAt) return { success: false, error: 'Build is already archived' };
+
+    const now = new Date();
+    const note = input.note?.trim() || null;
+
+    await db
+      .update(tasks)
+      .set({
+        archivedAt: now,
+        buildArchiveReason: input.reason,
+        buildArchiveNote: note,
+        buildArchivedBy: user.id,
+        updatedAt: now,
+      })
+      .where(eq(tasks.id, taskId));
+
+    // Builds are single-level, but archive any subtasks alongside the parent so
+    // they don't linger on the client board without their build.
+    await db.update(tasks).set({ archivedAt: now }).where(eq(tasks.parentTaskId, taskId));
+
+    revalidatePath('/agentic-builds');
+    return { success: true, data: null };
+  } catch (err) {
+    console.error('archiveAgenticBuild error:', err);
+    return { success: false, error: 'Failed to archive build' };
+  }
+}
+
+/** Put an archived build back on the board, clearing its archive reason. */
+export async function unarchiveAgenticBuild(taskId: string): Promise<ActionResult<null>> {
+  try {
+    const user = await requireAuth();
+
+    const access = await assertBuildAccess(user, taskId);
+    if (!access.ok) return { success: false, error: access.error };
+
+    const current = await db.query.tasks.findFirst({
+      where: and(eq(tasks.id, taskId), eq(tasks.isAgenticBuild, true)),
+      columns: { id: true, archivedAt: true },
+    });
+    if (!current) return { success: false, error: 'Build not found' };
+
+    const now = new Date();
+    await db
+      .update(tasks)
+      .set({
+        archivedAt: null,
+        buildArchiveReason: null,
+        buildArchiveNote: null,
+        buildArchivedBy: null,
+        updatedAt: now,
+      })
+      .where(eq(tasks.id, taskId));
+
+    await db.update(tasks).set({ archivedAt: null }).where(eq(tasks.parentTaskId, taskId));
+
+    revalidatePath('/agentic-builds');
+    return { success: true, data: null };
+  } catch (err) {
+    console.error('unarchiveAgenticBuild error:', err);
+    return { success: false, error: 'Failed to restore build' };
+  }
+}
+
+/**
+ * Permanently delete a build — admin only, and only from the archived drawer.
+ *
+ * This cascades away the build's build_stage_events, destroying the duration
+ * datapoint Pulse's pricing engine reads. It exists for cards that were never
+ * real builds (a test row, the wrong client); anything that represents actual
+ * work should be archived with a reason instead, where "created in error" and
+ * "duplicate" already mark it as noise without losing the row.
+ */
+export async function deleteAgenticBuild(taskId: string): Promise<ActionResult<null>> {
+  try {
+    const user = await requireAuth();
+    if (user.role !== 'admin') {
+      return { success: false, error: 'Only an admin can permanently delete a build' };
+    }
+
+    const current = await db.query.tasks.findFirst({
+      where: and(eq(tasks.id, taskId), eq(tasks.isAgenticBuild, true)),
+      columns: { id: true, archivedAt: true },
+    });
+    if (!current) return { success: false, error: 'Build not found' };
+    if (!current.archivedAt) {
+      return { success: false, error: 'Archive the build before deleting it' };
+    }
+
+    // Cascades to assignees, subtasks and build_stage_events via FK.
+    await db.delete(tasks).where(eq(tasks.id, taskId));
+
+    revalidatePath('/agentic-builds');
+    return { success: true, data: null };
+  } catch (err) {
+    console.error('deleteAgenticBuild error:', err);
+    return { success: false, error: 'Failed to delete build' };
   }
 }

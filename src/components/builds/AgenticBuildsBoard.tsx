@@ -13,7 +13,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer, Info, Eye } from 'lucide-react';
+import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer, Info, Eye, Archive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -22,6 +22,8 @@ import { ClientIcon } from '@/components/clients/ClientIcon';
 import { useAgenticBuilds, useBuildableClients, useSetBuildStage } from '@/lib/hooks';
 import { useDragToScroll } from '@/lib/hooks/useDragToScroll';
 import { BuildDialog } from './BuildDialog';
+import { ArchiveBuildDialog } from './ArchiveBuildDialog';
+import { ArchivedBuildsDialog } from './ArchivedBuildsDialog';
 import { buildTypeMeta, buildAccentColor, formatMoney, formatDuration } from '@/lib/builds/format';
 import {
   BUILD_STAGES,
@@ -359,6 +361,8 @@ export function AgenticBuildsBoard() {
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
   const [editBuild, setEditBuild] = React.useState<AgenticBuild | null>(null);
+  const [archiveBuild, setArchiveBuild] = React.useState<AgenticBuild | null>(null);
+  const [archivedOpen, setArchivedOpen] = React.useState(false);
 
   const byStage = React.useMemo(() => {
     const map = new Map<string, AgenticBuild[]>();
@@ -396,10 +400,16 @@ export function AgenticBuildsBoard() {
             Every AI website build across the team, by stage. {builds.length} total.
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)}>
-          <Plus className="mr-2 size-4" />
-          Add Build
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setArchivedOpen(true)}>
+            <Archive className="mr-2 size-4" />
+            Archived
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="mr-2 size-4" />
+            Add Build
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -451,8 +461,17 @@ export function AgenticBuildsBoard() {
           open={!!editBuild}
           onOpenChange={(o) => !o && setEditBuild(null)}
           build={editBuild}
+          onArchive={setArchiveBuild}
         />
       )}
+      {archiveBuild && (
+        <ArchiveBuildDialog
+          build={archiveBuild}
+          open={!!archiveBuild}
+          onOpenChange={(o) => !o && setArchiveBuild(null)}
+        />
+      )}
+      <ArchivedBuildsDialog open={archivedOpen} onOpenChange={setArchivedOpen} />
     </div>
   );
 }

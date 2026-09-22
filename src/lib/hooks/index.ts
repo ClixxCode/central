@@ -171,10 +171,14 @@ export {
 } from './useExtensionTokens';
 export {
   useAgenticBuilds,
+  useArchivedBuilds,
   useBuildableClients,
   useCreateBuild,
   useUpdateBuild,
   useSetBuildStage,
+  useArchiveBuild,
+  useUnarchiveBuild,
+  useDeleteBuild,
   buildKeys,
 } from './useBuilds';
 export { useMyWorkPreferences } from './useMyWorkPreferences';

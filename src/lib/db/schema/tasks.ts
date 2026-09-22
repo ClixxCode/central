@@ -6,6 +6,7 @@ import {
   date,
   integer,
   numeric,
+  text,
   jsonb,
   primaryKey,
   boolean,
@@ -94,6 +95,15 @@ export const tasks = pgTable('tasks', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   archivedAt: timestamp('archived_at'),
+  // Why a build left the Agentic Builds board. Set together with archivedAt by
+  // archiveAgenticBuild; reason ids come from BUILD_ARCHIVE_REASONS in
+  // src/lib/builds/archive-reasons.ts. A build is never archived without one,
+  // so an empty column on an archived build means the generic task
+  // archive/auto-archive path touched it rather than the build flow.
+  buildArchiveReason: varchar('build_archive_reason', { length: 32 }),
+  // Optional free-text context the archiver typed alongside the reason.
+  buildArchiveNote: text('build_archive_note'),
+  buildArchivedBy: uuid('build_archived_by').references(() => users.id, { onDelete: 'set null' }),
 });
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({

@@ -3132,6 +3132,16 @@ export async function archiveTask(taskId: string): Promise<{
     return { success: false, error: 'Task not found or access denied' };
   }
 
+  // An agentic build leaves the pipeline only via the Builds board, which
+  // records why (archiveAgenticBuild). Archiving it as a plain task would drop
+  // it off that board with no reason attached.
+  if (task.isAgenticBuild) {
+    return {
+      success: false,
+      error: 'Archive this build from the Agentic Builds board, where a reason is recorded.',
+    };
+  }
+
   // Get board status options to check if task is complete
   const board = await db.query.boards.findFirst({
     where: eq(boards.id, task.boardId),
@@ -3185,10 +3195,18 @@ export async function unarchiveTask(taskId: string): Promise<{
 
   const now = new Date();
 
-  // Unarchive the task and reset updatedAt so auto-archive timer resets
+  // Unarchive the task and reset updatedAt so auto-archive timer resets.
+  // Clearing the build archive fields keeps a build restored from the generic
+  // archive panels consistent with one restored from the Builds board.
   await db
     .update(tasks)
-    .set({ archivedAt: null, updatedAt: now })
+    .set({
+      archivedAt: null,
+      buildArchiveReason: null,
+      buildArchiveNote: null,
+      buildArchivedBy: null,
+      updatedAt: now,
+    })
     .where(eq(tasks.id, taskId));
 
   if (task.parentTaskId) {
@@ -3257,7 +3275,10 @@ export async function bulkArchiveDone(boardId: string): Promise<{
         eq(tasks.boardId, boardId),
         inArray(tasks.status, completeIds),
         isNull(tasks.archivedAt),
-        isNull(tasks.parentTaskId)
+        isNull(tasks.parentTaskId),
+        // Builds are archived only through archiveAgenticBuild, which records a
+        // reason; a bulk sweep would remove them from the Builds board silently.
+        eq(tasks.isAgenticBuild, false)
       )
     );
 

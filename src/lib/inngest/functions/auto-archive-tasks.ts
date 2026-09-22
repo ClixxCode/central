@@ -60,6 +60,11 @@ export const autoArchiveTasks = inngest.createFunction(
               inArray(tasks.status, completeIds),
               isNull(tasks.archivedAt),
               isNull(tasks.parentTaskId),
+              // Agentic builds leave the Builds board only via an explicit
+              // archive-with-reason (archiveAgenticBuild). Letting the nightly
+              // sweep take them would drop a build off the pipeline with no
+              // recorded why.
+              eq(tasks.isAgenticBuild, false),
               lte(tasks.updatedAt, cutoffDate)
             )
           );
