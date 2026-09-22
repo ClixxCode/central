@@ -17,9 +17,15 @@ import { Plus, Calendar, ExternalLink, Hammer, Pencil, Timer, Info, Eye, Archive
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AssigneeAvatars } from '@/components/tasks/AssigneePicker';
+import { AssigneeAvatars, AssigneePicker } from '@/components/tasks/AssigneePicker';
 import { ClientIcon } from '@/components/clients/ClientIcon';
-import { useAgenticBuilds, useBuildableClients, useSetBuildStage } from '@/lib/hooks';
+import {
+  useAgenticBuilds,
+  useBuildableClients,
+  useSetBuildStage,
+  useAssignableUsers,
+  useUpdateBuild,
+} from '@/lib/hooks';
 import { useDragToScroll } from '@/lib/hooks/useDragToScroll';
 import { BuildDialog } from './BuildDialog';
 import { ArchiveBuildDialog } from './ArchiveBuildDialog';
@@ -83,6 +89,53 @@ function dueTone(build: AgenticBuild): string {
     86_400_000;
   if (days <= 14) return 'text-amber-600 dark:text-amber-400';
   return 'text-muted-foreground';
+}
+
+/**
+ * Assign people to a build straight from its card, without opening the dialog.
+ *
+ * The board's assignable users are fetched per board, and only once the picker
+ * is actually opened — a board full of cards would otherwise fire one query
+ * each on mount. Pointer events are stopped so the picker doesn't start a drag.
+ */
+function CardAssignees({ build }: { build: AgenticBuild }) {
+  const [open, setOpen] = React.useState(false);
+  const { data: users = [] } = useAssignableUsers(build.boardId, { enabled: open });
+  const updateBuild = useUpdateBuild();
+
+  // Selection is local while the popover is open so the avatars respond
+  // immediately; it is committed to the server when the popover closes.
+  const assigned = React.useMemo(() => build.assignees.map((a) => a.id), [build.assignees]);
+  const [draft, setDraft] = React.useState<string[]>(assigned);
+  React.useEffect(() => {
+    if (!open) setDraft(assigned);
+  }, [open, assigned]);
+
+  function commit() {
+    const changed =
+      draft.length !== assigned.length || draft.some((id) => !assigned.includes(id));
+    if (changed) updateBuild.mutate({ taskId: build.id, input: { assigneeIds: draft } });
+  }
+
+  return (
+    <span
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      className="shrink-0"
+    >
+      <AssigneePicker
+        value={open ? draft : assigned}
+        onChange={setDraft}
+        users={users}
+        maxDisplay={3}
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) commit();
+        }}
+      />
+    </span>
+  );
 }
 
 /** Presentational card (drag wiring lives on the wrapper in DraggableBuildCard). */
@@ -189,7 +242,11 @@ function BuildCard({
                 </Link>
               )}
             </div>
-            <AssigneeAvatars assignees={build.assignees} maxDisplay={3} size="sm" />
+            {overlay ? (
+              <AssigneeAvatars assignees={build.assignees} maxDisplay={3} size="sm" />
+            ) : (
+              <CardAssignees build={build} />
+            )}
           </div>
         </div>
       </div>

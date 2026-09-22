@@ -515,9 +515,27 @@ export async function updateAgenticBuild(taskId: string, input: UpdateBuildInput
     }
 
     if (input.assigneeIds) {
+      // Diff before replacing so only genuinely new assignees are notified —
+      // re-saving the dialog or editing an unrelated field must not re-notify
+      // everyone already on the build.
+      const existing = await db
+        .select({ userId: taskAssignees.userId })
+        .from(taskAssignees)
+        .where(eq(taskAssignees.taskId, taskId));
+      const had = new Set(existing.map((a) => a.userId));
+      const added = input.assigneeIds.filter((id) => !had.has(id));
+
       await db.delete(taskAssignees).where(eq(taskAssignees.taskId, taskId));
       if (input.assigneeIds.length) {
         await db.insert(taskAssignees).values(input.assigneeIds.map((userId) => ({ taskId, userId })));
+      }
+
+      for (const assigneeId of added) {
+        createAssignmentNotification({
+          assigneeUserId: assigneeId,
+          assignerUserId: user.id,
+          taskId,
+        }).catch((e) => console.error('build assignment notification failed:', e));
       }
     }
 

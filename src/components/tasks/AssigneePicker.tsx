@@ -31,6 +31,11 @@ interface AssigneePickerProps {
   users: AssigneeUser[];
   disabled?: boolean;
   maxDisplay?: number;
+  /** Optionally control the popover. Callers that need to know when it closes
+   *  (to commit a change, or to defer loading the user list until it opens)
+   *  pass both; omitting them keeps the original uncontrolled behaviour. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function AssigneePicker({
@@ -39,8 +44,18 @@ export function AssigneePicker({
   users,
   disabled = false,
   maxDisplay = 3,
+  open: openProp,
+  onOpenChange,
 }: AssigneePickerProps) {
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = React.useCallback(
+    (o: boolean) => {
+      if (openProp === undefined) setUncontrolledOpen(o);
+      onOpenChange?.(o);
+    },
+    [openProp, onOpenChange]
+  );
   const [search, setSearch] = React.useState('');
 
   const selectedUsers = users.filter((user) => value.includes(user.id));

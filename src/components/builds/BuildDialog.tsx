@@ -11,7 +11,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { useCreateBuild, useUpdateBuild } from '@/lib/hooks';
+import { useCreateBuild, useUpdateBuild, useAssignableUsers } from '@/lib/hooks';
+import { AssigneePicker } from '@/components/tasks/AssigneePicker';
 import { BUILD_STAGES } from '@/lib/builds/stages';
 import { BUILD_TYPES, buildTypeIsFee, formatDuration } from '@/lib/builds/format';
 import type { AgenticBuild, BuildType, BuildableClient } from '@/lib/actions/builds';
@@ -69,6 +70,15 @@ export function BuildDialog(props: Props) {
   // "Shown to client" beta-review marker. Non-null date = shown.
   const [shownToClient, setShownToClient] = React.useState(false);
   const [shownDate, setShownDate] = React.useState('');
+  const [assigneeIds, setAssigneeIds] = React.useState<string[]>([]);
+
+  // Assignable users come from the build's board: in edit mode the build
+  // already has one, in add mode it follows the selected client.
+  const boardId =
+    mode === 'edit'
+      ? props.build.boardId
+      : (props.clients.find((c) => c.id === clientId)?.boardId ?? '');
+  const { data: assignableUsers = [] } = useAssignableUsers(boardId, { enabled: open && !!boardId });
 
   // Seed the form each time it opens.
   React.useEffect(() => {
@@ -85,6 +95,7 @@ export function BuildDialog(props: Props) {
       setTargetTouched(!!b.dueDate);
       setShownToClient(!!b.clientShownAt);
       setShownDate(b.clientShownAt ? b.clientShownAt.slice(0, 10) : todayStr());
+      setAssigneeIds(b.assignees.map((a) => a.id));
     } else {
       setClientId('');
       setTitle('');
@@ -96,6 +107,7 @@ export function BuildDialog(props: Props) {
       setTargetTouched(false);
       setShownToClient(false);
       setShownDate(todayStr());
+      setAssigneeIds([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -131,6 +143,7 @@ export function BuildDialog(props: Props) {
           projectValue: feeRequired ? valueNum : null,
           commencementDate: commencementDate || null,
           dueDate: targetEndDate || undefined,
+          assigneeIds,
         },
         { onSuccess: () => onOpenChange(false) }
       );
@@ -146,6 +159,7 @@ export function BuildDialog(props: Props) {
             commencementDate: commencementDate || null,
             dueDate: targetEndDate || null,
             clientShownAt: shownToClient ? shownDate || todayStr() : null,
+            assigneeIds,
           },
         },
         { onSuccess: () => onOpenChange(false) }
@@ -206,6 +220,20 @@ export function BuildDialog(props: Props) {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">Assignees</label>
+            {boardId ? (
+              <AssigneePicker
+                value={assigneeIds}
+                onChange={setAssigneeIds}
+                users={assignableUsers}
+                maxDisplay={5}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">Pick a client first.</p>
+            )}
           </div>
 
           {/* Every build carries a start + target end so it can't linger.
