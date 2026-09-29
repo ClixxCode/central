@@ -273,7 +273,17 @@ export async function listRollupBoards(): Promise<ActionResult<RollupBoardSummar
     const allRollups = await db.query.boards.findMany({
       where: eq(boards.type, 'rollup'),
       with: {
-        rollupSources: true,
+        rollupSources: {
+          with: {
+            sourceBoard: {
+              with: {
+                client: {
+                  columns: { accountStatus: true, podSubContext: true },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -297,7 +307,7 @@ export async function listRollupBoards(): Promise<ActionResult<RollupBoardSummar
           id: rollup.id,
           name: rollup.name,
           type: 'rollup' as const,
-          sourceCount: rollup.rollupSources.length,
+          sourceCount: filterActiveRollupSources(rollup.rollupSources).length,
         })),
       };
     }
@@ -313,7 +323,7 @@ export async function listRollupBoards(): Promise<ActionResult<RollupBoardSummar
         id: rollup.id,
         name: rollup.name,
         type: 'rollup' as const,
-        sourceCount: rollup.rollupSources.length,
+        sourceCount: filterActiveRollupSources(rollup.rollupSources).length,
       })),
     };
   } catch (error) {
