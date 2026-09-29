@@ -1,0 +1,1 @@
+ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "has_delivery_work" boolean DEFAULT true NOT NULL;
