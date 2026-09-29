@@ -343,7 +343,7 @@ export async function getRollupBoard(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, podSubContext: true, accountTeam: true, accountServices: true },
                 },
               },
             },
@@ -568,7 +568,7 @@ export async function updateRollupBoard(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, podSubContext: true, accountTeam: true, accountServices: true },
                 },
               },
             },
@@ -801,7 +801,7 @@ export async function getRollupTasks(
             sourceBoard: {
               with: {
                 client: {
-                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, accountTeam: true, accountServices: true },
+                  columns: { id: true, name: true, slug: true, color: true, icon: true, pulseAccountId: true, accountStatus: true, podSubContext: true, accountTeam: true, accountServices: true },
                 },
               },
             },
