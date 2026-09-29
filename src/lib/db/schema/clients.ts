@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, jsonb, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, jsonb, boolean, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
 import { boards } from './boards';
@@ -46,6 +46,11 @@ export const clients = pgTable('clients', {
   accountType: varchar('account_type', { length: 32 }),
   podName: varchar('pod_name', { length: 64 }),
   podSubContext: text('pod_sub_context'),
+  // Derived in Pulse from billing (ops.account_has_delivery_work): is this
+  // account invoiced for a Recurring or Project line? Hosting/maintenance-only
+  // clients are false and do not belong on a delivery rollup. Defaults TRUE so
+  // a client Pulse has not synced yet is shown rather than hidden.
+  hasDeliveryWork: boolean('has_delivery_work').notNull().default(true),
   accountTeam: jsonb('account_team').$type<AccountTeamMember[]>().notNull().default([]),
   // Reflected active service names from Pulse (consolidated reference only;
   // full service detail lives in Pulse). Distinct active service_name values.

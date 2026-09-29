@@ -267,6 +267,13 @@
       "when": 1789071473657,
       "tag": "0037_build_client_shown_at",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790695569827,
+      "tag": "0038_client_has_delivery_work",
+      "breakpoints": true
     }
   ]
 }

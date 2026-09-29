@@ -22,6 +22,26 @@
 export const HIDDEN_ROLLUP_ACCOUNT_STATUSES = ["terminated"] as const
 
 /**
+ * Whether the client has paid delivery work, derived in PULSE from billing
+ * (ops.account_has_delivery_work) and synced on the account snapshot.
+ *
+ * This is the field the pod_sub_context attempt should have used. A rollup is
+ * a delivery board, so what belongs on it is "are we paid to deliver
+ * something" — and the only system that knows is the one holding the
+ * invoices. Recurring or Project billing in the last 120 days is true;
+ * hosting, maintenance, card fees and domain renewals alone are false.
+ *
+ * Read as an explicit `=== false`, not as falsy. A client row predating the
+ * column, or one Pulse has not synced, must SHOW — same posture as the
+ * terminated rule below, where hiding a live board is the expensive mistake.
+ */
+export function isHiddenRollupDeliveryState(
+  hasDeliveryWork: boolean | null | undefined,
+): boolean {
+  return hasDeliveryWork === false
+}
+
+/**
  * DO NOT filter rollups on pod_sub_context. Tried on 2026-09-29, reverted the
  * same hour.
  *
@@ -48,11 +68,24 @@ export function isHiddenRollupAccountStatus(
   )
 }
 
-/** Drop sources whose client is terminated. Shape-agnostic on purpose. */
+/**
+ * Drop sources whose client is terminated, or has no paid delivery work.
+ * Shape-agnostic on purpose.
+ */
 export function filterActiveRollupSources<
-  T extends { sourceBoard?: { client?: { accountStatus?: string | null } | null } | null },
+  T extends {
+    sourceBoard?: {
+      client?: {
+        accountStatus?: string | null
+        hasDeliveryWork?: boolean | null
+      } | null
+    } | null
+  },
 >(sources: T[]): T[] {
-  return sources.filter(
-    (s) => !isHiddenRollupAccountStatus(s.sourceBoard?.client?.accountStatus),
-  )
+  return sources.filter((s) => {
+    const client = s.sourceBoard?.client
+    if (isHiddenRollupAccountStatus(client?.accountStatus)) return false
+    if (isHiddenRollupDeliveryState(client?.hasDeliveryWork)) return false
+    return true
+  })
 }

@@ -36,6 +36,7 @@ interface AccountSnapshot {
   slug: string;
   account_type: string | null;
   account_status: string | null;
+  has_delivery_work?: boolean;
   termination_date: string | null;
   pod: { id: string; name: string; sub_context: string | null } | null;
   team: AccountTeamMember[];
@@ -133,6 +134,8 @@ export async function POST(request: NextRequest) {
         accountType: snapshot.account_type,
         podName: snapshot.pod?.name ?? null,
         podSubContext: snapshot.pod?.sub_context ?? null,
+        // Absent (an older Pulse deploy) must mean SHOW, not hide.
+        hasDeliveryWork: snapshot.has_delivery_work ?? true,
         accountTeam: team,
         pulseSyncedAt: new Date(),
       })
