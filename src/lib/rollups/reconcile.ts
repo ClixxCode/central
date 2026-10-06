@@ -13,17 +13,21 @@ import type { RollupRule } from '@/lib/db/schema';
  * only management surface is pod + assignment in Pulse.
  */
 
-// Pod and per-person rollups are "who's actively working on what" views, so
-// they only surface live accounts. Lifecycle rollups (e.g. Offboarding) pick
-// their own statuses explicitly and are NOT subject to this filter.
-const LIVE_ACCOUNT_STATUSES = ['active', 'onboarding', 'offboarding', 'paused'];
+// Pod and per-person rollups are "who's actively working on what" views.
+// Rule: account is active / onboarding / offboarding (NOT paused or terminated),
+// AND has paid delivery work (hosting- or maintenance-only accounts are out;
+// has_delivery_work is derived from billing in Pulse). NULL delivery state means
+// "not synced yet" and SHOWS. Every standard board of a matching client (its
+// sub-boards included) qualifies. Lifecycle rollups pick their own statuses
+// explicitly and are NOT subject to this filter.
+const LIVE_ACCOUNT_STATUSES = ['active', 'onboarding', 'offboarding'];
 
 /** SQL fragment selecting matching standard board ids (column `id`) for a rule. */
 function membershipSelect(rule: RollupRule) {
   const base = sql`select b.id as id from boards b join clients c on c.id = b.client_id where b.type = 'standard'`;
   // Restrict pod/assignment membership to live accounts. NULL status is
   // excluded (unlinked clients shouldn't appear in a pod/person rollup).
-  const liveOnly = sql`and c.account_status = any(${LIVE_ACCOUNT_STATUSES})`;
+  const liveOnly = sql`and c.account_status = any(${LIVE_ACCOUNT_STATUSES}) and c.has_delivery_work is not false`;
   switch (rule.type) {
     case 'pod':
       return sql`${base} and c.pod_name = ${rule.pod_name} ${liveOnly}`;

@@ -359,6 +359,11 @@ export async function getRollupBoard(
       return { success: false, error: 'Not authenticated' };
     }
 
+    // Membership is derived from the rule; re-derive on read so a new sub-board,
+    // pod move or status change shows up immediately instead of waiting for the
+    // next Pulse webhook.
+    await reconcileRollup(rollupBoardId).catch((e) => console.error('[rollup-reconcile] on read failed', e));
+
     // Get the rollup board
     const rollup = await db.query.boards.findFirst({
       where: and(eq(boards.id, rollupBoardId), eq(boards.type, 'rollup')),
@@ -817,6 +822,9 @@ export async function getRollupTasks(
   try {
     const user = await requireAuth();
     const userIsAdmin = user.role === 'admin';
+
+    // Re-derive membership from the rule on read (see getRollupBoard).
+    await reconcileRollup(rollupBoardId).catch((e) => console.error('[rollup-reconcile] on read failed', e));
 
     // Get the rollup board and its sources
     const rollup = await db.query.boards.findFirst({
