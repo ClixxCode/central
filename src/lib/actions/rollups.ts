@@ -111,21 +111,6 @@ export interface RollupTaskWithAssignees {
   archivedAt: Date | null;
 }
 
-/** An active source board, returned even when it has no tasks (so review mode can visit it). */
-export interface RollupSourceBoardInfo {
-  boardId: string;
-  boardName: string;
-  clientId: string | null;
-  clientName: string | null;
-  clientSlug: string | null;
-  clientColor: string | null;
-  clientIcon: string | null;
-  pulseAccountId: string | null;
-  accountStatus: string | null;
-  accountTeam: AccountTeamMember[];
-  accountServices: string[];
-}
-
 export interface ActionResult<T = void> {
   success: boolean;
   error?: string;
@@ -810,7 +795,6 @@ export async function getRollupTasks(
   sort?: TaskSortOptions
 ): Promise<ActionResult<{
   tasks: RollupTaskWithAssignees[];
-  boards: RollupSourceBoardInfo[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
 }>> {
@@ -879,7 +863,6 @@ export async function getRollupTasks(
         success: true,
         data: {
           tasks: [],
-          boards: [],
           statusOptions: [],
           sectionOptions: [],
         },
@@ -1232,13 +1215,6 @@ export async function getRollupTasks(
       ])
     );
 
-    // Every active source board, including ones with no tasks — a client's
-    // sub-boards must still be visited in review mode. assigned_only boards
-    // are omitted: their group would always be empty for this user.
-    const sourceBoards: RollupSourceBoardInfo[] = activeSources
-      .filter((s) => accessLevels.get(s.sourceBoardId) === 'full')
-      .map((s) => ({ boardId: s.sourceBoardId, ...boardLookup.get(s.sourceBoardId)! }));
-
     // Filter tasks based on access level (assigned_only)
     const filteredTasks = allTasks.filter((task) => {
       const accessLevel = accessLevels.get(task.boardId);
@@ -1370,7 +1346,6 @@ export async function getRollupTasks(
       success: true,
       data: {
         tasks: resultTasks,
-        boards: sourceBoards,
         statusOptions,
         sectionOptions,
       },

@@ -17,7 +17,7 @@ import { useBoardViewStore } from '@/lib/stores/boardViewStore';
 import { useQuickActionsStore } from '@/lib/stores';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useUpdateTask, useUpdateTaskPositions, useDeleteTask, useTask } from '@/lib/hooks/useTasks';
-import type { RollupTaskWithAssignees, RollupBoardWithSources, RollupSourceBoardInfo } from '@/lib/actions/rollups';
+import type { RollupTaskWithAssignees, RollupBoardWithSources } from '@/lib/actions/rollups';
 import type { StatusOption, SectionOption } from '@/lib/db/schema';
 import type { AssigneeUser } from '@/components/tasks/AssigneePicker';
 import { ExpandedSubtasks } from '@/components/tasks/ExpandedSubtasks';
@@ -44,8 +44,6 @@ interface BoardGroup {
 interface RollupBoardViewProps {
   rollupBoard: RollupBoardWithSources;
   tasks: RollupTaskWithAssignees[];
-  /** Active source boards, incl. empty ones; seeds swimlane/review groups. */
-  sourceBoards?: RollupSourceBoardInfo[];
   statusOptions: StatusOption[];
   sectionOptions: SectionOption[];
   assignableUsers: AssigneeUser[];
@@ -64,7 +62,6 @@ interface RollupBoardViewProps {
 export function RollupBoardView({
   rollupBoard,
   tasks,
-  sourceBoards = [],
   statusOptions,
   sectionOptions,
   assignableUsers,
@@ -91,25 +88,6 @@ export function RollupBoardView({
   // Group tasks by board (for swimlane view)
   const boardGroups = React.useMemo(() => {
     const groupMap = new Map<string, BoardGroup>();
-
-    // In review mode, seed a group per source board so empty sub-boards
-    // (e.g. BDI Ground Screw) are still visited. Normal views stay task-driven
-    // so filters don't fill the page with empty lanes.
-    (reviewMode ? sourceBoards : []).forEach((b) => {
-      groupMap.set(b.boardId, {
-        boardId: b.boardId,
-        boardName: b.boardName,
-        clientName: b.clientName ?? 'Unknown Client',
-        clientSlug: b.clientSlug ?? '',
-        clientColor: b.clientColor,
-        clientIcon: b.clientIcon,
-        pulseAccountId: b.pulseAccountId,
-        accountStatus: b.accountStatus,
-        accountTeam: b.accountTeam,
-        accountServices: b.accountServices,
-        tasks: [],
-      });
-    });
 
     tasks.forEach((task) => {
       const existing = groupMap.get(task.boardId);
@@ -146,20 +124,20 @@ export function RollupBoardView({
     });
 
     return groups;
-  }, [tasks, sourceBoards, reviewMode]);
+  }, [tasks]);
 
   // How many distinct boards each client contributes to this rollup. Used to
   // decide whether the "/ board" suffix in a group header adds information —
   // for single-board clients it's just a redundant echo of the client name.
   const boardCountByClient = React.useMemo(() => {
     const m = new Map<string, Set<string>>();
-    boardGroups.forEach((g) => {
-      const key = g.clientSlug || g.clientName || g.boardId;
+    tasks.forEach((t) => {
+      const key = t.clientSlug || t.clientName || t.boardId;
       if (!m.has(key)) m.set(key, new Set());
-      m.get(key)!.add(g.boardId);
+      m.get(key)!.add(t.boardId);
     });
     return m;
-  }, [boardGroups]);
+  }, [tasks]);
 
   // Review mode: clamp index and auto-exit if no groups
   const clampedReviewIndex = React.useMemo(() => {
