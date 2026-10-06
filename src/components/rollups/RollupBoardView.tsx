@@ -92,10 +92,9 @@ export function RollupBoardView({
   const boardGroups = React.useMemo(() => {
     const groupMap = new Map<string, BoardGroup>();
 
-    // In review mode, seed a group per source board so empty sub-boards
-    // (e.g. BDI Ground Screw) are still visited. Normal views stay task-driven
-    // so filters don't fill the page with empty lanes.
-    (reviewMode ? sourceBoards : []).forEach((b) => {
+    // Seed a group per source board so boards with no work (e.g. BDI Ground
+    // Screw) still appear, and get highlighted. Table/kanban ignore groups.
+    sourceBoards.forEach((b) => {
       groupMap.set(b.boardId, {
         boardId: b.boardId,
         boardName: b.boardName,
@@ -146,7 +145,7 @@ export function RollupBoardView({
     });
 
     return groups;
-  }, [tasks, sourceBoards, reviewMode]);
+  }, [tasks, sourceBoards]);
 
   // How many distinct boards each client contributes to this rollup. Used to
   // decide whether the "/ board" suffix in a group header adds information —
@@ -659,7 +658,12 @@ function RollupBoardSwimlane({
   );
 
   return (
-    <div className="rounded-lg border bg-muted/30">
+    <div
+      className={cn(
+        'rounded-lg border bg-muted/30',
+        group.tasks.length === 0 && 'border-amber-400 bg-amber-50/60 dark:border-amber-500/60 dark:bg-amber-950/20'
+      )}
+    >
       {/* Header - Client + Board */}
       <div className="flex items-center gap-2 border-b px-4 py-3">
         <button
@@ -700,6 +704,11 @@ function RollupBoardSwimlane({
             accountServices={group.accountServices}
           />
         </div>
+        {group.tasks.length === 0 && (
+          <span className="ml-3 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+            No work
+          </span>
+        )}
         <span className="ml-auto text-sm text-muted-foreground">
           {group.tasks.length} {group.tasks.length === 1 ? 'task' : 'tasks'}
         </span>
