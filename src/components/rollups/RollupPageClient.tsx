@@ -62,6 +62,7 @@ export function RollupPageClient({
   const { data, isLoading } = useRollupTasks(rollupBoard.id, filters, sort);
 
   const tasks = data?.tasks ?? [];
+  const sourceBoards = data?.boards ?? [];
   const statusOptions = data?.statusOptions ?? [];
   const sectionOptions = data?.sectionOptions ?? [];
 
@@ -340,6 +341,7 @@ export function RollupPageClient({
         <RollupBoardView
           rollupBoard={rollupBoard}
           tasks={tasks}
+          sourceBoards={sourceBoards}
           statusOptions={statusOptions}
           sectionOptions={sectionOptions}
           assignableUsers={assignableUsers}
