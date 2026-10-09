@@ -5,7 +5,6 @@ import { SessionProvider } from 'next-auth/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider } from 'next-themes';
-import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
 import { OfflineIndicator } from '@/components/pwa/OfflineIndicator';
 import { PWAUpdateHandler } from '@/components/pwa/PWAUpdateHandler';
 import { RealtimeProvider } from '@/components/providers/RealtimeProvider';
@@ -51,7 +50,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <RealtimeProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             {children}
-            <PWAInstallPrompt />
             <OfflineIndicator />
             <PWAUpdateHandler />
           </ThemeProvider>
