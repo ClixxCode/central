@@ -42,7 +42,7 @@ export function SortableTask({ id, children, disabled = false }: SortableTaskPro
       ref={setNodeRef}
       style={style}
       className={cn(
-        'touch-none relative',
+        'touch-manipulation relative',
         isDragging && 'cursor-grabbing',
         !isDragging && !disabled && 'cursor-grab'
       )}
@@ -97,7 +97,7 @@ export function SortableTableRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'touch-none relative',
+        'touch-manipulation relative',
         isDragging && 'opacity-40 bg-muted',
         showDropIndicator && 'border-t-2 border-t-primary',
         className

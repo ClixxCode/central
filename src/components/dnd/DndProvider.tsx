@@ -6,7 +6,7 @@ import {
   DragOverlay,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -17,7 +17,6 @@ import {
   UniqueIdentifier,
   pointerWithin,
   rectIntersection,
-  getFirstCollision,
   CollisionDetection,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -83,7 +82,7 @@ export function DndProvider({
 
   // Configure sensors for mouse, touch, and keyboard support
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         // Require movement before starting drag (prevents accidental drags)
         distance: 8,
@@ -91,8 +90,8 @@ export function DndProvider({
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        // Delay before starting drag on touch devices
-        delay: 200,
+        // Let swipes scroll; only a deliberate hold starts a touch drag.
+        delay: 300,
         tolerance: 8,
       },
     }),

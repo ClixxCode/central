@@ -17,7 +17,7 @@ vi.mock('@dnd-kit/core', async () => {
     }),
     useSensor: vi.fn(),
     useSensors: vi.fn().mockReturnValue([]),
-    PointerSensor: class {},
+    MouseSensor: class {},
     TouchSensor: class {},
     KeyboardSensor: class {},
     closestCenter: vi.fn(),
@@ -80,7 +80,7 @@ describe('SortableTask', () => {
     expect(screen.getByTestId('task-content')).toBeInTheDocument();
   });
 
-  it('applies touch-none class', () => {
+  it('allows native touch panning', () => {
     const { container } = render(
       <DndProvider>
         <SortableTask id="task-1">
@@ -89,8 +89,9 @@ describe('SortableTask', () => {
       </DndProvider>
     );
 
-    const sortableDiv = container.querySelector('.touch-none');
+    const sortableDiv = container.querySelector('.touch-manipulation');
     expect(sortableDiv).toBeInTheDocument();
+    expect(container.querySelector('.touch-none')).not.toBeInTheDocument();
   });
 });
 
