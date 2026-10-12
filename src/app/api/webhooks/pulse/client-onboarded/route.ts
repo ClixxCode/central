@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
+  resolveClientForPulseAccount,
+  pulseAccountIdPatch,
+} from '@/lib/pulse/resolve-client';
+import {
   boardTemplates,
   boards,
   clients,
@@ -169,28 +173,13 @@ export async function POST(request: NextRequest) {
 }
 
 async function upsertClient(payload: PulseClientOnboardedPayload): Promise<UpsertResult> {
-  // Lookup by slug first; fall back to lookup by pulse_account_id stored on
-  // metadata. The fallback catches the case where Pulse's slug derivation
-  // changed (e.g. earlier conversions wrote slug = account UUID due to the
-  // business_name bug, then later conversions started sending the real
-  // slug). Without the fallback we'd create a duplicate client every time
-  // the slug shifts; with it, we update the existing row in place.
-  let existing = await db.query.clients.findFirst({
-    where: eq(clients.slug, payload.account_slug),
-    columns: { id: true, name: true, slug: true, metadata: true, defaultBoardId: true },
-  });
-
-  if (!existing) {
-    const candidates = await db.query.clients.findMany({
-      columns: { id: true, name: true, slug: true, metadata: true, defaultBoardId: true },
-    });
-    existing =
-      candidates.find(
-        (c) =>
-          (c.metadata as ClientMetadata | null)?.customFields?.pulse_account_id ===
-          payload.pulse_account_id,
-      ) ?? undefined;
-  }
+  // Identity resolution is SHARED with account-updated. Two private copies of
+  // this rule, disagreeing, is what created the duplicate clients. See
+  // src/lib/pulse/resolve-client.ts.
+  const existing = await resolveClientForPulseAccount(
+    payload.pulse_account_id,
+    payload.account_slug,
+  );
 
   const metadata: ClientMetadata = {
     ...(existing?.metadata ?? {}),
@@ -214,16 +203,17 @@ async function upsertClient(payload: PulseClientOnboardedPayload): Promise<Upser
   };
 
   if (existing) {
-    // Sync name + slug from Pulse on every push so renames propagate. Pulse
-    // is the source of truth for client identity; AMs who rename in Central
-    // will see their edit reverted on the next sync, which is the intended
-    // direction — changes should happen upstream.
+    // Pulse is the source of truth for the client's NAME, so renames
+    // propagate and a local rename in Central is reverted on the next push.
+    // The SLUG is deliberately NOT synced: it is URL identity and uniquely
+    // constrained (see resolve-client.ts). Backfill the identity column when
+    // we matched by slug or metadata, so the next push matches on identity.
     await db
       .update(clients)
       .set({
         name: payload.account_name,
-        slug: payload.account_slug,
         metadata,
+        ...pulseAccountIdPatch(existing, payload.pulse_account_id),
       })
       .where(eq(clients.id, existing.id));
     return { id: existing.id, defaultBoardId: existing.defaultBoardId ?? null };
@@ -234,6 +224,10 @@ async function upsertClient(payload: PulseClientOnboardedPayload): Promise<Upser
     .values({
       name: payload.account_name,
       slug: payload.account_slug,
+      // Set the identity column on CREATE. It was never written here before,
+      // which is why every bridge-created client carried only the metadata
+      // mirror and was invisible to the column-first lookup.
+      pulseAccountId: payload.pulse_account_id,
       metadata,
     })
     .returning({ id: clients.id });

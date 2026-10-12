@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { resolveClientForPulseAccount } from '@/lib/pulse/resolve-client';
 import { clients } from '@/lib/db/schema';
-import type { ClientMetadata, AccountTeamMember } from '@/lib/db/schema';
+import type { AccountTeamMember } from '@/lib/db/schema';
 import { reconcileAllRollups } from '@/lib/rollups/reconcile';
 
 export const runtime = 'nodejs';
@@ -87,31 +88,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Match by the Pulse account id (column first, metadata fallback), then by
-    // slug. We only reflect onto EXISTING Central clients — we never create one
-    // here (clients are provisioned by the SOW onboarding bridge).
-    let existing = await db.query.clients.findFirst({
-      where: eq(clients.pulseAccountId, snapshot.id),
-      columns: { id: true },
-    });
-
-    if (!existing) {
-      existing = await db.query.clients.findFirst({
-        where: eq(clients.slug, snapshot.slug),
-        columns: { id: true },
-      });
-    }
-
-    if (!existing) {
-      const candidates = await db.query.clients.findMany({
-        columns: { id: true, metadata: true },
-      });
-      const match = candidates.find(
-        (c) =>
-          (c.metadata as ClientMetadata | null)?.customFields?.pulse_account_id === snapshot.id,
-      );
-      existing = match ? { id: match.id } : undefined;
-    }
+    // Identity resolution is SHARED with client-onboarded. See
+    // src/lib/pulse/resolve-client.ts. We only reflect onto EXISTING Central
+    // clients; we never create one here (clients are provisioned by the SOW
+    // onboarding bridge).
+    const existing = await resolveClientForPulseAccount(snapshot.id, snapshot.slug);
 
     if (!existing) {
       // Not a Central client (or not onboarded yet) — nothing to reflect.
